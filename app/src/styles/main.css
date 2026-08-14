@@ -1,25 +1,29 @@
 /*
- * Deliberately minimal. The real design system (PrimeVue) lands with the admin
- * screens; this only needs to be legible enough to confirm the app is served.
+ * App-level layout only. Component styling comes from PrimeVue (Aura preset),
+ * so everything below is chrome: the shell, the sidebar and page scaffolding.
+ *
+ * Colours reuse PrimeVue's own CSS variables rather than a parallel palette, so
+ * light/dark switching is handled in one place: the `.app-dark` class on <html>
+ * (see plugins/primevue.ts and composables/useTheme.ts).
  */
 
 :root {
-  --bg: #ffffff;
-  --fg: #1f2933;
-  --muted: #6b7280;
-  --line: #e5e7eb;
-  --accent: #2563eb;
-  color-scheme: light dark;
+  --topbar-height: 4rem;
+  --sidebar-width: 16rem;
+
+  --app-bg: var(--p-surface-50);
+  --app-panel: #ffffff;
+  --app-border: var(--p-surface-200);
+  --app-text: var(--p-surface-800);
+  --app-muted: var(--p-surface-500);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14181d;
-    --fg: #e6e8eb;
-    --muted: #9aa3ad;
-    --line: #2b3138;
-    --accent: #7aa2f7;
-  }
+:root.app-dark {
+  --app-bg: var(--p-surface-950);
+  --app-panel: var(--p-surface-900);
+  --app-border: var(--p-surface-700);
+  --app-text: var(--p-surface-0);
+  --app-muted: var(--p-surface-400);
 }
 
 * {
@@ -28,158 +32,269 @@
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-family:
+    Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.6;
 }
 
-.shell__header {
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------- layout -- */
+
+.topbar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 20;
+  height: var(--topbar-height);
   display: flex;
   align-items: center;
-  gap: 2rem;
-  padding: 0.85rem 1.5rem;
-  border-bottom: 1px solid var(--line);
+  gap: 0.75rem;
+  padding: 0 1rem;
+  background: var(--app-panel);
+  border-bottom: 1px solid var(--app-border);
 }
 
-.shell__brand {
-  font-weight: 600;
-}
-
-.shell__nav {
+.topbar__brand {
   display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.topbar__brand i {
+  color: var(--p-primary-color);
+  font-size: 1.4rem;
+}
+
+.topbar__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.sidebar {
+  position: fixed;
+  top: var(--topbar-height);
+  bottom: 0;
+  left: 0;
+  z-index: 15;
+  width: var(--sidebar-width);
+  padding: 1rem 0.75rem;
+  overflow-y: auto;
+  background: var(--app-panel);
+  border-right: 1px solid var(--app-border);
+  transition: transform 0.2s ease;
+}
+
+.content {
+  padding: calc(var(--topbar-height) + 1.5rem) 1.5rem 2rem;
+  margin-left: var(--sidebar-width);
+  transition: margin-left 0.2s ease;
+}
+
+/* Collapsed: the sidebar slides out and the content reclaims the space. */
+.layout--collapsed .sidebar {
+  transform: translateX(-100%);
+}
+
+.layout--collapsed .content {
+  margin-left: 0;
+}
+
+/* The mask only exists to close the overlay sidebar on small screens. */
+.layout__mask {
+  display: none;
+}
+
+@media (max-width: 60rem) {
+  .content {
+    margin-left: 0;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .layout:not(.layout--collapsed) .layout__mask {
+    display: block;
+    position: fixed;
+    inset: var(--topbar-height) 0 0 0;
+    z-index: 14;
+    background: rgb(0 0 0 / 45%);
+  }
+}
+
+/* ------------------------------------------------------------------ menu -- */
+
+.menu__section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.9rem 0.75rem 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--app-muted);
+}
+
+.menu__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.menu__link {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  color: var(--app-text);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.menu__link:hover {
+  background: var(--p-content-hover-background);
+}
+
+/* `router-link-active` rather than `-exact-active`: a child route such as
+   /settings/users/42 must keep its parent entry highlighted. */
+.menu__link.router-link-active {
+  color: var(--p-primary-color);
+  background: var(--p-highlight-background);
+}
+
+/* ------------------------------------------------------------------ page -- */
+
+.page {
+  max-width: 72rem;
+}
+
+.page__header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.page__header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.page__header :last-child {
+  margin-left: auto;
+}
+
+.page__message {
+  margin-bottom: 1rem;
+}
+
+.cards {
+  display: grid;
   gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
 }
 
-.shell__main {
-  max-width: 46rem;
-  margin: 0 auto;
-  padding: 2rem 1.5rem;
+.pairs {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 1rem;
+  margin: 0;
 }
 
-a {
-  color: var(--accent);
+.pairs dt {
+  color: var(--app-muted);
 }
 
-a.router-link-exact-active {
-  font-weight: 600;
+.pairs dd {
+  margin: 0;
 }
 
-h1 {
-  font-size: 1.6rem;
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* ------------------------------------------------- blank (login / errors) -- */
+
+.blank {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.blank__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 1rem;
+}
+
+.blank__body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 1.5rem 4rem;
+}
+
+.centered {
+  max-width: 32rem;
+  text-align: center;
+}
+
+.centered h1 {
+  font-size: 2rem;
   margin-top: 0;
 }
 
+/* ------------------------------------------------------------------ misc -- */
+
+.muted,
+.note {
+  color: var(--app-muted);
+}
+
+.note {
+  font-size: 0.9rem;
+}
+
 code {
-  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  background: var(--p-surface-100);
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
   font-size: 0.9em;
 }
 
-table {
+:root.app-dark code {
+  background: var(--p-surface-800);
+}
+
+table.plain {
   border-collapse: collapse;
   width: 100%;
-  margin: 1.5rem 0;
 }
 
-th,
-td {
+table.plain th,
+table.plain td {
   text-align: left;
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--app-border);
 }
 
-th {
+table.plain th {
   width: 14rem;
   font-weight: 500;
-  color: var(--muted);
-}
-
-.note {
-  color: var(--muted);
-  font-size: 0.9rem;
-  border-left: 3px solid var(--line);
-  padding-left: 1rem;
-}
-
-.muted {
-  color: var(--muted);
-}
-
-/* Pushes the login/logout block to the far right of the header. */
-.shell__auth {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.form {
-  display: grid;
-  gap: 0.35rem;
-  max-width: 22rem;
-  margin: 1.5rem 0;
-}
-
-.form label {
-  font-size: 0.9rem;
-  color: var(--muted);
-}
-
-.form input {
-  padding: 0.5rem 0.65rem;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--fg);
-  font: inherit;
-}
-
-.form input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.form button {
-  margin-top: 0.75rem;
-  padding: 0.55rem 1rem;
-  border: 0;
-  border-radius: 6px;
-  background: var(--accent);
-  color: #fff;
-  font: inherit;
-  cursor: pointer;
-}
-
-.form button:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-
-/* A button that has to look like a link: logout is an action, not navigation. */
-button.link {
-  border: 0;
-  background: none;
-  padding: 0;
-  color: var(--accent);
-  font: inherit;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.error {
-  color: #b91c1c;
-  font-size: 0.9rem;
-  margin: 0.5rem 0 0;
-}
-
-@media (prefers-color-scheme: dark) {
-  .error {
-    color: #fca5a5;
-  }
-}
-
-td code + code {
-  margin-left: 0.35rem;
+  color: var(--app-muted);
 }
