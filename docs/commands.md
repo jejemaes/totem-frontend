@@ -47,6 +47,23 @@ Le préfixe de montage du bundle ne correspond pas à celui servi par le proxy. 
 build** : vérifiez `VITE_BASE_PATH` dans `docker-compose.yml` et reconstruisez avec
 `make preview`. La page `/tabou/diagnostic` affiche le préfixe réellement embarqué.
 
+### La connexion échoue avec « Client OAuth inconnu du backend »
+
+La table `oauth_oauthapp` du backend est vide. Initialisez-la :
+
+```bash
+cd ../totem-backend && docker compose exec django ./manage.py populate --env local --size small
+```
+
+### La connexion échoue alors que le backend répond
+
+En développement, le serveur Vite relaie `/api` et `/o` vers `totem-backend:8000` par le réseau
+`totem-saas-network`. Vérifiez que le conteneur backend tourne et porte bien ce nom :
+
+```bash
+docker ps --format '{{.Names}}' | grep totem-backend
+```
+
 ### Une modification de la table `domain` du proxy semble ignorée
 
 Le proxy met les résolutions en cache 30 secondes :

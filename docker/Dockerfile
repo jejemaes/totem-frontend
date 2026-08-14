@@ -71,8 +71,14 @@ WORKDIR /usr/src/app
 # cannot do this -- the URLs are rewritten at build time.
 ARG VITE_BASE_PATH=/
 
+# Public OAuth client id. Also build-time, because Vite inlines every VITE_*
+# variable into the bundle. Consequence to keep in mind: one image cannot serve
+# two tenants that have different client ids.
+ARG VITE_OAUTH_CLIENT_ID
+
 ENV NODE_ENV=production \
-    VITE_BASE_PATH=${VITE_BASE_PATH}
+    VITE_BASE_PATH=${VITE_BASE_PATH} \
+    VITE_OAUTH_CLIENT_ID=${VITE_OAUTH_CLIENT_ID}
 
 # .dockerignore excludes **/node_modules, so the layer from `deps` survives.
 COPY app/ ./

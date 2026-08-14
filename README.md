@@ -5,8 +5,42 @@ Frontend VueJs App for Totem Saas.
 Interface d'administration du SaaS Totem : SPA Vue 3 + TypeScript, servie par nginx et routée
 par nom de domaine via [`totem-proxy`](../totem-proxy).
 
-> **État actuel : squelette.** L'application tourne et traverse toute la chaîne de déploiement,
-> mais n'est **pas encore branchée sur l'API**. Voir « Prochaines étapes ».
+> **État actuel : squelette + authentification.** L'application traverse toute la chaîne de
+> déploiement et sait se connecter au backend. Les écrans d'administration restent à faire.
+
+## Routes
+
+| Route         | Accès                | Rôle                                              |
+| ------------- | -------------------- | ------------------------------------------------- |
+| `/`           | public               | Page ouverte à tous                               |
+| `/diagnostic` | public               | Domaine, préfixe et mode de build résolus         |
+| `/login`      | visiteurs uniquement | Connexion OAuth2 ; redirige si déjà authentifié   |
+| `/espace`     | authentifié          | Profil issu de `GET /api/v1/users/me/`            |
+
+Le mode d'accès est déclaré par route dans `meta.auth` (`'none'`, `'guest-only'`, `'required'`) et
+appliqué par une garde unique dans [`app/src/router/index.ts`](app/src/router/index.ts).
+
+## Authentification
+
+Flux OAuth2 *resource owner password* sur `/o/token/`. Le jeton est **opaque** (non décodable côté
+client) et stocké dans `localStorage`, entièrement derrière
+[`app/src/auth/tokenStorage.ts`](app/src/auth/tokenStorage.ts).
+
+Détenir un jeton n'est pas la même chose qu'avoir une session : la garde appelle `ensureSession()`,
+qui valide le jeton auprès du backend une fois par session. Un jeton expiré ou révoqué provoque donc
+une redirection vers la connexion plutôt qu'une page qui échoue à chaque requête.
+
+En développement, le compte de test est `admin` / `admin`. Si la connexion renvoie
+« Client OAuth inconnu du backend », c'est que la base backend n'a pas été initialisée :
+
+```bash
+cd ../totem-backend && docker compose exec django ./manage.py populate --env local --size small
+```
+
+> **Pas encore de rafraîchissement automatique du jeton.** Le backend configure
+> `REFRESH_TOKEN_EXPIRE_SECONDS` (5 h) plus court que `ACCESS_TOKEN_EXPIRE_SECONDS` (10 h) : le
+> jeton de rafraîchissement meurt donc toujours avant celui qu'il doit renouveler. À corriger côté
+> backend avant d'implémenter le renouvellement.
 
 ## Prérequis
 
@@ -101,8 +135,6 @@ Le code applicatif est isolé dans `app/` et l'infra dans `docker/`, sur le mod�
 
 ## Prochaines étapes
 
-1. Brancher l'API `/api/v1/` et l'authentification OAuth2 `/o/token/` de `totem-backend`.
-2. Intégrer PrimeVue, puis les écrans d'administration (listes et formulaires).
-
-Le plan détaillé (client généré depuis l'OpenAPI, couche d'auth, abstraction CRUD) est décrit dans
-`docs/`.
+1. Intégrer PrimeVue, puis les écrans d'administration (listes et formulaires).
+2. Remplacer le client d'API écrit à la main par un client généré depuis `/api/v1/openapi.json`.
+3. Rafraîchissement automatique du jeton, une fois la durée de vie corrigée côté backend.
