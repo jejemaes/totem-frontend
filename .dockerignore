@@ -1,0 +1,38 @@
+# VCS and CI
+.git
+.gitignore
+.gitattributes
+.github
+
+# docs and repo metadata: never affect a build
+docs
+README.md
+LICENSE
+.editorconfig
+
+# orchestration: changing these must not bust the build cache
+docker-compose.yml
+Makefile
+default.env
+.env
+.env.*
+
+# NOTE: docker/ is intentionally NOT ignored -- the runtime stage COPYs
+# docker/nginx/spa.conf.template.
+
+# installed / generated artefacts: rebuilt inside the image.
+# **/node_modules is the important one: without it, `COPY app/ ./` in the build
+# stage would overwrite the deps stage's node_modules with a host copy.
+**/node_modules
+**/dist
+**/dist-ssr
+**/.vite
+**/coverage
+**/*.tsbuildinfo
+**/.eslintcache
+
+# noise
+**/*.log
+**/.DS_Store
+**/.idea
+**/.vscode

@@ -1,0 +1,78 @@
+# Local development and preview for the Totem admin SPA.
+#
+#   docker compose up                      -> Vite dev server on :5173 (HMR)
+#   docker compose --profile preview up    -> nginx serving the built bundle on :8081
+#
+# Both are wrapped by the Makefile: `make dev` and `make preview`.
+#
+# No `version:` key -- it has been obsolete since Compose v2. `name:` pins the
+# project prefix so volume and network names do not depend on the checkout
+# directory name.
+
+name: totem-frontend
+
+services:
+  vite:
+    container_name: totem-frontend-vite
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev
+    # uid/gid 1000 inside the node image, which matches the host user, so files
+    # written into the bind mount are not root-owned.
+    user: node
+    volumes:
+      - ./app:/usr/src/app
+      # Named volume shadowing the bind mount: keeps the image's node_modules
+      # visible instead of being hidden by the host directory. Named rather
+      # than anonymous so `make clean` can target it.
+      - node-modules:/usr/src/app/node_modules
+    ports:
+      - "5173:5173"
+    env_file:
+      - default.env
+    tty: true
+    stdin_open: true
+    networks:
+      - totem-frontend-network
+
+  nginx:
+    # The name and port are a CONTRACT with totem-proxy: its routing database
+    # seeds `totem.localhost` with frontend_host='totem-frontend' and
+    # frontend_port=3006 (see totem-proxy/db/saasbase.sql). OpenResty resolves
+    # this container by name through Docker DNS, so renaming it breaks routing.
+    container_name: totem-frontend
+    # Not started by a bare `docker compose up`.
+    profiles:
+      - preview
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: runtime
+      args:
+        # totem-proxy serves the tenant frontend under /tabou/ and forwards the
+        # prefix untouched, so the bundle must be built to own it. Set to "/"
+        # to serve the app at the domain root instead.
+        VITE_BASE_PATH: /tabou/
+        APP_PORT: 3006
+    ports:
+      # Published only for direct access without the proxy. 8000/8080/5432 are
+      # taken by totem-backend and 9999/9000/5433 by totem-proxy.
+      - "3006:3006"
+    networks:
+      - totem-frontend-network
+      # Makes this container's name resolvable by totem-proxy's OpenResty,
+      # which does `proxy_pass http://$tenant_upstream` through Docker DNS.
+      - totem-saas-network
+
+volumes:
+  node-modules:
+
+networks:
+  totem-frontend-network:
+    name: totem-frontend-network
+  # Created by totem-proxy's compose. If it does not exist yet:
+  #   docker network create totem-saas-network
+  totem-saas-network:
+    name: totem-saas-network
+    external: true
