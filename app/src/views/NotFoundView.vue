@@ -1,10 +1,14 @@
+<script setup lang="ts">
+import Button from 'primevue/button'
+</script>
+
 <template>
-  <section>
+  <section class="centered">
     <h1>404</h1>
     <p>
-      Cette page n'existe pas côté application. Notez que vous voyez bien ce message rendu par Vue,
-      ce qui signifie que le serveur a correctement renvoyé <code>index.html</code>.
+      Cette page n'existe pas côté application. Le fait que ce message soit rendu par Vue confirme
+      que le serveur a bien renvoyé <code>index.html</code> plutôt qu'une erreur.
     </p>
-    <p><RouterLink to="/">Retour à l'accueil</RouterLink></p>
+    <RouterLink to="/"><Button label="Retour à l'accueil" icon="pi pi-home" /></RouterLink>
   </section>
 </template>

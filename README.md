@@ -5,20 +5,57 @@ Frontend VueJs App for Totem Saas.
 Interface d'administration du SaaS Totem : SPA Vue 3 + TypeScript, servie par nginx et routée
 par nom de domaine via [`totem-proxy`](../totem-proxy).
 
-> **État actuel : squelette + authentification.** L'application traverse toute la chaîne de
-> déploiement et sait se connecter au backend. Les écrans d'administration restent à faire.
+> **État actuel :** chaîne de déploiement validée, authentification OAuth2, mise en page
+> d'administration (PrimeVue) et première liste. Les écrans de création/édition restent à faire.
 
 ## Routes
 
-| Route         | Accès                | Rôle                                              |
-| ------------- | -------------------- | ------------------------------------------------- |
-| `/`           | public               | Page ouverte à tous                               |
-| `/diagnostic` | public               | Domaine, préfixe et mode de build résolus         |
-| `/login`      | visiteurs uniquement | Connexion OAuth2 ; redirige si déjà authentifié   |
-| `/espace`     | authentifié          | Profil issu de `GET /api/v1/users/me/`            |
+| Route             | Accès                | Contenu                                          |
+| ----------------- | -------------------- | ------------------------------------------------ |
+| `/`               | public               | Page ouverte à tous                              |
+| `/diagnostic`     | public               | Domaine, préfixe et mode de build résolus        |
+| `/login`          | visiteurs uniquement | Connexion OAuth2 ; redirige si déjà authentifié  |
+| `/dashboard`      | authentifié          | Point d'arrivée après connexion                  |
+| `/settings/users` | `totem.user.read`    | Liste des utilisateurs (pagination serveur)      |
+| `/403`            | public               | Connecté mais pas autorisé                       |
 
-Le mode d'accès est déclaré par route dans `meta.auth` (`'none'`, `'guest-only'`, `'required'`) et
-appliqué par une garde unique dans [`app/src/router/index.ts`](app/src/router/index.ts).
+Les routes authentifiées sont rendues dans `AdminLayout` (barre latérale + en-tête) ; les autres
+dans `BlankLayout`.
+
+Chaque route déclare son mode d'accès dans `meta.auth` (`'none'`, `'guest-only'`, `'required'`) et,
+le cas échéant, `meta.permissions`. Une garde unique dans
+[`app/src/router/index.ts`](app/src/router/index.ts) applique les deux.
+
+## Permissions
+
+Les permissions **sont** les scopes OAuth : le backend dérive le `scope` du jeton de l'union des
+permissions des rôles de l'utilisateur. Les jetons étant opaques, le `scope` renvoyé à la connexion
+est la seule source — il n'y a rien à décoder côté client.
+
+Deux effets, complémentaires :
+
+- **Le menu** ([`app/src/layouts/menu.ts`](app/src/layouts/menu.ts)) masque les entrées dont la
+  permission manque, et une section vidée de toutes ses entrées disparaît. Le menu ne propose donc
+  jamais une page qui répondrait 403.
+- **La garde** renvoie vers `/403` — et non vers la connexion, qui serait une impasse pour quelqu'un
+  déjà authentifié.
+
+C'est un confort d'usage, **pas une frontière de sécurité** : le backend vérifie les mêmes scopes à
+chaque requête. Masquer un bouton inutilisable évite juste un 403 à l'utilisateur.
+
+> Le `scope` est lu à la connexion. **Après l'ajout d'un rôle côté backend, il faut se reconnecter**
+> pour que le menu et les accès en tiennent compte.
+
+### Attribuer un rôle
+
+Un utilisateur sans rôle n'a aucune permission, et `Settings › Users` reste donc masqué. Pour
+donner le rôle Administrator à `admin` :
+
+```bash
+docker exec totem-backend-db psql -U postgres -d postgres -c "INSERT INTO user_userrolerelation (user_id, role_id) SELECT id, 'USERTYPE_ADMIN' FROM user_user WHERE username = 'admin';"
+```
+
+Puis se déconnecter et se reconnecter.
 
 ## Authentification
 
@@ -135,6 +172,6 @@ Le code applicatif est isolé dans `app/` et l'infra dans `docker/`, sur le mod�
 
 ## Prochaines étapes
 
-1. Intégrer PrimeVue, puis les écrans d'administration (listes et formulaires).
+1. Formulaires de création et d'édition d'utilisateur (mapper les erreurs 422 sur les champs).
 2. Remplacer le client d'API écrit à la main par un client généré depuis `/api/v1/openapi.json`.
 3. Rafraîchissement automatique du jeton, une fois la durée de vie corrigée côté backend.

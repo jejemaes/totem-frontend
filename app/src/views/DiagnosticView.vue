@@ -17,7 +17,7 @@ const rows = computed(() => [
 </script>
 
 <template>
-  <section>
+  <section class="page">
     <h1>Diagnostic</h1>
     <p>
       Le <strong>domaine</strong> ci-dessous est celui que le navigateur a demandé. Si vous arrivez
@@ -26,7 +26,7 @@ const rows = computed(() => [
       <code>localhost:3006</code> qui est l'accès direct au conteneur.
     </p>
 
-    <table>
+    <table class="plain">
       <tbody>
         <tr v-for="row in rows" :key="row.label">
           <th>{{ row.label }}</th>

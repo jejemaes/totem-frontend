@@ -1,12 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { useAuthStore } from '@/auth/authStore'
+import AdminLayout from '@/layouts/AdminLayout.vue'
+import BlankLayout from '@/layouts/BlankLayout.vue'
 
+import DashboardView from '@/views/DashboardView.vue'
 import DiagnosticView from '@/views/DiagnosticView.vue'
+import ForbiddenView from '@/views/ForbiddenView.vue'
 import LoginView from '@/views/LoginView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
-import ProtectedView from '@/views/ProtectedView.vue'
 import PublicView from '@/views/PublicView.vue'
+import UsersView from '@/views/settings/UsersView.vue'
+
+import { HOME_ROUTE } from './constants'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -16,9 +22,11 @@ declare module 'vue-router' {
      * 'guest-only' only when signed out, e.g. the login page
      *
      * Adding a magic-link / one-time-token mode later means one more value and
-     * one more case in the guard below -- nothing else moves.
+     * one more branch in the guard -- nothing else moves.
      */
     auth?: 'required' | 'none' | 'guest-only'
+    /** OAuth scopes required on top of a valid session. All of them must be held. */
+    permissions?: string[]
     title?: string
   }
 }
@@ -28,11 +36,33 @@ declare module 'vue-router' {
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: '/', name: 'public', component: PublicView, meta: { auth: 'none' } },
-    { path: '/diagnostic', name: 'diagnostic', component: DiagnosticView, meta: { auth: 'none' } },
-    { path: '/login', name: 'login', component: LoginView, meta: { auth: 'guest-only' } },
-    { path: '/espace', name: 'protected', component: ProtectedView, meta: { auth: 'required' } },
-    { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { auth: 'none' } },
+    // Signed-in area: sidebar + topbar.
+    {
+      path: '/',
+      component: AdminLayout,
+      children: [
+        { path: 'dashboard', name: 'dashboard', component: DashboardView, meta: { title: 'Dashboard' } },
+        {
+          path: 'settings/users',
+          name: 'settings-users',
+          component: UsersView,
+          meta: { title: 'Users', permissions: ['totem.user.read'] },
+        },
+      ],
+    },
+
+    // Everything without the admin chrome.
+    {
+      path: '/',
+      component: BlankLayout,
+      children: [
+        { path: '', name: 'public', component: PublicView, meta: { auth: 'none' } },
+        { path: 'diagnostic', name: 'diagnostic', component: DiagnosticView, meta: { auth: 'none' } },
+        { path: 'login', name: 'login', component: LoginView, meta: { auth: 'guest-only' } },
+        { path: '403', name: 'forbidden', component: ForbiddenView, meta: { auth: 'none' } },
+        { path: ':pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { auth: 'none' } },
+      ],
+    },
   ],
 })
 
@@ -55,9 +85,23 @@ router.beforeEach(async (to) => {
   }
 
   // Already signed in: no reason to show the login form again.
-  if (mode === 'guest-only') return signedIn ? { name: 'protected' } : true
+  if (mode === 'guest-only') return signedIn ? HOME_ROUTE : true
 
-  if (signedIn) return true
-  // Keep where the user was heading so login can send them back there.
-  return { name: 'login', query: { redirect: to.fullPath } }
+  if (!signedIn) {
+    // Keep where the user was heading so login can send them back there.
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
+
+  // Authenticated but not authorised: 403, not a redirect to login. Sending
+  // them to a login form they have already passed would be a dead end.
+  const required = to.meta.permissions ?? []
+  if (required.some((permission) => !auth.scopes.has(permission))) {
+    return { name: 'forbidden', query: { from: to.fullPath } }
+  }
+
+  return true
+})
+
+router.afterEach((to) => {
+  document.title = to.meta.title ? `${to.meta.title} · Totem Admin` : 'Totem Admin'
 })
