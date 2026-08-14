@@ -8,6 +8,10 @@ import { defineConfig, loadEnv } from 'vite'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
+  // Container name on totem-saas-network, which both this dev container and
+  // totem-backend join. Resolved by Docker DNS, so it needs no published port.
+  const backend = env.VITE_DEV_PROXY_TARGET || 'http://totem-backend:8000'
+
   return {
     // Public base path. Baked in at BUILD time (Vite rewrites every asset URL),
     // which is why it is a build arg in docker/Dockerfile and not a runtime
@@ -42,8 +46,19 @@ export default defineConfig(({ mode }) => {
         usePolling: env.VITE_USE_POLLING === '1',
         interval: 300,
       },
-      // NOTE: no /api or /o proxy yet -- this step has no backend integration.
-      // See docs/commands.md when wiring totem-backend in.
+      // In production totem-proxy serves this app under /tabou/ on the tenant
+      // domain and routes every other path to the tenant backend, so the app
+      // calls /api and /o with relative URLs and there is no CORS. The dev
+      // server has to reproduce that same-origin arrangement itself.
+      proxy: {
+        '/api': { target: backend, changeOrigin: true },
+        '/o': { target: backend, changeOrigin: true },
+        // The Django-rendered pages (/admin, the OAuth authorize view) pull
+        // their assets from /static and /media.
+        '/admin': { target: backend, changeOrigin: true },
+        '/static': { target: backend, changeOrigin: true },
+        '/media': { target: backend, changeOrigin: true },
+      },
     },
   }
 })

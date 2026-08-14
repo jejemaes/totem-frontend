@@ -102,3 +102,84 @@ th {
   border-left: 3px solid var(--line);
   padding-left: 1rem;
 }
+
+.muted {
+  color: var(--muted);
+}
+
+/* Pushes the login/logout block to the far right of the header. */
+.shell__auth {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.form {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 22rem;
+  margin: 1.5rem 0;
+}
+
+.form label {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.form input {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.form input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.form button {
+  margin-top: 0.75rem;
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.form button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* A button that has to look like a link: logout is an action, not navigation. */
+button.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.error {
+  color: #b91c1c;
+  font-size: 0.9rem;
+  margin: 0.5rem 0 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .error {
+    color: #fca5a5;
+  }
+}
+
+td code + code {
+  margin-left: 0.35rem;
+}

@@ -35,6 +35,9 @@ services:
     stdin_open: true
     networks:
       - totem-frontend-network
+      # Lets the dev server's /api and /o proxy reach totem-backend:8000 by
+      # container name -- totem-backend joins this same network.
+      - totem-saas-network
 
   nginx:
     # The name and port are a CONTRACT with totem-proxy: its routing database
@@ -55,6 +58,9 @@ services:
         # to serve the app at the domain root instead.
         VITE_BASE_PATH: /tabou/
         APP_PORT: 3006
+        # Inlined into the bundle by Vite, hence a build arg and not an
+        # environment variable on the running container.
+        VITE_OAUTH_CLIENT_ID: HfklzFtWfWxubcc3UjbJrpNaMtffc9CrH7bw4yN7
     ports:
       # Published only for direct access without the proxy. 8000/8080/5432 are
       # taken by totem-backend and 9999/9000/5433 by totem-proxy.
