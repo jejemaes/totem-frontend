@@ -1,36 +1,38 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
-/node_modules
-/.pnp
-.pnp.js
+node_modules/
+.pnpm-store/
+.yarn/
 
-# testing
-/coverage
+# build output
+dist/
+dist-ssr/
+*.tsbuildinfo
 
-# next.js
-/.next/
-/out/
+# tooling caches
+.vite/
+.eslintcache
+.cache/
 
-# production
-/build
+# test output
+coverage/
+test-results/
 
-# misc
-.DS_Store
-*.pem
-
-# debug
+# logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
-# local env files
-.env*.local
+# local env files (default.env IS committed, like totem-backend)
 .env
+.env.local
+.env.*.local
 
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.sw?
+.DS_Store
+*.pem
