@@ -1,11 +1,12 @@
-import { apiFetch } from '@/api/client'
+import { fetchList, type ListQuery, type Page } from '@/api/list'
 
 /**
  * Fields requested from the list endpoint.
  *
  * List responses are serialised with `exclude_unset=True`, so ONLY the keys
  * asked for in `?fields=` come back. Declaring them once, `as const`, keeps the
- * query string and the row type from drifting apart.
+ * query string and the row type from drifting apart -- and `satisfies` makes a
+ * typo here a compile error rather than a silently missing column.
  */
 export const USER_LIST_FIELDS = [
   'id',
@@ -15,7 +16,14 @@ export const USER_LIST_FIELDS = [
   'last_name',
   'is_active',
   'roles',
-] as const
+] as const satisfies readonly (keyof UserRow)[]
+
+/**
+ * Fields the backend accepts in `?ordering=`. Kept next to the row type because
+ * it is the same contract: `roles` is deliberately absent, it is not sortable,
+ * and asking for it would be a 422.
+ */
+export const USER_SORTABLE = ['login', 'email', 'first_name', 'is_active', 'date_joined'] as const
 
 /** Relations are read as nested objects and written as id arrays. */
 export interface UserRoleRef {
@@ -34,36 +42,25 @@ export interface UserRow {
   roles: UserRoleRef[] | null
 }
 
-/** DRF-style envelope returned by every list endpoint. */
-export interface Page<T> {
-  count: number
-  next: string | null
-  previous: string | null
-  results: T[]
-}
-
-export interface ListUsersQuery {
-  /** 1-based. The API rejects 0. */
-  page: number
-  pageSize: number
-  /** Public field name, optionally prefixed with '-' for descending. */
-  ordering?: string | null
+/**
+ * Filters this endpoint accepts, as plain query params.
+ *
+ * A `type` and not an `interface`: only type aliases get the implicit index
+ * signature that makes them assignable to `ListFilters`.
+ */
+export type UserFilters = {
   /** Matches login OR email, case-insensitive. */
-  search?: string | null
+  search?: string
+  login?: string
+  email?: string
+  is_active?: boolean
 }
 
-export function listUsers(query: ListUsersQuery): Promise<Page<UserRow>> {
-  const params = new URLSearchParams({
-    page: String(Math.max(1, query.page)),
-    // The schema declares exclusiveMaximum: 200, so 200 itself is a 422.
-    page_size: String(Math.min(query.pageSize, 199)),
-    fields: USER_LIST_FIELDS.join(','),
-  })
-
-  if (query.ordering) params.set('ordering', query.ordering)
-  if (query.search) params.set('search', query.search)
-
-  return apiFetch<Page<UserRow>>(`/users/?${params.toString()}`)
+export function listUsers(
+  query: ListQuery<UserFilters>,
+  signal?: AbortSignal,
+): Promise<Page<UserRow>> {
+  return fetchList<UserRow>('/users/', query, USER_LIST_FIELDS, signal)
 }
 
 /** Display name falling back to the login when no real name is set. */

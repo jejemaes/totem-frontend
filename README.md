@@ -117,14 +117,28 @@ que verra le proxy.
 - `/tabou/…` → le **frontend** du tenant (`frontend_host:frontend_port`)
 - tout le reste → le **backend** du tenant (`backend_host:backend_port`)
 
-La base de routage livrée avec `totem-proxy` contient déjà le tenant `totem` :
+La base de routage de `totem-proxy` contient le tenant `totem`. Vérifiez toujours vers quoi elle
+pointe réellement, car les deux cibles sont utiles :
 
-| domaine          | frontend               | backend             |
-| ---------------- | ---------------------- | ------------------- |
-| `totem.localhost`| `totem-frontend:3006`  | `totem-backend:8000`|
+```bash
+curl -s -H 'Host: totem.localhost' http://localhost:9999/_saas/whoami
+```
 
-Ce dépôt respecte donc un **contrat** : le conteneur nginx s'appelle `totem-frontend` et écoute sur
-**3006**. Le renommer casse le routage.
+| `frontend_host:port`      | Ce que le domaine sert                                      |
+| ------------------------- | ----------------------------------------------------------- |
+| `totem-frontend-vite:5173`| Le **serveur de dev** : rechargement à chaud sur le domaine tenant. Le websocket HMR ne traverse pas le proxy (pas d'en-têtes d'upgrade dans `saas.conf`), la console affiche donc des échecs de WebSocket — sans conséquence sur l'application. |
+| `totem-frontend:3006`     | Le **bundle statique** servi par nginx (`make preview`), c'est-à-dire ce que verra la production. |
+
+Basculer de l'un à l'autre est une mise à jour SQL suivie d'un vidage de cache :
+
+```bash
+docker exec -i totem-saas-db psql -U postgres -d saas_base -c \
+  "UPDATE domain SET frontend_host='totem-frontend', frontend_port=3006 WHERE lower(name)='totem.localhost';"
+curl -X POST http://localhost:9999/_saas/flush-cache
+```
+
+Le nom et le port du conteneur nginx (`totem-frontend`, **3006**) sont donc un **contrat** avec cette
+table : les renommer casse le routage.
 
 ```bash
 cd ../totem-proxy && docker compose up -d   # la pile proxy
@@ -169,6 +183,36 @@ et le Lua de `totem-proxy` en conséquence, sinon la racine part vers le backend
 
 Le code applicatif est isolé dans `app/` et l'infra dans `docker/`, sur le modèle du `src/` de
 `totem-backend`.
+
+## Listes paginées
+
+La pagination côté serveur est factorisée en trois couches, et la règle porteuse est que le
+composable **n'importe jamais** un module `resources/` : il reçoit une fonction `fetchPage`. C'est ce
+qui le rend indépendant de la ressource et testable sans simuler le réseau.
+
+| Fichier | Rôle |
+| ------- | ---- |
+| [`app/src/api/list.ts`](app/src/api/list.ts) | Contrat réseau : `Page<T>`, `ListQuery`, noms des paramètres, borne `page_size` à 199, lecture de la query string. Pur, sans Vue. |
+| [`app/src/resources/users.ts`](app/src/resources/users.ts) | Le chemin, les champs demandés, le type de ligne, les filtres acceptés |
+| [`app/src/composables/useResourceList.ts`](app/src/composables/useResourceList.ts) | État d'affichage : offset↔page, tri, anti-rebond, chargement, erreur, URL |
+
+Ajouter une liste revient donc à écrire une fonction `listXxx` de trois lignes et à appeler
+`useResourceList`.
+
+Trois comportements non évidents, chacun couvert par un test :
+
+- **Réponses concurrentes** : taper puis trier immédiatement émet deux requêtes ; si la plus ancienne
+  arrive en dernier, elle est ignorée. Sans cela, les lignes affichées contrediraient la flèche de tri.
+- **Page au-delà de la dernière** : le backend répond 404 (et non une liste vide). Le composable
+  retombe sur la page 1 au lieu d'afficher une impasse — ce qui rend un lien `?page=99` partagé
+  utilisable.
+- **`?page` / `?ordering` / filtres dans l'URL** (option `syncUrl`) : F5 restaure la vue à
+  l'identique, en **une seule** requête, car l'URL est lue *avant* la création de l'état. Un tri
+  nommant une colonne non triable est ignoré et retiré de l'URL.
+
+L'URL est écrite avec `router.replace`, jamais `push` : trier ou filtrer ne crée donc pas d'entrée
+d'historique, et le bouton Retour quitte la page au lieu de défaire le dernier tri. C'est un choix
+assumé — une entrée d'historique par frappe clavier serait pénible.
 
 ## Prochaines étapes
 

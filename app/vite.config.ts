@@ -1,7 +1,10 @@
 import { fileURLToPath, URL } from 'node:url'
 
 import vue from '@vitejs/plugin-vue'
-import { defineConfig, loadEnv } from 'vite'
+import { loadEnv } from 'vite'
+// `defineConfig` from vitest/config, not vite: it is the one that types the
+// `test` block below. `loadEnv` is not re-exported there, hence two imports.
+import { defineConfig } from 'vitest/config'
 
 // The dev server runs inside a container (node is not installed on the host),
 // so every network-facing option below has to be explicit.
@@ -59,6 +62,13 @@ export default defineConfig(({ mode }) => {
         '/static': { target: backend, changeOrigin: true },
         '/media': { target: backend, changeOrigin: true },
       },
+    },
+
+    test: {
+      // Nothing under test touches the DOM: the pure helpers and the state
+      // machine are deliberately free of it. `useTheme` would need jsdom.
+      environment: 'node',
+      include: ['src/**/*.spec.ts'],
     },
   }
 })

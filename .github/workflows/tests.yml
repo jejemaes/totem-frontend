@@ -1,0 +1,41 @@
+# Mirrors totem-backend/.github/workflows/tests.yml: the toolchain runs natively
+# on the runner, not through Docker. The "no node on the host" constraint is a
+# fact about the development machine, not about CI -- GitHub runners have node.
+name: Tests
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run test suite
+        run: npm run test
+
+      # Catches anything the type checker misses, and keeps the deployable
+      # artefact honest: the Docker image runs the very same command.
+      - name: Build
+        run: npm run build
