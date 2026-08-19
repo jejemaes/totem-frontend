@@ -7,6 +7,7 @@ import BlankLayout from '@/layouts/BlankLayout.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import DiagnosticView from '@/views/DiagnosticView.vue'
 import ForbiddenView from '@/views/ForbiddenView.vue'
+import FormDemoView from '@/views/FormDemoView.vue'
 import LoginView from '@/views/LoginView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 import PublicView from '@/views/PublicView.vue'
@@ -58,6 +59,14 @@ export const router = createRouter({
       children: [
         { path: '', name: 'public', component: PublicView, meta: { auth: 'none' } },
         { path: 'diagnostic', name: 'diagnostic', component: DiagnosticView, meta: { auth: 'none' } },
+        // Page de développement : elle sert à voir les composants Form/Field
+        // sans backend ni session. Volontairement absente du menu.
+        {
+          path: 'form-demo',
+          name: 'form-demo',
+          component: FormDemoView,
+          meta: { auth: 'none', title: 'Démo formulaire' },
+        },
         { path: 'login', name: 'login', component: LoginView, meta: { auth: 'guest-only' } },
         { path: '403', name: 'forbidden', component: ForbiddenView, meta: { auth: 'none' } },
         { path: ':pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { auth: 'none' } },
