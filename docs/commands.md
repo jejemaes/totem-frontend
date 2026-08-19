@@ -14,6 +14,7 @@ développement. Le `Makefile` est la seule interface à connaître — `make` se
 | `make logs`            | Suit les logs du serveur de dev                                   |
 | `make sh`              | Ouvre un shell dans le conteneur                                  |
 | `make typecheck`       | Vérifie les types (`vue-tsc`), sans générer de fichiers           |
+| `make test`            | Lance la suite Vitest (`make test WATCH=1` pour le mode veille)   |
 | `make build`           | Construit le bundle dans `app/dist/`                              |
 | `make preview`         | Sert le bundle via nginx sur :3006                                |
 | `make clean`           | Supprime conteneurs, volume `node_modules` et `app/dist`          |

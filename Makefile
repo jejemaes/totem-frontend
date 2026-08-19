@@ -12,7 +12,7 @@ SERVICE := vite
 RUN := $(COMPOSE) run --rm $(SERVICE)
 
 .DEFAULT_GOAL := help
-.PHONY: help lock install add remove dev up down logs sh typecheck build preview clean
+.PHONY: help lock install add remove dev up down logs sh typecheck test build preview clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -56,6 +56,9 @@ sh: ## Open a shell in the dev container
 
 typecheck: ## Run vue-tsc, no emit
 	$(RUN) npm run typecheck
+
+test: ## Run the Vitest suite (make test WATCH=1 to watch)
+	$(RUN) npm run $(if $(WATCH),test:watch,test)
 
 build: ## Build the production bundle into app/dist/
 	$(RUN) npm run build
