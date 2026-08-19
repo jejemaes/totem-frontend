@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
     // which is why it is a build arg in docker/Dockerfile and not a runtime
     // variable. totem-proxy currently serves the tenant frontend under
     // /tabou/ and forwards that prefix untouched, so the bundle must own it.
-    base: env.VITE_BASE_PATH || '/',
+    base: env.VITE_BASE_PATH || '/tabou/',
 
     plugins: [vue()],
 
