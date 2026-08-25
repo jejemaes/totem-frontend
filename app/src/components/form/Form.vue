@@ -27,16 +27,31 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  /** A detached snapshot of the draft, never the internal reactive proxy. */
-  save: [values: FormData]
+  /**
+   * Detached snapshots, never the internal reactive proxy.
+   *
+   * `values` is the whole draft; `changed` holds only the keys that differ
+   * from the `data` the form was seeded with. A create sends the first, an
+   * update the second -- a PATCH should carry what was edited and nothing
+   * else, both to avoid pointless writes and because a backend may react to
+   * the mere presence of a key.
+   */
+  save: [values: FormData, changed: FormData]
 }>()
 
 defineSlots<{
-  default(props: { draft: Readonly<FormData> }): unknown
-  actions?(props: { invalid: boolean }): unknown
+  default(props: { draft: Readonly<FormData>; dirty: boolean }): unknown
+  actions?(props: { invalid: boolean; dirty: boolean }): unknown
 }>()
 
 const draft = reactive<FormData>({ ...props.data })
+
+/**
+ * What the form was seeded with, to tell an edit from an untouched value. A
+ * ref rather than a plain object so `changed` recomputes when a new record
+ * replaces the current one.
+ */
+const baseline = ref<FormData>({ ...props.data })
 
 /** Filled in by the mounted <Field>s: the form cannot discover them any other
     way, they live in its default slot. */
@@ -60,6 +75,23 @@ const readonly = computed(() => props.readonly || props.saving)
     the button must stay mounted to carry its spinner. */
 const showActions = computed(() => !props.readonly)
 
+/**
+ * The keys whose value differs from the seed.
+ *
+ * A key ABSENT from `data` counts as changed as soon as it holds anything: it
+ * was filled by a <Field default>, and the caller does not have that value
+ * yet. `Object.is` is enough -- a FieldValue is always a primitive.
+ */
+const changed = computed<FormData>(() => {
+  const result: FormData = {}
+  for (const [key, value] of Object.entries(draft)) {
+    if (!Object.is(value, baseline.value[key])) result[key] = value
+  }
+  return result
+})
+
+const dirty = computed(() => Object.keys(changed.value).length > 0)
+
 /** A field's error message: the `required` constraint first, then whatever the
     server answered. */
 function errorFor(name: string): string | undefined {
@@ -75,6 +107,7 @@ watch(
   (next) => {
     for (const key of Object.keys(draft)) delete draft[key]
     Object.assign(draft, next)
+    baseline.value = { ...next }
     missing.value = []
     serverErrors.value = {}
   },
@@ -120,7 +153,7 @@ function onSubmit(): void {
   serverErrors.value = {}
   missing.value = [...requiredNames].filter((name) => isEmpty(draft[name]))
   if (missing.value.length) return
-  emit('save', { ...toRaw(draft) })
+  emit('save', { ...toRaw(draft) }, { ...changed.value })
 }
 </script>
 
@@ -129,7 +162,7 @@ function onSubmit(): void {
        messages. The <form> is kept so that Enter submits, as in LoginView. -->
   <form class="form" novalidate @submit.prevent="onSubmit">
     <div class="form__fields">
-      <slot :draft="draft" />
+      <slot :draft="draft" :dirty="dirty" />
     </div>
 
     <Message v-if="missing.length" severity="error" :closable="false">
@@ -137,7 +170,7 @@ function onSubmit(): void {
     </Message>
 
     <div v-if="showActions" class="form__actions">
-      <slot name="actions" :invalid="missing.length > 0">
+      <slot name="actions" :invalid="missing.length > 0" :dirty="dirty">
         <Button type="submit" :label="saveLabel" icon="pi pi-check" :loading="saving" />
       </slot>
     </div>

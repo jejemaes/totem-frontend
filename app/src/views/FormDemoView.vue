@@ -29,9 +29,13 @@ const data = ref<FormData>({
 })
 
 const saved = ref<FormData | null>(null)
+const changed = ref<FormData | null>(null)
 
-function onSave(payload: FormData): void {
+/** <Form> hands over the whole draft and, separately, only the keys that differ
+    from `data` -- what an update should actually PATCH. */
+function onSave(payload: FormData, edited: FormData): void {
   saved.value = payload
+  changed.value = edited
 }
 
 /** A copy of the template below, so the page documents itself. */
@@ -69,7 +73,7 @@ const DEFINITION = `<Form :data="data" @save="onSave">
       <Card>
         <template #title>Form</template>
         <template #content>
-          <Form :data="data" v-slot="{ draft }" @save="onSave">
+          <Form :data="data" v-slot="{ draft, dirty }" @save="onSave">
             <Field name="name" widget="string" label="Name" required
                    help="Required: clear it and save to see the error." />
 
@@ -103,7 +107,7 @@ const DEFINITION = `<Form :data="data" @save="onSave">
             <Field name="reference" widget="string" label="Reference" readonly
                    help="Locked, but still present in the payload." />
 
-            <p class="note">The draft, live:</p>
+            <p class="note">The draft, live — edited: {{ dirty ? 'yes' : 'no' }}</p>
             <pre class="preview">{{ JSON.stringify(draft, null, 2) }}</pre>
           </Form>
         </template>
@@ -114,6 +118,12 @@ const DEFINITION = `<Form :data="data" @save="onSave">
         <template #content>
           <pre v-if="saved" class="preview">{{ JSON.stringify(saved, null, 2) }}</pre>
           <p v-else class="note">Nothing saved yet.</p>
+
+          <template v-if="changed">
+            <h3>Only what changed</h3>
+            <p class="note">What an update would PATCH.</p>
+            <pre class="preview">{{ JSON.stringify(changed, null, 2) }}</pre>
+          </template>
 
           <h3>The original <code>data</code></h3>
           <p class="note">

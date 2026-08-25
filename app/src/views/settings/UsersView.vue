@@ -10,19 +10,33 @@ import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
 import { computed, reactive } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { can } from '@/auth/permissions'
 import { useResourceList } from '@/composables/useResourceList'
 import { fullName, initials, listUsers, USER_SORTABLE, type UserRow } from '@/resources/users'
 
+const route = useRoute()
+
 /**
- * The button is hidden without the scope, like the menu entries: hiding what
- * would answer 403 is a convenience, the actual barrier is the route guard.
+ * The actions are hidden without their scope, like the menu entries: hiding
+ * what would answer 403 is a convenience, the actual barrier is the route
+ * guard.
  *
- * A computed rather than a direct call from the template: `can()` instantiates
- * the store on every evaluation.
+ * Computeds rather than direct calls from the template: `can()` instantiates
+ * the store on every evaluation, and the pencil is evaluated once per row.
  */
 const canCreate = computed(() => can('totem.user.create'))
+const canUpdate = computed(() => can('totem.user.update'))
+
+/**
+ * The edit link carries the list's own query (page, ordering, search) so the
+ * form can send the user back to the list they actually left, and so a
+ * refresh or a shared link still knows where "back" leads.
+ */
+function editRoute(id: string) {
+  return { name: 'settings-user-edit', params: { id }, query: route.query }
+}
 
 /** Every key is sent as a query param; any change resets to page 1. */
 const filters = reactive({ search: '' })
@@ -164,6 +178,16 @@ const skeletonRows = Array.from({ length: 5 }, (_, i) => ({ id: `skeleton-${i}` 
           />
         </template>
       </Column>
+
+      <!-- Row actions: no header, the icons speak for themselves. -->
+      <Column style="width: 4rem" body-class="row-actions">
+        <template #body="{ data }">
+          <Skeleton v-if="isInitialLoad" height="2rem" width="2rem" shape="circle" />
+          <RouterLink v-else-if="canUpdate" :to="editRoute(data.id)">
+            <Button icon="pi pi-pencil" text rounded severity="secondary" aria-label="Edit" />
+          </RouterLink>
+        </template>
+      </Column>
     </DataTable>
   </section>
 </template>
@@ -229,6 +253,10 @@ const skeletonRows = Array.from({ length: 5 }, (_, i) => ({ id: `skeleton-${i}` 
 
 .link:hover {
   text-decoration: underline;
+}
+
+.row-actions {
+  text-align: right;
 }
 
 .page__error {

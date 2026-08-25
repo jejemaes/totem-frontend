@@ -1,4 +1,4 @@
-import { postJson } from '@/api/client'
+import { apiFetch, patchJson, postJson } from '@/api/client'
 import { fetchList, type ListQuery, type Page } from '@/api/list'
 
 /**
@@ -98,12 +98,55 @@ export interface UserCreatePayload {
  * non-nullable columns with a default, so an explicit `null` is a 422. That is
  * also why the payload is built key by key and never by copying the draft.
  *
- * The response is a full UserSchema, wider than UserRow (it also carries
- * `user_type`, `language`, `avatar`). The extra keys are harmless: the type
- * only promises the ones it declares.
+ * The 201 body is a full UserSchema, the same shape a retrieve returns.
  */
-export function createUser(payload: UserCreatePayload): Promise<UserRow> {
-  return postJson<UserRow>('/users/', { roles: [], ...payload })
+export function createUser(payload: UserCreatePayload): Promise<UserDetail> {
+  return postJson<UserDetail>('/users/', { roles: [], ...payload })
+}
+
+/**
+ * What GET /users/{id}/ returns: the full UserSchema, wider than the row the
+ * list asks for. No `?fields=` is sent -- the detail endpoint is a single
+ * record, so trimming it buys nothing and would only be one more thing to keep
+ * in sync with the form.
+ */
+export interface UserDetail extends UserRow {
+  language: string | null
+  user_type: string | null
+  avatar: string | null
+}
+
+export function fetchUser(id: string, signal?: AbortSignal): Promise<UserDetail> {
+  return apiFetch<UserDetail>(`/users/${encodeURIComponent(id)}/`, { signal })
+}
+
+/**
+ * Body of PATCH /users/{id}/.
+ *
+ * Every key is optional, and that is load-bearing rather than merely
+ * permissive: the backend builds its update from the schema with
+ * `exclude_unset=True`, so **an omitted key is left untouched** while an
+ * explicit `null` is written. The two are not interchangeable.
+ *
+ * That is what makes it safe for the edit form to leave `roles`, `user_type`
+ * and `avatar` out entirely: omitting them keeps the account's existing roles,
+ * where sending `roles: []` -- as creation does -- would wipe them. So would
+ * `roles: null`, which the service turns into an empty list. Only omission is
+ * safe.
+ *
+ * `user_type` must be omitted for a second reason: UserQuerySet.update fires
+ * `user_change_rights` on the mere PRESENCE of that key, which invalidates the
+ * account's tokens. Echoing it back unchanged would sign the user out.
+ *
+ * `email`, `login`, `language` and `user_type` must also never be sent as
+ * `null` here: unlike on create they pass schema validation (every update
+ * field is Optional), reach the database, and fail its NOT NULL constraint --
+ * so the 422 comes back under `__all__` with no field attached.
+ */
+export type UserUpdatePayload = Partial<UserCreatePayload>
+
+export function updateUser(id: string, payload: UserUpdatePayload): Promise<UserDetail> {
+  return patchJson<UserDetail>(`/users/${encodeURIComponent(id)}/`, payload)
 }
 
 /** Display name falling back to the login when no real name is set. */
