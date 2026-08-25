@@ -9,19 +9,25 @@ import { isEmpty } from './fields/values'
 
 const props = withDefaults(
   defineProps<{
-    /** Valeurs initiales. Jamais mutées : le formulaire travaille sur une copie. */
+    /** Initial values. Never mutated: the form works on a copy. */
     data: FormData
     saveLabel?: string
-    /** Désactive tous les champs et masque la barre d'actions. */
+    /** Disables every field and hides the actions row. */
     readonly?: boolean
-    /** Bouton en état chargement, pour un futur appel backend. */
+    /** Spinner on the save button while a request is in flight. */
     saving?: boolean
+    /**
+     * Errors returned by the backend, keyed by field name. A key matching no
+     * <Field> -- `__all__` typically -- is shown nowhere here: it stays with
+     * the parent's banner.
+     */
+    errors?: Record<string, string>
   }>(),
-  { saveLabel: 'Enregistrer', readonly: false, saving: false },
+  { saveLabel: 'Save', readonly: false, saving: false, errors: undefined },
 )
 
 const emit = defineEmits<{
-  /** Un instantané détaché du brouillon, jamais le proxy réactif interne. */
+  /** A detached snapshot of the draft, never the internal reactive proxy. */
   save: [values: FormData]
 }>()
 
@@ -32,24 +38,45 @@ defineSlots<{
 
 const draft = reactive<FormData>({ ...props.data })
 
-/** Alimenté par les <Field> montés : le formulaire ne peut pas les découvrir
-    autrement, ils vivent dans son slot par défaut. */
+/** Filled in by the mounted <Field>s: the form cannot discover them any other
+    way, they live in its default slot. */
 const requiredNames = reactive(new Set<string>())
 
-/** Les champs obligatoires laissés vides lors du dernier envoi refusé. */
+/** Required fields left empty by the last rejected submit. */
 const missing = ref<string[]>([])
 
+/**
+ * Local copy of the server errors: a prop must not be mutated, and fixing a
+ * field has to clear its error at once, the same way `required` does.
+ */
+const serverErrors = ref<Record<string, string>>({})
+watch(() => props.errors, (next) => { serverErrors.value = { ...next } }, { immediate: true })
+
+/** Locks the fields. `saving` counts: a value already sent to the backend must
+    not keep changing under it. */
 const readonly = computed(() => props.readonly || props.saving)
 
-// Watch sur l'IDENTITÉ, surtout pas `deep` : un watch profond écraserait les
-// saisies en cours dès que le parent touche son propre objet. Un nouvel objet
-// signifie un nouvel enregistrement, donc on ré-amorce le brouillon.
+/** The actions row, on the other hand, follows ONLY `readonly`: during a save
+    the button must stay mounted to carry its spinner. */
+const showActions = computed(() => !props.readonly)
+
+/** A field's error message: the `required` constraint first, then whatever the
+    server answered. */
+function errorFor(name: string): string | undefined {
+  if (missing.value.includes(name)) return 'This field is required.'
+  return serverErrors.value[name]
+}
+
+// Watch on IDENTITY, definitely not `deep`: a deep watch would clobber the
+// user's edits every time the parent touched its own object. A new object means
+// a new record, so the draft is re-seeded.
 watch(
   () => props.data,
   (next) => {
     for (const key of Object.keys(draft)) delete draft[key]
     Object.assign(draft, next)
     missing.value = []
+    serverErrors.value = {}
   },
 )
 
@@ -57,15 +84,21 @@ provide(FORM_CONTEXT, {
   values: draft,
   set(name: string, value: FieldValue) {
     draft[name] = value
-    // Corriger un champ efface son erreur tout de suite, sans attendre un
-    // nouvel envoi.
+    // Fixing a field clears its error immediately, without waiting for another
+    // submit. A server error goes on the first keystroke: it is the backend's
+    // job to say whether the new value is acceptable.
     if (missing.value.includes(name) && !isEmpty(value)) {
       missing.value = missing.value.filter((entry) => entry !== name)
     }
+    if (name in serverErrors.value) {
+      const rest = { ...serverErrors.value }
+      delete rest[name]
+      serverErrors.value = rest
+    }
   },
   register(name: string, defaultValue: FieldValue) {
-    // Uniquement si la clé est absente : un `null` présent dans `data` est une
-    // valeur réelle (« vide connu ») et ne doit pas être écrasé par le défaut.
+    // Only when the key is absent: a `null` present in `data` is a real value
+    // ("known empty") and must not be overwritten by the default.
     if (!(name in draft)) draft[name] = defaultValue
   },
   setRequired(name: string, required: boolean) {
@@ -76,11 +109,15 @@ provide(FORM_CONTEXT, {
     requiredNames.delete(name)
     missing.value = missing.value.filter((entry) => entry !== name)
   },
-  invalid: (name: string) => missing.value.includes(name),
+  invalid: (name: string) => Boolean(errorFor(name)),
+  error: errorFor,
   readonly,
 })
 
 function onSubmit(): void {
+  // A new submit starts from a clean slate: the previous attempt's errors are
+  // worthless, only the coming response counts.
+  serverErrors.value = {}
   missing.value = [...requiredNames].filter((name) => isEmpty(draft[name]))
   if (missing.value.length) return
   emit('save', { ...toRaw(draft) })
@@ -88,19 +125,18 @@ function onSubmit(): void {
 </script>
 
 <template>
-  <!-- novalidate : les bulles natives du navigateur ne doivent pas concurrencer
-       nos propres messages. Le <form> est conservé pour que la touche Entrée
-       envoie, comme dans LoginView. -->
+  <!-- novalidate: the browser's native bubbles must not compete with our own
+       messages. The <form> is kept so that Enter submits, as in LoginView. -->
   <form class="form" novalidate @submit.prevent="onSubmit">
     <div class="form__fields">
       <slot :draft="draft" />
     </div>
 
     <Message v-if="missing.length" severity="error" :closable="false">
-      Veuillez renseigner les champs obligatoires.
+      Please fill in the required fields.
     </Message>
 
-    <div v-if="!readonly" class="form__actions">
+    <div v-if="showActions" class="form__actions">
       <slot name="actions" :invalid="missing.length > 0">
         <Button type="submit" :label="saveLabel" icon="pi pi-check" :loading="saving" />
       </slot>

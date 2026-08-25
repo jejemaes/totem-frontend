@@ -1,57 +1,62 @@
 /*
- * Le contrat entre `<Form>` et les `<Field>` déclarés dans son slot.
+ * The contract between <Form> and the <Field>s declared in its slot.
  *
- * Ce module est volontairement séparé des deux composants : `Form.vue` fournit
- * le contexte, `fields/Field.vue` le consomme, et aucun des deux n'a besoin
- * d'importer l'autre — donc pas de dépendance circulaire.
+ * Deliberately kept apart from both components: Form.vue provides the context,
+ * fields/Field.vue consumes it, and neither has to import the other -- so no
+ * circular dependency.
  */
 
 import { inject, type ComputedRef, type InjectionKey } from 'vue'
 
 import type { FieldValue } from './fields/types'
 
-/** Les valeurs d'un formulaire, indexées par nom de champ. Plat : « a.b » n'est pas un chemin. */
+/** A form's values, keyed by field name. Flat: "a.b" is not a path. */
 export type FormData = Record<string, FieldValue>
 
 export interface FormContext {
   /**
-   * Le brouillon, en lecture. C'est ce qui donne à chaque champ l'accès aux
-   * valeurs de TOUS les autres, et pas seulement à la sienne.
+   * The draft, read-only. This is what gives every field access to ALL the
+   * other values, not just its own.
    *
-   * La seule voie d'écriture est `set()`, pour qu'un champ ne puisse pas
-   * réécrire discrètement une clé qui ne lui appartient pas.
+   * The only way in is `set()`, so a field cannot quietly rewrite a key that
+   * does not belong to it.
    */
   values: Readonly<FormData>
   set(name: string, value: FieldValue): void
   /**
-   * Déclare une clé auprès du formulaire.
+   * Declares a key with the form.
    *
-   * Ne la remplit avec `defaultValue` que si le `data` ne la portait pas du
-   * tout : un `null` explicite est une valeur réelle (« vide connu », ce que
-   * renvoie le backend) et n'est pas écrasé.
+   * Fills it with `defaultValue` only when `data` did not carry it at all: an
+   * explicit `null` is a real value ("known empty", what the backend sends) and
+   * is not overwritten.
    */
   register(name: string, defaultValue: FieldValue): void
-  /** Appelé depuis un `watchEffect` : `required` peut lui-même être réactif. */
+  /** Called from a watchEffect: `required` may itself be reactive. */
   setRequired(name: string, required: boolean): void
-  /** Au démontage (`v-if`) : retire la contrainte, garde la valeur. */
+  /** On unmount (`v-if`): drops the constraint, keeps the value. */
   unregister(name: string): void
-  /** Vrai pour un champ laissé vide lors du dernier envoi refusé. */
+  /** True when the field carries an error, whatever its origin. */
   invalid(name: string): boolean
-  /** Le `readonly` global du formulaire. Combiné en OU par `<Field>`. */
+  /**
+   * The field's error message: the `required` constraint, or whatever the
+   * server answered. `undefined` when the field is valid.
+   */
+  error(name: string): string | undefined
+  /** The form-level readonly. OR-ed by <Field>. */
   readonly: ComputedRef<boolean>
 }
 
 export const FORM_CONTEXT: InjectionKey<FormContext> = Symbol('totem.form')
 
 /**
- * Lève une erreur plutôt que de renvoyer `null` : un `<Field>` hors d'un
- * `<Form>` n'a rien à quoi se lier, et un champ silencieusement inerte est bien
- * plus difficile à diagnostiquer qu'une erreur au montage.
+ * Throws rather than returning `null`: a <Field> outside a <Form> has nothing
+ * to bind to, and a silently inert field is far harder to diagnose than an
+ * error at mount time.
  */
 export function useFormContext(): FormContext {
   const context = inject(FORM_CONTEXT, null)
   if (!context) {
-    throw new Error('<Field> doit être utilisé à l’intérieur d’un <Form>.')
+    throw new Error('<Field> must be used inside a <Form>.')
   }
   return context
 }

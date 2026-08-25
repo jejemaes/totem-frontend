@@ -11,6 +11,7 @@ import FormDemoView from '@/views/FormDemoView.vue'
 import LoginView from '@/views/LoginView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 import PublicView from '@/views/PublicView.vue'
+import UserCreateView from '@/views/settings/UserCreateView.vue'
 import UsersView from '@/views/settings/UsersView.vue'
 
 import { HOME_ROUTE } from './constants'
@@ -49,6 +50,16 @@ export const router = createRouter({
           component: UsersView,
           meta: { title: 'Users', permissions: ['totem.user.read'] },
         },
+        // A sibling of the list, not a child: a child route would keep
+        // UsersView mounted, and it drives useResourceList with syncUrl, whose
+        // watcher rewrites route.query -- it would fight the create form over
+        // the query string while holding a list request open behind it.
+        {
+          path: 'settings/users/new',
+          name: 'settings-user-create',
+          component: UserCreateView,
+          meta: { title: 'New user', permissions: ['totem.user.create'] },
+        },
       ],
     },
 
@@ -59,13 +70,13 @@ export const router = createRouter({
       children: [
         { path: '', name: 'public', component: PublicView, meta: { auth: 'none' } },
         { path: 'diagnostic', name: 'diagnostic', component: DiagnosticView, meta: { auth: 'none' } },
-        // Page de développement : elle sert à voir les composants Form/Field
-        // sans backend ni session. Volontairement absente du menu.
+        // Development page: it exists to look at the Form/Field components
+        // with no backend and no session. Deliberately absent from the menu.
         {
           path: 'form-demo',
           name: 'form-demo',
           component: FormDemoView,
-          meta: { auth: 'none', title: 'Démo formulaire' },
+          meta: { auth: 'none', title: 'Form demo' },
         },
         { path: 'login', name: 'login', component: LoginView, meta: { auth: 'guest-only' } },
         { path: '403', name: 'forbidden', component: ForbiddenView, meta: { auth: 'none' } },

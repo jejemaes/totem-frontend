@@ -1,85 +1,84 @@
 /*
- * Contrats partagés par tous les composants de champ.
+ * Contracts shared by every field component.
  *
- * Ce module ne contient que des types : il est importé par les huit composants
- * du dossier ainsi que par `../context.ts`, et ne doit donc jamais tirer de
- * dépendance à l'exécution.
+ * Types only: this module is imported by the eight components in this folder
+ * and by ../context.ts, so it must never pull in a runtime dependency.
  */
 
-/** Les noms de widget acceptés par `<Field widget="…">`. */
+/** The widget names accepted by `<Field widget="...">`. */
 export type Widget = 'string' | 'boolean' | 'text' | 'integer' | 'float' | 'selection'
 
 /**
- * Ce qu'un champ peut contenir — volontairement étroit : exactement ce que les
- * six widgets savent produire.
+ * What a field can hold -- deliberately narrow: exactly what the six widgets
+ * can produce.
  *
- * INVARIANT tenu par les six widgets : un champ vide vaut `null`. Jamais '',
- * jamais NaN, jamais undefined. Le payload émis par `save` est donc lisible
- * sans règle de vide par clé.
+ * INVARIANT held by all six: an empty field is `null`. Never '', never NaN,
+ * never undefined. The payload emitted by `save` is therefore readable without
+ * a per-key emptiness rule.
  */
 export type FieldValue = string | number | boolean | null
 
-/** Une entrée de liste déroulante. */
+/** One entry of a dropdown. */
 export interface SelectionChoice {
   value: string | number
   label: string
 }
 
-/** Une chaîne / un nombre nu est un raccourci pour `{ value: x, label: String(x) }`. */
+/** A bare string or number is shorthand for `{ value: x, label: String(x) }`. */
 export type ChoiceInput = string | number | SelectionChoice
 
 /**
- * Configuration libre, interprétée par chaque widget. Les clés ci-dessous sont
- * celles que les six widgets lisent ; tout le reste est transporté et ignoré —
- * c'est ce qui en fait un point d'extension et non un schéma figé.
+ * Free-form configuration, interpreted by each widget. The keys below are the
+ * ones the six widgets read; anything else is carried and ignored -- which is
+ * what makes this an extension point rather than a fixed schema.
  */
 export interface FieldOptions {
-  /** SelectionField : la liste des choix. Obligatoire pour ce widget. */
+  /** SelectionField: the choice list. Required for that widget. */
   choices?: ChoiceInput[]
   placeholder?: string
-  /** TextField : hauteur du textarea. */
+  /** TextField: textarea height. */
   rows?: number
   /** CharField */
   maxLength?: number
   /** IntegerField / FloatField */
   min?: number
   max?: number
-  /** FloatField : nombre de décimales conservées. */
+  /** FloatField: how many decimals are kept. */
   maxFractionDigits?: number
-  /** BooleanField : forcer la forme du contrôle au lieu de la déduire de `required`. */
+  /** BooleanField: force the control shape instead of deriving it from `required`. */
   display?: 'radio' | 'select'
   [key: string]: unknown
 }
 
-/** Les props communes à tous les composants de champ. */
+/** The props every field component shares. */
 export interface FieldProps {
   label?: string
-  /** Ligne d'explication affichée sous le contrôle. */
+  /** Explanatory line shown under the control. */
   help?: string
   widget?: Widget
   options?: FieldOptions
   required?: boolean
   readonly?: boolean
-  /** Appliqué quand le `data` du formulaire ne porte pas la clé. `null` si non fourni. */
+  /** Applied when the form's `data` does not carry the key. `null` when not given. */
   default?: FieldValue
 }
 
 /**
- * Ce que prend un widget concret : les props communes plus le v-model.
+ * What a concrete widget takes: the shared props plus the v-model.
  *
- * Un widget est un composant `v-model` ordinaire — il n'injecte rien, ce qui le
- * rend utilisable seul, hors d'un `<Form>`. C'est `Field.vue` qui fait le pont
- * avec le contexte du formulaire.
+ * A widget is an ordinary `v-model` component -- it injects nothing, which
+ * keeps it usable alone, outside a <Form>. Field.vue is what bridges it to the
+ * form context.
  */
 export interface WidgetProps extends FieldProps {
   modelValue: FieldValue
-  /** `true` quand le champ est en erreur : anneau rouge PrimeVue. */
+  /** `true` when the field is in error: PrimeVue's red ring. */
   invalid?: boolean
-  /** Message d'erreur à afficher sous le contrôle. */
+  /** Error message to show under the control. */
   error?: string
   /**
-   * Toutes les valeurs du formulaire, en lecture. Fourni par `<Field>` pour
-   * qu'un widget puisse dépendre d'un voisin (choix conditionnels, etc.).
+   * Every value in the form, read-only. Supplied by <Field> so a widget can
+   * depend on a sibling (conditional choices, and so on).
    */
   values?: Readonly<Record<string, FieldValue>>
 }

@@ -10,7 +10,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: FieldValue] }>()
 
 const inputId = useId()
 
-/** Un champ vidé vaut `null`, jamais '' — cf. l'invariant de FieldValue. */
+/** A cleared field is `null`, never '' -- see the FieldValue invariant. */
 function onInput(next: string | undefined): void {
   const text = String(next ?? '')
   emit('update:modelValue', text === '' ? null : text)

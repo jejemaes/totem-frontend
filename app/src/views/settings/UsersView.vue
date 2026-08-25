@@ -9,10 +9,20 @@ import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
-import { reactive } from 'vue'
+import { computed, reactive } from 'vue'
 
+import { can } from '@/auth/permissions'
 import { useResourceList } from '@/composables/useResourceList'
 import { fullName, initials, listUsers, USER_SORTABLE, type UserRow } from '@/resources/users'
+
+/**
+ * The button is hidden without the scope, like the menu entries: hiding what
+ * would answer 403 is a convenience, the actual barrier is the route guard.
+ *
+ * A computed rather than a direct call from the template: `can()` instantiates
+ * the store on every evaluation.
+ */
+const canCreate = computed(() => can('totem.user.create'))
 
 /** Every key is sent as a query param; any change resets to page 1. */
 const filters = reactive({ search: '' })
@@ -52,6 +62,14 @@ const skeletonRows = Array.from({ length: 5 }, (_, i) => ({ id: `skeleton-${i}` 
           <template v-if="!loading">{{ total }} compte{{ total > 1 ? 's' : '' }}</template>
         </p>
       </div>
+
+      <!-- `.page__header > :last-child:not(:only-child)` pushes it right, on
+           the title's line. The `:not(:only-child)` makes the v-if free: with
+           the button hidden the <div> is an only child again and the rule
+           stops applying. -->
+      <RouterLink v-if="canCreate" to="/settings/users/new">
+        <Button label="New" icon="pi pi-plus" />
+      </RouterLink>
     </header>
 
     <Message v-if="error" severity="error" :closable="false" class="page__message">

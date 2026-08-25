@@ -12,12 +12,11 @@ const emit = defineEmits<{ 'update:modelValue': [value: FieldValue] }>()
 const groupId = useId()
 
 /**
- * Obligatoire -> deux boutons radio (il n'y a que deux réponses possibles).
- * Facultatif  -> une liste à trois entrées, « Non défini » étant un état réel.
+ * Required -> two radio buttons (there are only two possible answers).
+ * Optional -> a three-entry dropdown, "Unset" being a real state.
  *
- * `options.display` permet de forcer la forme quand ce couplage ne convient
- * pas : rendre un champ facultatif ne devrait pas changer son contrôle par
- * surprise.
+ * `options.display` forces the shape when that coupling does not suit: making
+ * a field optional should not change its control by surprise.
  */
 const asRadio = computed(() => {
   const display = props.options?.display
@@ -25,7 +24,7 @@ const asRadio = computed(() => {
   return Boolean(props.required)
 })
 
-/** Le `data` peut porter « true » ou 1 : on ramène tout à un booléen ou à null. */
+/** The `data` may carry "true" or 1: everything narrows to a boolean or null. */
 const value = computed<boolean | null>(() => {
   const raw = props.modelValue
   if (raw === null || raw === undefined || raw === '') return null
@@ -34,15 +33,14 @@ const value = computed<boolean | null>(() => {
 })
 
 /*
- * Sentinelles chaîne, et surtout PAS une option de valeur `null` : PrimeVue
- * traite un modelValue à null comme « rien de sélectionné » et affiche le
- * placeholder, donc une option littéralement valuée null ne s'afficherait
- * jamais comme sélectionnée.
+ * String sentinels, and emphatically NOT an option valued `null`: PrimeVue
+ * treats a null modelValue as "nothing selected" and shows the placeholder, so
+ * an option literally valued null would never render as the selected one.
  */
 const CHOICES = [
-  { value: 'true', label: 'Oui' },
-  { value: 'false', label: 'Non' },
-  { value: 'unset', label: 'Non défini' },
+  { value: 'true', label: 'Yes' },
+  { value: 'false', label: 'No' },
+  { value: 'unset', label: 'Unset' },
 ]
 
 const selected = computed(() => (value.value === null ? 'unset' : String(value.value)))
@@ -65,8 +63,8 @@ function onRadio(next: boolean): void {
     :error="error"
     v-slot="{ labelId }"
   >
-    <!-- Un groupe de radios n'a pas d'élément focusable unique : le libellé du
-         wrapper est un <span> et le groupe le référence par aria-labelledby. -->
+    <!-- A radio group has no single focusable element: the wrapper's label is
+         a <span> and the group points at it through aria-labelledby. -->
     <div v-if="asRadio" class="boolean" role="radiogroup" :aria-labelledby="labelId">
       <div class="boolean__choice">
         <RadioButton
@@ -78,7 +76,7 @@ function onRadio(next: boolean): void {
           :invalid="invalid"
           @update:model-value="onRadio"
         />
-        <label :for="`${groupId}-yes`">Oui</label>
+        <label :for="`${groupId}-yes`">Yes</label>
       </div>
 
       <div class="boolean__choice">
@@ -91,7 +89,7 @@ function onRadio(next: boolean): void {
           :invalid="invalid"
           @update:model-value="onRadio"
         />
-        <label :for="`${groupId}-no`">Non</label>
+        <label :for="`${groupId}-no`">No</label>
       </div>
     </div>
 

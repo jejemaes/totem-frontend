@@ -1,3 +1,4 @@
+import { postJson } from '@/api/client'
 import { fetchList, type ListQuery, type Page } from '@/api/list'
 
 /**
@@ -61,6 +62,48 @@ export function listUsers(
   signal?: AbortSignal,
 ): Promise<Page<UserRow>> {
   return fetchList<UserRow>('/users/', query, USER_LIST_FIELDS, signal)
+}
+
+/** The only two languages declared by the backend's settings.LANGUAGES. */
+export type UserLanguage = 'en-us' | 'fr'
+
+/**
+ * Body of POST /users/.
+ *
+ * The schema accepts only these keys plus `roles`, `user_type` and `avatar`.
+ * `is_active`, `password` and `id` are dropped in silence -- note there is no
+ * password field in the API at all, so an account created here has no way to
+ * sign in until one is set elsewhere.
+ */
+export interface UserCreatePayload {
+  /** The ORM field is `username`; the body accepts ONLY `login`. Unique. */
+  login: string
+  email: string
+  /** Nullable in the database: `null` is accepted and stored as-is. */
+  first_name?: string | null
+  last_name?: string | null
+  /**
+   * NOT nullable, merely defaulted: an explicit `null` is a 422. Omitting the
+   * key is what lets the backend apply 'fr'.
+   */
+  language?: UserLanguage
+}
+
+/**
+ * `roles` is required by the schema but has no widget -- there is no relational
+ * field yet -- so it is injected here rather than carried by the form. The
+ * account is therefore created with no role at all.
+ *
+ * `user_type` and `avatar` are ABSENT rather than sent as `null`: both are
+ * non-nullable columns with a default, so an explicit `null` is a 422. That is
+ * also why the payload is built key by key and never by copying the draft.
+ *
+ * The response is a full UserSchema, wider than UserRow (it also carries
+ * `user_type`, `language`, `avatar`). The extra keys are harmless: the type
+ * only promises the ones it declares.
+ */
+export function createUser(payload: UserCreatePayload): Promise<UserRow> {
+  return postJson<UserRow>('/users/', { roles: [], ...payload })
 }
 
 /** Display name falling back to the login when no real name is set. */

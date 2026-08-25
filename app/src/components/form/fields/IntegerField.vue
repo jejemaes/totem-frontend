@@ -7,20 +7,19 @@ import type { FieldValue, WidgetProps } from './types'
 import { toNumberOrNull } from './values'
 
 /*
- * InputNumber plutôt qu'un InputText + inputmode : son v-model est déjà un
- * `number | null` (champ vidé -> null, ce qui est exactement notre invariant),
- * et `maxFractionDigits: 0` EMPÊCHE matériellement de taper un séparateur
- * décimal — là où `inputmode="numeric"` n'est qu'une suggestion de clavier
- * virtuel qui ne bloque rien. Avec un InputText il faudrait parser à chaque
- * frappe et gérer à la main « - », « 1. », « 1, » qui valent tous NaN en cours
- * de saisie.
+ * InputNumber rather than an InputText + inputmode: its v-model is already a
+ * `number | null` (cleared -> null, exactly our invariant), and
+ * `maxFractionDigits: 0` PHYSICALLY prevents typing a decimal separator --
+ * where `inputmode="numeric"` is only a soft-keyboard hint that blocks nothing.
+ * An InputText would mean parsing on every keystroke and hand-policing "-",
+ * "1." and "1," which all read as NaN mid-typing.
  */
 defineProps<WidgetProps>()
 const emit = defineEmits<{ 'update:modelValue': [value: FieldValue] }>()
 
 const inputId = useId()
 
-/** Ceinture et bretelles : maxFractionDigits interdit déjà la saisie décimale. */
+/** Belt and braces: maxFractionDigits already forbids decimal input. */
 function onInput(next: number | null): void {
   emit('update:modelValue', next === null ? null : Math.trunc(next))
 }
