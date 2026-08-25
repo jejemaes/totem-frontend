@@ -2,23 +2,21 @@
 import { useId } from 'vue'
 
 /*
- * Le chrome commun aux six widgets : libellé, marqueur « obligatoire », texte
- * d'aide et message d'erreur. Sans lui, les six composants répéteraient
- * exactement le même bloc.
+ * The chrome shared by the six widgets: label, "required" marker, help text and
+ * error message. Without it, all six would repeat the exact same block.
  *
- * Il est utilisé À L'INTÉRIEUR de chaque widget, et non autour du
- * `<component :is>` de Field.vue, pour deux raisons : le `<label for>` doit
- * viser un identifiant que le widget possède, et un groupe de boutons radio
- * n'a pas d'élément focusable unique à viser — d'où le repli sur un `<span>`
- * + `aria-labelledby`.
+ * It is used INSIDE each widget rather than around Field.vue's
+ * `<component :is>`, for two reasons: the `<label for>` must point at an id the
+ * widget owns, and a radio group has no single focusable element to point at --
+ * hence the fallback to a `<span>` plus aria-labelledby.
  */
 defineProps<{
-  /** Omis par un contrôle sans élément focusable unique (groupe de radios). */
+  /** Omitted by a control with no single focusable element (radio group). */
   inputId?: string
   label?: string
   help?: string
   required?: boolean
-  /** Message d'erreur ; il masque le texte d'aide tant qu'il est présent. */
+  /** Error message; it hides the help text for as long as it is present. */
   error?: string
 }>()
 

@@ -24,10 +24,9 @@ function onInput(next: number | null): void {
     :required="required"
     :error="error"
   >
-    <!-- maxFractionDigits vaut 2 par défaut dans PrimeVue : laissé tel quel,
-         ce champ arrondirait silencieusement 3.14159 en 3.14. D'où le 6.
-         useGrouping est forcé à false : « 1 234 » dans une zone de saisie
-         casse le copier-coller. -->
+    <!-- maxFractionDigits defaults to 2 in PrimeVue: left alone, this field
+         would silently round 3.14159 to 3.14. Hence the 6. useGrouping is
+         forced off: "1 234" inside an editable field breaks copy/paste. -->
     <InputNumber
       :input-id="inputId"
       fluid

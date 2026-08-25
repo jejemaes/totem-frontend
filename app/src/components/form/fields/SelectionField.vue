@@ -13,9 +13,9 @@ const emit = defineEmits<{ 'update:modelValue': [value: FieldValue] }>()
 const inputId = useId()
 
 /*
- * Collision de noms à garder en tête : notre prop `options` est la
- * configuration libre du champ, alors que la prop `options` de <Select> est la
- * liste des entrées. D'où le renommage en `choices` ici.
+ * Name collision worth keeping in mind: our `options` prop is the field's
+ * free-form configuration, while <Select>'s own `options` prop is the list of
+ * entries. Hence the rename to `choices` here.
  */
 const choices = computed(() => normaliseChoices(props.options?.choices))
 
@@ -43,13 +43,13 @@ function onSelect(next: FieldValue): void {
       :show-clear="!required"
       :disabled="readonly"
       :invalid="invalid"
-      :placeholder="options?.placeholder ?? 'Sélectionner…'"
+      :placeholder="options?.placeholder ?? 'Select…'"
       @update:model-value="onSelect"
     />
-    <!-- Une liste vide est un défaut de configuration, pas un état normal :
-         mieux vaut le dire que rendre un menu déroulant inutilisable. -->
+    <!-- An empty list is a configuration mistake, not a normal state: better
+         to say so than to render an unusable dropdown. -->
     <Message v-else severity="warn" :closable="false">
-      Aucun choix configuré&nbsp;: renseignez <code>options.choices</code>.
+      No choices configured: set <code>options.choices</code>.
     </Message>
   </FieldWrapper>
 </template>

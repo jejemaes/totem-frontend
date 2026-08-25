@@ -1,29 +1,28 @@
 /*
- * Helpers de valeurs, sans aucune dépendance à Vue.
+ * Value helpers, with no dependency on Vue.
  *
- * Toute la logique un peu piégeuse des champs est concentrée ici précisément
- * pour être testable en environnement `node`, sans monter de composant.
+ * Every slightly treacherous bit of field logic is concentrated here precisely
+ * so it can be tested in a `node` environment, without mounting a component.
  */
 
 import type { ChoiceInput, FieldValue, SelectionChoice } from './types'
 
 /**
- * Un champ est vide quand il vaut `null`, `undefined` ou la chaîne vide.
+ * A field is empty when it is `null`, `undefined` or the empty string.
  *
- * Ce qui n'est délibérément PAS vide : `false` (un booléen auquel on a répondu
- * « Non ») et `0` (un nombre parfaitement valide). Confondre les deux est le
- * bug classique de la validation `required`.
+ * What is deliberately NOT empty: `false` (a boolean answered "no") and `0` (a
+ * perfectly valid number). Conflating the two is the classic `required` bug.
  */
 export function isEmpty(value: FieldValue | undefined): boolean {
   return value === undefined || value === null || value === ''
 }
 
 /**
- * Ramène une valeur quelconque à un nombre, ou à `null`.
+ * Narrows an arbitrary value to a number, or to `null`.
  *
- * Le `data` fourni au formulaire n'est pas forcément bien typé (il peut venir
- * d'un JSON backend), donc les champs numériques s'alimentent à travers cette
- * fonction plutôt que de faire confiance à leur `modelValue`.
+ * The `data` handed to a form is not necessarily well typed (it may come
+ * straight from backend JSON), so the numeric fields feed through this rather
+ * than trusting their `modelValue`.
  */
 export function toNumberOrNull(value: unknown): number | null {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null
@@ -33,16 +32,16 @@ export function toNumberOrNull(value: unknown): number | null {
     const parsed = Number(trimmed)
     return Number.isFinite(parsed) ? parsed : null
   }
-  // `true` vaudrait 1 avec Number() : un booléen n'a rien à faire dans un champ
-  // numérique, on préfère le vide au silence.
+  // `true` would become 1 via Number(): a boolean has no business in a numeric
+  // field, so empty beats silently wrong.
   return null
 }
 
 /**
- * Normalise la liste de choix d'un `SelectionField`.
+ * Normalises a SelectionField's choice list.
  *
- * Accepte la forme complète `{ value, label }` et le raccourci `['a', 'b']`,
- * pour que les listes triviales restent lisibles dans le template.
+ * Accepts the full `{ value, label }` form and the `['a', 'b']` shorthand, so
+ * trivial lists stay readable in the template.
  */
 export function normaliseChoices(input: ChoiceInput[] | undefined): SelectionChoice[] {
   if (!Array.isArray(input)) return []

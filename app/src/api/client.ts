@@ -13,6 +13,11 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /**
+     * Per-field messages from a 422, keyed by the PUBLIC field name (`login`,
+     * never the ORM's `username`). Undefined for every other error shape.
+     */
+    readonly fields?: Record<string, string>,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -20,17 +25,75 @@ export class ApiError extends Error {
 }
 
 /**
- * Turns the backend's error bodies into a single message.
- * 404 answers {"detail": "..."} while 400/403 answer {"detail": [msg, ...]}.
+ * What the backend could not attach to any field. Same sentinel as its own
+ * core.services.exceptions.NON_FIELD_ERRORS.
+ *
+ * This is where a duplicate login lands: `username` is not `unique=True` on the
+ * model, it is a UniqueConstraint, so the clash is only caught by the database
+ * and comes back as an integrity error with no field attached.
  */
-function messageFrom(body: unknown, status: number): string {
+export const NON_FIELD = '__all__'
+
+export interface ParsedApiError {
+  message: string
+  /** Only present for a 422. */
+  fields?: Record<string, string>
+}
+
+/** One entry of django-ninja's 422 body. */
+interface ValidationDetail {
+  loc?: unknown[]
+  msg?: string
+}
+
+function isValidationDetail(item: unknown): item is ValidationDetail {
+  return typeof item === 'object' && item !== null && 'msg' in item
+}
+
+/**
+ * The last element of `loc` is the public field name:
+ * ["body", "request_body", "login"].
+ */
+function fieldOf(detail: ValidationDetail): string {
+  const last = detail.loc?.[detail.loc.length - 1]
+  return typeof last === 'string' ? last : NON_FIELD
+}
+
+/**
+ * Turns the backend's three error-body shapes into a message, plus per-field
+ * messages when it is a validation failure.
+ *
+ *   404      {"detail": "Object not found"}          -- a string
+ *   400/403  {"detail": ["...", "..."]}              -- strings
+ *   422      {"detail": [{type, loc, msg, ctx}, ...] -- OBJECTS
+ *
+ * The third shape used to be dropped wholesale by the string filter, which is
+ * why every validation failure read "Error 422" and there was no way to tell
+ * the user what the backend had actually refused.
+ *
+ * Strings are checked before objects so 400/403 behave exactly as before.
+ */
+export function parseApiError(body: unknown, status: number): ParsedApiError {
   const detail = (body as { detail?: unknown } | null)?.detail
-  if (typeof detail === 'string') return detail
+
+  if (typeof detail === 'string') return { message: detail }
+
   if (Array.isArray(detail)) {
     const messages = detail.filter((item): item is string => typeof item === 'string')
-    if (messages.length) return messages.join(' ')
+    if (messages.length) return { message: messages.join(' ') }
+
+    const fields: Record<string, string> = {}
+    for (const item of detail) {
+      if (!isValidationDetail(item) || !item.msg) continue
+      const name = fieldOf(item)
+      fields[name] = fields[name] ? `${fields[name]} ${item.msg}` : item.msg
+    }
+
+    const collected = Object.values(fields)
+    if (collected.length) return { message: collected.join(' '), fields }
   }
-  return `Erreur ${status}`
+
+  return { message: `Error ${status}` }
 }
 
 /**
@@ -49,15 +112,29 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   headers.set('Accept', 'application/json')
   if (tokens) headers.set('Authorization', `Bearer ${tokens.accessToken}`)
 
+  // Only for an already-serialised body. A FormData body (the avatar, later)
+  // must keep the Content-Type the browser computes for it, otherwise the
+  // multipart boundary is missing and the backend parses nothing. Without this,
+  // a string body goes out as text/plain and django-ninja ignores it.
+  if (typeof init.body === 'string' && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+
   const response = await fetch(`${API_BASE}${path}`, { ...init, headers })
 
   if (!response.ok) {
     const body = await response.json().catch(() => null)
-    throw new ApiError(messageFrom(body, response.status), response.status)
+    const { message, fields } = parseApiError(body, response.status)
+    throw new ApiError(message, response.status, fields)
   }
 
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
+}
+
+/** POST a JSON body. The trailing-slash rule applies here too. */
+export function postJson<T>(path: string, payload: unknown): Promise<T> {
+  return apiFetch<T>(path, { method: 'POST', body: JSON.stringify(payload) })
 }
 
 /** Subset of the profile returned by GET /api/v1/users/me/. */

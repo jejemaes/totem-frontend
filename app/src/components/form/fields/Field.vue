@@ -13,7 +13,7 @@ import TextField from './TextField.vue'
 import type { FieldProps, FieldValue, Widget } from './types'
 
 interface FieldDeclarationProps extends FieldProps {
-  /** La clé du dict `data` à laquelle ce champ est lié. */
+  /** The key of the `data` dict this field is bound to. */
   name: string
   widget: Widget
 }
@@ -21,12 +21,12 @@ interface FieldDeclarationProps extends FieldProps {
 const props = defineProps<FieldDeclarationProps>()
 
 /**
- * L'unique registre widget -> composant. C'est ce fichier qui charge les six
- * types de champs.
+ * The one and only widget -> component registry. This file is what loads the
+ * six field types.
  *
- * Typé `Record<Widget, Component>` à dessein : ajouter un membre à `Widget`
- * sans ajouter le composant ici devient une erreur de compilation, et non un
- * champ blanc à l'exécution.
+ * Typed `Record<Widget, Component>` on purpose: adding a member to `Widget`
+ * without adding its component here becomes a compile error rather than a blank
+ * field at runtime.
  */
 const WIDGETS: Record<Widget, Component> = {
   string: CharField,
@@ -39,34 +39,33 @@ const WIDGETS: Record<Widget, Component> = {
 
 const form = useFormContext()
 
-// Synchrone, et non dans onMounted : la valeur par défaut doit être dans le
-// brouillon AVANT le premier rendu, sinon le contrôle s'affiche vide puis
-// scintille.
+// Synchronous, not in onMounted: the default has to be in the draft BEFORE the
+// first render, otherwise the control paints empty and then flickers.
 form.register(props.name, props.default ?? null)
 
-// watchEffect plutôt qu'un appel unique : `required` peut être une expression
-// qui dépend d'un autre champ.
+// watchEffect rather than a one-off call: `required` may be an expression that
+// depends on another field.
 watchEffect(() => form.setRequired(props.name, props.required ?? false))
 
-// Démonter un <Field> (v-if) retire sa contrainte `required`, mais garde sa
-// valeur dans le brouillon.
+// Unmounting a <Field> (v-if) drops its `required` constraint but keeps its
+// value in the draft.
 onScopeDispose(() => form.unregister(props.name))
 
 const component = computed<Component | null>(() => WIDGETS[props.widget] ?? null)
 
 const value = computed<FieldValue>(() => form.values[props.name] ?? null)
 
-/** `default` est un mot-clé JS : on l'aliase pour ne pas le nommer en template. */
+/** `default` is a JS keyword: aliased so no template expression has to name it. */
 const defaultValue = computed<FieldValue>(() => props.default ?? null)
 
-/** Le readonly du champ est combiné en OU avec celui du formulaire : ni l'un ni
-    l'autre ne peut réactiver un champ que l'autre a verrouillé. */
+/** The field's readonly is OR-ed with the form's: neither can re-enable a field
+    the other has locked. */
 const readonly = computed(() => (props.readonly ?? false) || form.readonly.value)
 
+// The text comes from the form: it is the one that knows whether the error is
+// its own `required` constraint or a refusal from the backend.
 const invalid = computed(() => form.invalid(props.name))
-
-// `required` est la seule validation du formulaire, donc le message est unique.
-const error = computed(() => (invalid.value ? 'Ce champ est obligatoire.' : undefined))
+const error = computed(() => form.error(props.name))
 
 function onUpdate(next: FieldValue): void {
   form.set(props.name, next)
@@ -74,10 +73,10 @@ function onUpdate(next: FieldValue): void {
 </script>
 
 <template>
-  <!-- Les props sont transmises explicitement, et non via v-bind="$props" :
-       `name` ne doit pas atteindre le widget (il retomberait en attribut sur
-       son noeud racine), et la liste explicite garde la surface transmise
-       visible en un seul endroit. -->
+  <!-- Props are forwarded explicitly, not through v-bind="$props": `name` must
+       not reach the widget (it would fall through as an attribute on its root
+       node), and an explicit list keeps the forwarded surface visible in one
+       place. -->
   <component
     :is="component"
     v-if="component"
@@ -95,11 +94,11 @@ function onUpdate(next: FieldValue): void {
     @update:model-value="onUpdate"
   />
 
-  <!-- Un widget inconnu ne peut venir que d'une valeur calculée (le type le
-       garantit pour un littéral). Une mauvaise ligne ne doit pas vider la
-       page : on le signale sur place. La clé reste enregistrée, donc le champ
-       reste dans le payload. -->
+  <!-- An unknown widget can only come from a computed value (the type
+       guarantees it for a literal). One bad row must not blank the page, so it
+       is reported in place. The key stays registered, so the field stays in the
+       payload. -->
   <Message v-else severity="error" :closable="false">
-    Widget inconnu «&nbsp;{{ widget }}&nbsp;» pour le champ «&nbsp;{{ name }}&nbsp;».
+    Unknown widget "{{ widget }}" for field "{{ name }}".
   </Message>
 </template>
