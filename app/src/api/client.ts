@@ -137,6 +137,11 @@ export function postJson<T>(path: string, payload: unknown): Promise<T> {
   return apiFetch<T>(path, { method: 'POST', body: JSON.stringify(payload) })
 }
 
+/** PATCH a JSON body. The backend exposes PATCH for updates, never PUT. */
+export function patchJson<T>(path: string, payload: unknown): Promise<T> {
+  return apiFetch<T>(path, { method: 'PATCH', body: JSON.stringify(payload) })
+}
+
 /** Subset of the profile returned by GET /api/v1/users/me/. */
 export interface UserProfile {
   id: string

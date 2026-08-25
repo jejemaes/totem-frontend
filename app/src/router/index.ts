@@ -11,7 +11,7 @@ import FormDemoView from '@/views/FormDemoView.vue'
 import LoginView from '@/views/LoginView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 import PublicView from '@/views/PublicView.vue'
-import UserCreateView from '@/views/settings/UserCreateView.vue'
+import UserFormView from '@/views/settings/UserFormView.vue'
 import UsersView from '@/views/settings/UsersView.vue'
 
 import { HOME_ROUTE } from './constants'
@@ -50,15 +50,30 @@ export const router = createRouter({
           component: UsersView,
           meta: { title: 'Users', permissions: ['totem.user.read'] },
         },
-        // A sibling of the list, not a child: a child route would keep
-        // UsersView mounted, and it drives useResourceList with syncUrl, whose
-        // watcher rewrites route.query -- it would fight the create form over
-        // the query string while holding a list request open behind it.
+        // One component, two routes: UserFormView is a create form with no id
+        // and an edit form with one. They stay separate routes because their
+        // scopes differ -- editing has to GET the record before it can PATCH
+        // it, creating reads nothing.
+        //
+        // Both are siblings of the list rather than children: a child route
+        // would keep UsersView mounted, and it drives useResourceList with
+        // syncUrl, whose watcher rewrites route.query -- it would fight the
+        // form over the query string while holding a list request open behind
+        // it.
         {
           path: 'settings/users/new',
           name: 'settings-user-create',
-          component: UserCreateView,
+          component: UserFormView,
           meta: { title: 'New user', permissions: ['totem.user.create'] },
+        },
+        // Declared after 'new' for readability only: vue-router ranks a static
+        // segment above a param whatever the order, so ':id' cannot swallow
+        // '/new'.
+        {
+          path: 'settings/users/:id',
+          name: 'settings-user-edit',
+          component: UserFormView,
+          meta: { title: 'Edit user', permissions: ['totem.user.read', 'totem.user.update'] },
         },
       ],
     },
