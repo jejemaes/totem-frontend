@@ -2,13 +2,13 @@
 import { useId } from 'vue'
 
 /*
- * The chrome shared by the six widgets: label, "required" marker, help text and
+ * The chrome shared by the eight widgets: label, "required" marker, help text and
  * error message. Without it, all six would repeat the exact same block.
  *
  * It is used INSIDE each widget rather than around Field.vue's
  * `<component :is>`, for two reasons: the `<label for>` must point at an id the
- * widget owns, and a radio group has no single focusable element to point at --
- * hence the fallback to a `<span>` plus aria-labelledby.
+ * widget owns, and a radio group or a swatch grid has no single focusable
+ * element to point at -- hence the fallback to a `<span>` plus aria-labelledby.
  */
 defineProps<{
   /** Omitted by a control with no single focusable element (radio group). */

@@ -22,6 +22,8 @@ const data = ref<FormData>({
   colour: null,
   quantity: 12,
   rating: 3.14159,
+  due_date: '2024-03-31',
+  swatch: 12,
   active: true,
   published: null,
   status: 'draft',
@@ -47,6 +49,8 @@ const DEFINITION = `<Form :data="data" @save="onSave">
          :options="{ choices: ['blue', 'red', 'green'] }" />
   <Field name="quantity"    widget="integer"   label="Quantity" :options="{ min: 0 }" />
   <Field name="rating"      widget="float"     label="Rating" />
+  <Field name="due_date"    widget="date"      label="Due date" />
+  <Field name="swatch"      widget="color"     label="Swatch" :options="{ max: 15 }" />
   <Field name="active"      widget="boolean"   label="Active" required />
   <Field name="published"   widget="boolean"   label="Published" />
   <Field name="status"      widget="selection" label="Status"
@@ -91,6 +95,12 @@ const DEFINITION = `<Form :data="data" @save="onSave">
 
             <Field name="rating" widget="float" label="Rating"
                    help="Six decimals kept, no rounding to two." />
+
+            <Field name="due_date" widget="date" label="Due date"
+                   help="Carried as an ISO YYYY-MM-DD string, never shifted by a timezone." />
+
+            <Field name="swatch" widget="color" label="Swatch" :options="{ max: 15 }"
+                   help="The value is a palette index; click the selected one again to clear it." />
 
             <Field name="active" widget="boolean" label="Active" required
                    help="Required, hence radio buttons." />

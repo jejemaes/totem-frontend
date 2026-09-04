@@ -28,6 +28,14 @@ export const menu: MenuSection[] = [
     items: [{ label: 'Dashboard', icon: 'pi pi-chart-bar', to: '/dashboard' }],
   },
   {
+    label: 'Contacts',
+    icon: 'pi pi-address-book',
+    items: [
+      { label: 'Contacts', icon: 'pi pi-user', to: '/contacts', permission: 'totem.contact.read' },
+      { label: 'Tags', icon: 'pi pi-tags', to: '/contact-tags', permission: 'totem.contacttag.read' },
+    ],
+  },
+  {
     label: 'Settings',
     icon: 'pi pi-cog',
     items: [
