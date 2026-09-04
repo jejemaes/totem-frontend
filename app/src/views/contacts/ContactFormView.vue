@@ -3,7 +3,7 @@ import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import type { FormData } from '@/components/form/context'
@@ -11,6 +11,7 @@ import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
 import Form from '@/components/form/Form.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
+import { searchCountries, type CountryRef } from '@/resources/countries'
 import {
   createContact,
   fetchContact,
@@ -26,8 +27,9 @@ import {
  * versus PATCH, the error mapping -- so what is left here is the field list and
  * the two labels that change.
  *
- * Simpler than UserFormView: every field is a primitive, so every value lives
- * in the <Form> draft and there is no detached widget to seed or to diff.
+ * Simpler than UserFormView: every value lives in the <Form> draft and there is
+ * no detached widget to seed or to diff. The country is a relation, but its
+ * value is the id of the related row -- a primitive like the rest.
  */
 const router = useRouter()
 const route = useRoute()
@@ -48,10 +50,14 @@ function text(value: FieldValue): string | null {
 /*
  * Both payloads are built key by key, never by copying the draft.
  *
- * What is NOT sent matters as much: `tags` and `country` are absent from this
- * form, and the backend deserialises with `exclude_unset=True`, so omitting
- * them is what LEAVES THEM ALONE. Sending `tags: []` on an update would wipe
- * the contact's tags -- which is exactly why no code path here can.
+ * What is NOT sent matters as much: `tags` is absent from this form, and the
+ * backend deserialises with `exclude_unset=True`, so omitting it is what LEAVES
+ * IT ALONE. Sending `tags: []` on an update would wipe the contact's tags --
+ * which is exactly why no code path here can.
+ *
+ * `country` goes out as the bare ISO code, which is what the draft holds: a
+ * relation is written as the id of its target, never as the nested object the
+ * GET returns.
  */
 function createPayload(values: FormData): ContactCreatePayload {
   return {
@@ -64,6 +70,7 @@ function createPayload(values: FormData): ContactCreatePayload {
     street: text(values.street),
     zip: text(values.zip),
     city: text(values.city),
+    country: text(values.country),
   }
 }
 
@@ -83,8 +90,20 @@ function updatePayload(changed: FormData): ContactUpdatePayload {
   if ('street' in changed) body.street = text(changed.street)
   if ('zip' in changed) body.zip = text(changed.zip)
   if ('city' in changed) body.city = text(changed.city)
+  if ('country' in changed) body.country = text(changed.country)
   return body
 }
+
+/**
+ * The country of the loaded record, nested.
+ *
+ * `data` below is the DRAFT -- it carries the country's id and nothing else --
+ * so the label has to come from the record itself. This is what the many2one
+ * field displays when it is read-only, and what labels the current value while
+ * the dropdown's own list has not landed yet. Re-seeded through `onLoaded`, the
+ * only hook that fires when the route param changes under a reused component.
+ */
+const country = ref<CountryRef | null>(null)
 
 const form = useResourceForm<ContactDetail>({
   // A getter, not a plain value: vue-router reuses this component when only the
@@ -100,9 +119,11 @@ const form = useResourceForm<ContactDetail>({
     street: null,
     zip: null,
     city: null,
+    country: null,
   },
-  // `tags` and `country` are read from the record but never put in the draft:
-  // a key in the draft is a key that can end up in the payload.
+  // `tags` is read from the record but never put in the draft: a key in the
+  // draft is a key that can end up in the payload. `country` is flattened to
+  // its id -- the draft carries primitives, and the id is what a PATCH sends.
   toForm: (contact) => ({
     last_name: contact.last_name,
     first_name: contact.first_name,
@@ -113,8 +134,12 @@ const form = useResourceForm<ContactDetail>({
     street: contact.street,
     zip: contact.zip,
     city: contact.city,
+    country: contact.country?.id ?? null,
   }),
   fetchOne: fetchContact,
+  onLoaded: (contact) => {
+    country.value = contact?.country ?? null
+  },
   create: (values) => createContact(createPayload(values)),
   update: (id, changed) => updateContact(id, updatePayload(changed)),
   notFoundMessage: 'This contact no longer exists.',
@@ -149,7 +174,7 @@ const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
     <header class="page__header">
       <div>
         <h1>{{ title }}</h1>
-        <p class="page__subtitle">Tags and country are not editable here yet.</p>
+        <p class="page__subtitle">Tags are not editable here yet.</p>
       </div>
     </header>
 
@@ -171,7 +196,7 @@ const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
         <!-- Placeholders with the form's real shape, so the card does not jump
              when the record lands. -->
         <div v-if="loading" class="contact-form__skeleton">
-          <Skeleton v-for="n in 9" :key="n" height="3.2rem" />
+          <Skeleton v-for="n in 10" :key="n" height="3.2rem" />
         </div>
 
         <Form
@@ -224,6 +249,22 @@ const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
             <Field name="zip" widget="string" label="Zip" :options="{ maxLength: 32 }" />
 
             <Field name="city" widget="string" label="City" :options="{ maxLength: 255 }" />
+
+            <!-- A relation: the draft holds the ISO code, the dropdown is filled
+                 by the countries endpoint and its filter box searches there.
+                 `record` is what the field shows when it is read-only -- the
+                 nested country the GET already returned, so that mode costs no
+                 request. -->
+            <Field
+              name="country"
+              widget="many2one"
+              label="Country"
+              :options="{
+                fetch: searchCountries,
+                record: country,
+                permission: 'totem.country.read',
+              }"
+            />
           </template>
 
           <template #actions="{ dirty }">

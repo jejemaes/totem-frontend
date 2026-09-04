@@ -2,8 +2,13 @@
  * Contracts shared by every field component.
  *
  * Types only: this module is imported by the ten components in this folder
- * and by ../context.ts, so it must never pull in a runtime dependency.
+ * and by ../context.ts, so it must never pull in a runtime dependency. The
+ * import below is `import type`, so it is erased at compile time -- many2one.ts
+ * imports FieldValue back from here, and only a runtime cycle would be a
+ * problem.
  */
+
+import type { RelationDisplay, RelationFetch, RelationRecord } from './many2one'
 
 /** The widget names accepted by `<Field widget="...">`. */
 export type Widget =
@@ -15,13 +20,15 @@ export type Widget =
   | 'selection'
   | 'date'
   | 'color'
+  | 'many2one'
 
 /**
- * What a field can hold -- deliberately narrow: exactly what the eight widgets
- * can produce. A date is an ISO `YYYY-MM-DD` string and a colour is a palette
- * index, so neither of them widened this.
+ * What a field can hold -- deliberately narrow: exactly what the nine widgets
+ * can produce. A date is an ISO `YYYY-MM-DD` string, a colour is a palette
+ * index and a many-to-one is the id of the related record, so none of them
+ * widened this.
  *
- * INVARIANT held by all eight: an empty field is `null`. Never '', never NaN,
+ * INVARIANT held by all nine: an empty field is `null`. Never '', never NaN,
  * never undefined. The payload emitted by `save` is therefore readable without
  * a per-key emptiness rule.
  */
@@ -60,6 +67,28 @@ export interface FieldOptions {
   maxFractionDigits?: number
   /** BooleanField: force the control shape instead of deriving it from `required`. */
   display?: 'radio' | 'select'
+  /**
+   * ManyToOneField: loads the candidates. REQUIRED for that widget -- it is
+   * what carries the endpoint, its `?fields=` list and the name of its search
+   * parameter, all of which belong to a resource module.
+   */
+  fetch?: RelationFetch
+  /**
+   * ManyToOneField: the related record as the resource returned it, nested. It
+   * is what read-only displays -- with it, that mode needs no request at all --
+   * and what keeps the selected entry labelled while a search excludes it.
+   */
+  record?: RelationRecord | null
+  /** ManyToOneField: builds the label of a record. Defaults to displayRelation. */
+  relationDisplay?: RelationDisplay
+  /** ManyToOneField: permission required to read the related endpoint. Without
+      it the field degrades to its read-only display instead of a 403. */
+  permission?: string
+  /** ManyToOneField: the filter box of the dropdown. On by default. */
+  filter?: boolean
+  /** ManyToOneField: how long to wait after a keystroke before searching, in ms. */
+  filterDelay?: number
+  filterPlaceholder?: string
   [key: string]: unknown
 }
 
