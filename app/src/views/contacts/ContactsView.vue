@@ -8,12 +8,11 @@ import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
-import Tag from 'primevue/tag'
 import { computed, reactive } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { can } from '@/auth/permissions'
-import { colorAt } from '@/components/form/fields/colors'
+import ColorTag from '@/components/ColorTag.vue'
 import { useResourceList } from '@/composables/useResourceList'
 import {
   CONTACT_SORTABLE,
@@ -177,13 +176,11 @@ const skeletonRows = Array.from({ length: 5 }, (_, i) => ({ id: `skeleton-${i}` 
         <template #body="{ data }">
           <Skeleton v-if="isInitialLoad" height="1rem" />
           <div v-else-if="data.tags?.length" class="tags">
-            <!-- The stored colour is a palette index, so the chip is styled
-                 rather than given a PrimeVue severity. -->
-            <Tag
+            <ColorTag
               v-for="tag in data.tags"
               :key="tag.id"
-              :value="tag.name"
-              :style="{ backgroundColor: colorAt(tag.color), color: '#fff' }"
+              :label="tag.name"
+              :color="tag.color"
             />
           </div>
           <span v-else class="muted">None</span>

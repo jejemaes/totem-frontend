@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { colorAt, MAX_COLOR_INDEX } from '@/components/colors'
+
 import FieldWrapper from './FieldWrapper.vue'
-import { colorAt, MAX_COLOR_INDEX } from './colors'
 import type { FieldValue, WidgetProps } from './types'
 import { toNumberOrNull } from './values'
 

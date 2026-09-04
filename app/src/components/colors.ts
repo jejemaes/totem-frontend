@@ -1,10 +1,14 @@
 /*
- * The field colour palette, with no dependency on Vue.
+ * The application colour palette, with no dependency on Vue.
  *
- * A single source of truth: ColorIntegerField paints its swatches from it, and
- * so does any list that renders a stored index back as a colour (the contact
- * tag chips, today). A second, parallel list of colours would drift, and a
- * stored index would then mean two different things depending on the screen.
+ * A single source of truth: the colour picker paints its swatches from it, the
+ * relation fields paint their dots and chips, and the lists paint the tags they
+ * display. A second, parallel list of colours would drift, and a stored index
+ * would then mean two different things depending on the screen.
+ *
+ * It lives at the top of `components/` rather than inside the form: a stored
+ * colour index is not a form concern. Two list views read it without a <Form>
+ * anywhere in sight.
  *
  * The 16 entries are not arbitrary: the backend stores a `PositiveSmallInteger`
  * bounded 0..15 by a check constraint, described as "index in the front-end
@@ -49,4 +53,17 @@ export const MAX_COLOR_INDEX = FIELD_COLORS.length - 1
 export function colorAt(index: unknown): string {
   const position = typeof index === 'number' && Number.isInteger(index) ? index : 0
   return FIELD_COLORS[position] ?? FIELD_COLORS[0]
+}
+
+/**
+ * An index -> the inline style of something FILLED with that colour: a chip, a
+ * pill, a swatch.
+ *
+ * The white text is not a guess: every entry of the palette is a `-500` shade,
+ * which is dark enough for white to clear the contrast bar in both themes. It
+ * is stated here once rather than repeated at each call site, and it is the
+ * reason the palette must not grow a pastel.
+ */
+export function colorStyle(index: unknown): { backgroundColor: string; color: string } {
+  return { backgroundColor: colorAt(index), color: '#fff' }
 }

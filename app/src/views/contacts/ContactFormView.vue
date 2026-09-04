@@ -11,6 +11,7 @@ import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
 import Form from '@/components/form/Form.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
+import { searchContactTags } from '@/resources/contactTags'
 import { searchCountries, type CountryRef } from '@/resources/countries'
 import {
   createContact,
@@ -18,6 +19,7 @@ import {
   updateContact,
   type ContactCreatePayload,
   type ContactDetail,
+  type ContactTagRef,
   type ContactUpdatePayload,
 } from '@/resources/contacts'
 
@@ -28,8 +30,9 @@ import {
  * the two labels that change.
  *
  * Simpler than UserFormView: every value lives in the <Form> draft and there is
- * no detached widget to seed or to diff. The country is a relation, but its
- * value is the id of the related row -- a primitive like the rest.
+ * no detached widget to seed or to diff. Both relations are ordinary fields --
+ * the country holds the id of its row, the tags hold a list of ids, and <Form>
+ * diffs the list for us.
  */
 const router = useRouter()
 const route = useRoute()
@@ -47,17 +50,29 @@ function text(value: FieldValue): string | null {
   return typeof value === 'string' ? value : null
 }
 
+/**
+ * The same narrowing for the one list-valued field.
+ *
+ * The tag ids are ULIDs, so anything that is not a non-empty string is dropped
+ * rather than sent -- the payload types them `string[]`.
+ */
+function ids(value: FieldValue): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((id): id is string => typeof id === 'string' && id !== '')
+}
+
 /*
  * Both payloads are built key by key, never by copying the draft.
  *
- * What is NOT sent matters as much: `tags` is absent from this form, and the
- * backend deserialises with `exclude_unset=True`, so omitting it is what LEAVES
- * IT ALONE. Sending `tags: []` on an update would wipe the contact's tags --
- * which is exactly why no code path here can.
+ * Both relations go out as ids -- `country` as the bare ISO code, `tags` as the
+ * list of tag ids -- which is what the draft holds. A relation is written as
+ * the id of its target, never as the nested object the GET returns.
  *
- * `country` goes out as the bare ISO code, which is what the draft holds: a
- * relation is written as the id of its target, never as the nested object the
- * GET returns.
+ * What is NOT sent still matters: the backend deserialises with
+ * `exclude_unset=True`, so an omitted `tags` LEAVES THE RELATION ALONE while an
+ * explicit `[]` clears it. updatePayload below therefore mentions the key only
+ * when <Form> reports it as edited -- editing a phone number must not touch the
+ * tags.
  */
 function createPayload(values: FormData): ContactCreatePayload {
   return {
@@ -71,6 +86,7 @@ function createPayload(values: FormData): ContactCreatePayload {
     zip: text(values.zip),
     city: text(values.city),
     country: text(values.country),
+    tags: ids(values.tags),
   }
 }
 
@@ -91,6 +107,10 @@ function updatePayload(changed: FormData): ContactUpdatePayload {
   if ('zip' in changed) body.zip = text(changed.zip)
   if ('city' in changed) body.city = text(changed.city)
   if ('country' in changed) body.country = text(changed.country)
+  // The guard is the no-wipe guarantee, not a micro-optimisation: an
+  // unconditional `body.tags` would clear the relation on every save that did
+  // not touch it.
+  if ('tags' in changed) body.tags = ids(changed.tags)
   return body
 }
 
@@ -104,6 +124,16 @@ function updatePayload(changed: FormData): ContactUpdatePayload {
  * only hook that fires when the route param changes under a reused component.
  */
 const country = ref<CountryRef | null>(null)
+
+/**
+ * The tags of the loaded record, nested.
+ *
+ * The same role as `country` above, and it carries more weight: the tags field
+ * fetches nothing until its dropdown is opened, so these records are the only
+ * thing that can paint the chips on a form the user never opens it on. Without
+ * them the field would show bare ULIDs.
+ */
+const tags = ref<ContactTagRef[]>([])
 
 const form = useResourceForm<ContactDetail>({
   // A getter, not a plain value: vue-router reuses this component when only the
@@ -120,10 +150,12 @@ const form = useResourceForm<ContactDetail>({
     zip: null,
     city: null,
     country: null,
+    tags: [],
   },
-  // `tags` is read from the record but never put in the draft: a key in the
-  // draft is a key that can end up in the payload. `country` is flattened to
-  // its id -- the draft carries primitives, and the id is what a PATCH sends.
+  // Both relations are flattened to their ids: the draft carries what a PATCH
+  // sends, and the nested objects go to the fields' `record`/`records` options
+  // instead. `tags` defaults to `[]` and never to `null` -- that is the empty
+  // state every list-valued field holds.
   toForm: (contact) => ({
     last_name: contact.last_name,
     first_name: contact.first_name,
@@ -135,10 +167,12 @@ const form = useResourceForm<ContactDetail>({
     zip: contact.zip,
     city: contact.city,
     country: contact.country?.id ?? null,
+    tags: contact.tags?.map((tag) => tag.id) ?? [],
   }),
   fetchOne: fetchContact,
   onLoaded: (contact) => {
     country.value = contact?.country ?? null
+    tags.value = contact?.tags ?? []
   },
   create: (values) => createContact(createPayload(values)),
   update: (id, changed) => updateContact(id, updatePayload(changed)),
@@ -174,7 +208,6 @@ const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
     <header class="page__header">
       <div>
         <h1>{{ title }}</h1>
-        <p class="page__subtitle">Tags are not editable here yet.</p>
       </div>
     </header>
 
@@ -196,7 +229,7 @@ const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
         <!-- Placeholders with the form's real shape, so the card does not jump
              when the record lands. -->
         <div v-if="loading" class="contact-form__skeleton">
-          <Skeleton v-for="n in 10" :key="n" height="3.2rem" />
+          <Skeleton v-for="n in 11" :key="n" height="3.2rem" />
         </div>
 
         <Form
@@ -263,6 +296,22 @@ const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
                 fetch: searchCountries,
                 record: country,
                 permission: 'totem.country.read',
+              }"
+            />
+
+            <!-- The other relation, and the only list-valued field of the form:
+                 the draft holds the tag ids, the chips are painted from the
+                 tags the GET already nested, and /contact-tags/ is not called
+                 until the dropdown is opened. -->
+            <Field
+              name="tags"
+              widget="many2many_tags"
+              label="Tags"
+              :options="{
+                fetch: searchContactTags,
+                records: tags,
+                permission: 'totem.contacttag.read',
+                placeholder: 'Add a tag…',
               }"
             />
           </template>

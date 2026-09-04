@@ -8,13 +8,45 @@
 import type { ChoiceInput, FieldValue, SelectionChoice } from './types'
 
 /**
- * A field is empty when it is `null`, `undefined` or the empty string.
+ * A field is empty when it is `null`, `undefined`, the empty string or the
+ * empty list.
  *
  * What is deliberately NOT empty: `false` (a boolean answered "no") and `0` (a
  * perfectly valid number). Conflating the two is the classic `required` bug.
+ *
+ * A list-valued field is empty at `[]` and not at `null`: that is the shape it
+ * actually holds when the user has picked nothing, so a `required` many-to-many
+ * would otherwise always pass.
  */
 export function isEmpty(value: FieldValue | undefined): boolean {
+  if (Array.isArray(value)) return value.length === 0
   return value === undefined || value === null || value === ''
+}
+
+/**
+ * Do two field values hold the same thing?
+ *
+ * `Object.is` for every scalar -- which is all it ever needed to be while a
+ * FieldValue was a primitive. Two lists compare as SETS instead: a
+ * many-to-many has no order, the backend accepts the ids in any, and the widget
+ * rebuilds the array on every pick. Comparing those by reference would report
+ * the field as edited on every render, which turns Save into a permanent
+ * no-op-that-PATCHes; comparing them by ORDER would report a reordering that
+ * the user cannot even perform.
+ *
+ * A list and a scalar are never equal -- `Object.is` already says so.
+ */
+export function sameFieldValue(a: FieldValue | undefined, b: FieldValue | undefined): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false
+    // Compared in their string form, and sorted as strings: the ids may be
+    // numbers on one side and the strings the backend sent on the other, and
+    // this is a set comparison, not an ordering anyone reads.
+    const left = a.map(String).sort()
+    const right = b.map(String).sort()
+    return left.every((id, index) => id === right[index])
+  }
+  return Object.is(a, b)
 }
 
 /**

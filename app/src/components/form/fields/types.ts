@@ -21,18 +21,26 @@ export type Widget =
   | 'date'
   | 'color'
   | 'many2one'
+  | 'many2many_tags'
 
 /**
- * What a field can hold -- deliberately narrow: exactly what the nine widgets
+ * What a field can hold -- deliberately narrow: exactly what the ten widgets
  * can produce. A date is an ISO `YYYY-MM-DD` string, a colour is a palette
- * index and a many-to-one is the id of the related record, so none of them
- * widened this.
+ * index and a many-to-one is the id of the related record, so none of those
+ * widened this. A many-to-many did: its value is the list of ids of the related
+ * records, and there is no primitive that carries a list.
  *
- * INVARIANT held by all nine: an empty field is `null`. Never '', never NaN,
- * never undefined. The payload emitted by `save` is therefore readable without
- * a per-key emptiness rule.
+ * INVARIANT held by the nine scalar widgets: an empty field is `null`. Never
+ * '', never NaN, never undefined. A list-valued widget holds the same line by
+ * being empty as `[]`, never as `null` -- see isEmpty, which reads both as
+ * empty so `required` cannot be fooled.
+ *
+ * INVARIANT held by every list-valued widget, and load-bearing: it NEVER
+ * mutates its value in place, it always emits a NEW array. <Form> keeps its
+ * baseline as a shallow copy, so an in-place push would edit the baseline too
+ * and the field would read as permanently untouched.
  */
-export type FieldValue = string | number | boolean | null
+export type FieldValue = string | number | boolean | null | (string | number)[]
 
 /** One entry of a dropdown. */
 export interface SelectionChoice {
@@ -68,9 +76,9 @@ export interface FieldOptions {
   /** BooleanField: force the control shape instead of deriving it from `required`. */
   display?: 'radio' | 'select'
   /**
-   * ManyToOneField: loads the candidates. REQUIRED for that widget -- it is
-   * what carries the endpoint, its `?fields=` list and the name of its search
-   * parameter, all of which belong to a resource module.
+   * ManyToOneField / ManyToManyTagsField: loads the candidates. REQUIRED for
+   * both -- it is what carries the endpoint, its `?fields=` list and the name
+   * of its search parameter, all of which belong to a resource module.
    */
   fetch?: RelationFetch
   /**
@@ -79,14 +87,25 @@ export interface FieldOptions {
    * and what keeps the selected entry labelled while a search excludes it.
    */
   record?: RelationRecord | null
-  /** ManyToOneField: builds the label of a record. Defaults to displayRelation. */
+  /**
+   * ManyToManyTagsField: the related records as the resource returned them,
+   * nested. The plural of `record`, and it carries more weight here: nothing is
+   * fetched until the dropdown is opened, so until then this is the ONLY thing
+   * that can label the chips. Omitting it shows bare ids.
+   */
+  records?: RelationRecord[] | null
+  /** ManyToOneField / ManyToManyTagsField: builds the label of a record.
+      Defaults to displayRelation. */
   relationDisplay?: RelationDisplay
-  /** ManyToOneField: permission required to read the related endpoint. Without
-      it the field degrades to its read-only display instead of a 403. */
+  /** ManyToOneField / ManyToManyTagsField: permission required to read the
+      related endpoint. Without it the field degrades to its read-only display
+      instead of a 403. */
   permission?: string
-  /** ManyToOneField: the filter box of the dropdown. On by default. */
+  /** ManyToOneField / ManyToManyTagsField: the filter box of the dropdown.
+      On by default. */
   filter?: boolean
-  /** ManyToOneField: how long to wait after a keystroke before searching, in ms. */
+  /** ManyToOneField / ManyToManyTagsField: how long to wait after a keystroke
+      before searching, in ms. */
   filterDelay?: number
   filterPlaceholder?: string
   [key: string]: unknown

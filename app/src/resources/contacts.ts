@@ -2,9 +2,9 @@
  * /api/v1/contacts/ -- the address book.
  *
  * The model flattens a postal address into the record (`AddressMixin`) and
- * carries a many-to-many to the tags. `country` is editable from the form, as
- * the id of the related row; `tags` is still read on the list and never
- * written.
+ * carries a many-to-many to the tags. Both relations are editable from the
+ * form and both are WRITTEN AS IDS -- `country` as one, `tags` as a list --
+ * while both are READ as the nested objects the GET returns.
  */
 
 import { apiFetch, patchJson, postJson } from '@/api/client'
@@ -12,11 +12,17 @@ import { fetchList, type ListQuery, type Page } from '@/api/list'
 
 import type { CountryRef } from './countries'
 
-/** A tag as it appears nested in a contact. Written as an id array, read as this. */
-export interface ContactTagRef {
+/**
+ * A tag as it appears nested in a contact. Written as an id array, read as this.
+ *
+ * A `type` and not an `interface`, for the same reason as CountryRef: only type
+ * aliases get the implicit index signature that makes them assignable to
+ * `RelationRecord`, which is what `options.records` on the tags field takes.
+ */
+export type ContactTagRef = {
   id: string
   name: string
-  /** Index into the front-end palette -- see @/components/form/fields/colors. */
+  /** Index into the front-end palette -- see @/components/colors. */
   color: number
 }
 
@@ -103,10 +109,9 @@ export function fetchContact(id: string, signal?: AbortSignal): Promise<ContactD
 /**
  * The create body.
  *
- * `country` is the ISO code of the related row -- a relation is written as the
- * id of its target, never as the nested object it is read as. `tags` is absent
- * on purpose: the form does not expose it yet, so it is never sent -- see
- * createContact for the one exception.
+ * A relation is written as the id of its target, never as the nested object it
+ * is read as: `country` is the ISO code of the related row, and `tags` is the
+ * list of tag ids.
  */
 export interface ContactCreatePayload {
   last_name: string
@@ -120,12 +125,14 @@ export interface ContactCreatePayload {
   city?: string | null
   /** ISO 3166-1 alpha-2, or `null` to clear the relation. */
   country?: string | null
+  /** Tag ids. `[]` clears every tag; omitting the key leaves them alone. */
+  tags?: string[]
 }
 
 /**
- * `tags: []` is seeded the way createUser seeds `roles: []`: the create schema
- * has no default for the relation. A brand new contact has no tag anyway, so
- * this states the obvious rather than deciding anything.
+ * `tags: []` is the fallback the way createUser seeds `roles: []`: the create
+ * schema has no default for the relation, so the key has to be there even when
+ * the caller picked nothing. A caller that DID pick tags overrides it.
  */
 export function createContact(payload: ContactCreatePayload): Promise<ContactDetail> {
   return postJson<ContactDetail>('/contacts/', { tags: [], ...payload })
@@ -135,9 +142,15 @@ export function createContact(payload: ContactCreatePayload): Promise<ContactDet
  * A PATCH body, and only the edited keys.
  *
  * The backend deserialises with `exclude_unset=True`: an omitted key is left
- * untouched, where an explicit `null` is written. That is what keeps `tags`
- * safe -- an update never mentions it, so editing a phone number cannot wipe a
- * contact's tags -- and what makes clearing the country an explicit `null`.
+ * untouched, where an explicit `null` is written. Clearing the country is
+ * therefore an explicit `null`, and clearing the tags an explicit `[]`.
+ *
+ * Which makes the omission of `tags` load-bearing: editing a phone number must
+ * not mention the relation, or the PATCH would wipe it. The caller only sends
+ * the key when <Form> reports it as changed, and <Form> can only tell because
+ * `sameFieldValue` compares the two id lists as SETS -- reference equality
+ * would report the list as edited on every render and every PATCH would carry
+ * it. See @/components/form/fields/values.
  */
 export type ContactUpdatePayload = Partial<ContactCreatePayload>
 
