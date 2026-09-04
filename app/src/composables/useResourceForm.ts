@@ -42,6 +42,25 @@ export interface UseResourceFormOptions<T> {
    */
   update(id: string, changed: FormData): Promise<T>
   /**
+   * Runs when a record has been loaded, and with `null` on a create form once
+   * the defaults are seeded.
+   *
+   * For state living OUTSIDE the <Form> draft -- the value of a standalone
+   * widget, which is not a <Field> and therefore registers nothing. Nothing
+   * else would re-seed it when the route param changes under a reused
+   * component, so without this hook such a widget keeps showing the previous
+   * record's value.
+   */
+  onLoaded?(record: T | null): void
+  /**
+   * True when that outside state was edited.
+   *
+   * Without it, an edit that touched only a standalone widget leaves `changed`
+   * empty, `save` below takes its no-op shortcut, and the change is dropped in
+   * silence -- the screen even navigates away as if it had been saved.
+   */
+  hasExternalChanges?(): boolean
+  /**
    * Runs after a successful save -- typically a redirect. Its resolved value
    * is ignored, so `router.push` can be returned straight from an arrow
    * without discarding its NavigationFailure.
@@ -116,6 +135,7 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
       loadError.value = null
       loading.value = false
       data.value = { ...options.defaults }
+      options.onLoaded?.(null)
       return
     }
 
@@ -128,6 +148,9 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
       if (ticket !== seq) return
       loaded = record
       data.value = options.toForm(record)
+      // Inside the ticket guard above, so a superseded response cannot re-seed
+      // a widget with the record the user has already navigated away from.
+      options.onLoaded?.(record)
     } catch (caught) {
       if (ticket !== seq || controller.signal.aborted) return
       loadError.value =
@@ -148,7 +171,11 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
     // Nothing was touched. Skipping the request is not just an optimisation:
     // an empty PATCH body updates no row, and the backend reports that as a
     // 404. The screen still moves on, which is what Save is expected to do.
-    if (current && !Object.keys(changed).length) {
+    //
+    // `hasExternalChanges` is the escape hatch: the draft can be untouched
+    // while a standalone widget outside it was edited, and that edit still has
+    // to be sent.
+    if (current && !Object.keys(changed).length && !options.hasExternalChanges?.()) {
       if (loaded) await options.onSaved?.(loaded, 'edit')
       return
     }

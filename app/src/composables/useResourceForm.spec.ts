@@ -299,3 +299,85 @@ describe('useResourceForm — save errors', () => {
     expect(onSaved).not.toHaveBeenCalled()
   })
 })
+
+/*
+ * State a standalone widget owns, outside the <Form> draft. UserFormView's
+ * roles widget is the case these two hooks exist for.
+ */
+describe('useResourceForm — state outside the draft', () => {
+  const record = { id: '7', name: 'Totem' }
+
+  it('reports the loaded record so the caller can seed its own state', async () => {
+    const onLoaded = vi.fn()
+    mount({ id: '7', fetchOne: async () => record, onLoaded })
+    await flush()
+
+    expect(onLoaded).toHaveBeenCalledWith(record)
+  })
+
+  // A create form has no record, but the caller still has to reset: the
+  // component is reused between /users/7 and /users/new.
+  it('reports null on a create form', async () => {
+    const onLoaded = vi.fn()
+    mount({ onLoaded })
+    await flush()
+
+    expect(onLoaded).toHaveBeenCalledWith(null)
+  })
+
+  it('does not report a response a newer request has superseded', async () => {
+    const first = deferred<Record>()
+    const second = deferred<Record>()
+    const responses = [first, second]
+    const id = ref<string | null>('1')
+    const onLoaded = vi.fn()
+    mount({ id, fetchOne: () => responses.shift()!.promise, onLoaded })
+    await flush()
+
+    id.value = '2'
+    await flush()
+
+    second.resolve({ id: '2', name: 'newer' })
+    await flush()
+    first.resolve({ id: '1', name: 'older' })
+    await flush()
+
+    expect(onLoaded).toHaveBeenCalledTimes(1)
+    expect(onLoaded).toHaveBeenCalledWith({ id: '2', name: 'newer' })
+  })
+
+  // Without this, an edit confined to the widget leaves `changed` empty, the
+  // no-op shortcut swallows it, and the screen navigates away as if saved.
+  it('still updates when only the outside state was edited', async () => {
+    const update = vi.fn(async () => record)
+    const { form } = mount({
+      id: '7',
+      fetchOne: async () => record,
+      update,
+      hasExternalChanges: () => true,
+    })
+    await flush()
+
+    await form.save({ name: 'Totem' }, {})
+
+    expect(update).toHaveBeenCalledWith('7', {})
+  })
+
+  it('keeps the no-op shortcut when it reports nothing edited', async () => {
+    const update = vi.fn()
+    const onSaved = vi.fn()
+    const { form } = mount({
+      id: '7',
+      fetchOne: async () => record,
+      update,
+      onSaved,
+      hasExternalChanges: () => false,
+    })
+    await flush()
+
+    await form.save({ name: 'Totem' }, {})
+
+    expect(update).not.toHaveBeenCalled()
+    expect(onSaved).toHaveBeenCalledWith(record, 'edit')
+  })
+})

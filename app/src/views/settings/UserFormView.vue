@@ -3,13 +3,15 @@ import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
 import Form from '@/components/form/Form.vue'
+import UserRolesSelectionWidget from '@/components/form/widget/UserRolesSelectionWidget.vue'
+import { sameRoleIds } from '@/components/form/widget/userRolesSelection'
 import { useResourceForm } from '@/composables/useResourceForm'
 import {
   createUser,
@@ -37,6 +39,24 @@ const route = useRoute()
  */
 const listRoute = computed(() => ({ name: 'settings-users', query: route.query }))
 
+/*
+ * The roles live here rather than in the <Form> draft.
+ *
+ * UserRolesSelectionWidget is not a <Field> -- its value is a list of ids, and
+ * a FieldValue is a primitive -- so it registers nothing and <Form> knows
+ * nothing about it. Everything <Form> would have done is therefore explicit
+ * below: seeding on load (`onLoaded`), telling an edit from an untouched list
+ * (`rolesDirty`), enabling Save, and reaching the payload.
+ */
+const roleIds = ref<string[]>([])
+
+/** What the record carried, to tell an edit from an untouched list. */
+const roleBaseline = ref<string[]>([])
+
+/** A set comparison: the widget rebuilds the list on every pick, and the order
+    carries no meaning. */
+const rolesDirty = computed(() => !sameRoleIds(roleIds.value, roleBaseline.value))
+
 /** `FieldValue` is wider than the payload accepts: these five fields only ever
     produce strings, but the type does not say so. */
 function text(value: FieldValue): string | null {
@@ -52,12 +72,13 @@ function language(value: unknown): UserLanguage {
 /*
  * Both payloads are built key by key, never by copying the draft.
  *
- * What is NOT sent matters as much. On create, `roles: []` is added by
- * `createUser` and `user_type`/`avatar` are omitted so the backend applies its
- * defaults. On update, omitting them is what LEAVES THEM ALONE: the backend
- * builds its update with `exclude_unset=True`, so an omitted key is untouched
- * while `roles: []` would wipe the account's roles and the mere presence of
- * `user_type` would invalidate its tokens.
+ * What is NOT sent matters as much. `user_type` and `avatar` are omitted from
+ * both: on create so the backend applies its defaults, on update because
+ * omitting them is what LEAVES THEM ALONE -- the backend builds its update with
+ * `exclude_unset=True`, and the mere presence of `user_type` invalidates the
+ * account's tokens. `roles` is the opposite case and the delicate one: always
+ * sent on create, sent on update only when the widget's value moved, because
+ * `roles: []` wipes the account's roles.
  */
 function createPayload(values: FormData): UserCreatePayload {
   return {
@@ -66,6 +87,8 @@ function createPayload(values: FormData): UserCreatePayload {
     first_name: text(values.first_name),
     last_name: text(values.last_name),
     language: language(values.language),
+    // A fresh array: the payload must not alias the widget's live value.
+    roles: [...roleIds.value],
   }
 }
 
@@ -81,6 +104,15 @@ function updatePayload(changed: FormData): UserUpdatePayload {
   if ('first_name' in changed) body.first_name = text(changed.first_name)
   if ('last_name' in changed) body.last_name = text(changed.last_name)
   if ('language' in changed) body.language = language(changed.language)
+
+  // Read from the ref, not from `changed`: the roles were never in the draft.
+  // Present ONLY when the dropdowns actually moved -- an omitted key leaves the
+  // account's roles alone, where `roles: []` wipes them. Clearing every
+  // dropdown IS that wipe, deliberately. Without the totem.userrole.read
+  // permission the widget never renders, the value never moves, and `roles`
+  // therefore never reaches the body.
+  if (rolesDirty.value) body.roles = [...roleIds.value]
+
   return body
 }
 
@@ -104,6 +136,17 @@ const form = useResourceForm<UserDetail>({
     language: language(user.language),
   }),
   fetchOne: fetchUser,
+  // <Form> re-seeds its draft when `data` changes identity; nothing would
+  // re-seed a value living outside it. This is that, for the roles widget --
+  // without it, walking from one user to the next keeps the previous account's
+  // roles on screen and one careless Save moves them.
+  onLoaded: (user) => {
+    roleBaseline.value = user ? (user.roles ?? []).map((role) => role.id) : []
+    roleIds.value = [...roleBaseline.value]
+  },
+  // An edit confined to the dropdowns leaves `changed` empty, and an empty
+  // `changed` makes useResourceForm skip the PATCH entirely.
+  hasExternalChanges: () => rolesDirty.value,
   create: (values) => createUser(createPayload(values)),
   update: (id, changed) => updateUser(id, updatePayload(changed)),
   notFoundMessage: 'This user no longer exists.',
@@ -133,9 +176,9 @@ const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
         <h1>{{ title }}</h1>
         <p class="page__subtitle">
           <template v-if="isNew">
-            The account is created with no role: permissions are granted afterwards.
+            Roles can be granted right away: permissions are the union of them.
           </template>
-          <template v-else>Roles and account status are not editable here.</template>
+          <template v-else>The account status is not editable here.</template>
         </p>
       </div>
     </header>
@@ -158,7 +201,7 @@ const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
         <!-- Placeholders with the form's real shape, so the card does not jump
              when the record lands. -->
         <div v-if="loading" class="user-form__skeleton">
-          <Skeleton v-for="n in 5" :key="n" height="3.2rem" />
+          <Skeleton v-for="n in 6" :key="n" height="3.2rem" />
         </div>
 
         <Form
@@ -169,53 +212,73 @@ const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
           :errors="fieldErrors"
           @save="form.save"
         >
-          <Field
-            name="login"
-            widget="string"
-            label="Login"
-            required
-            :options="{ maxLength: 255, placeholder: 'jdoe' }"
-            help="Used to sign in. It must be unique."
-          />
+          <template #default="{ draft }">
+            <Field
+              name="login"
+              widget="string"
+              label="Login"
+              required
+              :options="{ maxLength: 255, placeholder: 'jdoe' }"
+              help="Used to sign in. It must be unique."
+            />
 
-          <Field
-            name="email"
-            widget="string"
-            label="Email"
-            required
-            :options="{ maxLength: 255, placeholder: 'jane.doe@example.com' }"
-          />
+            <Field
+              name="email"
+              widget="string"
+              label="Email"
+              required
+              :options="{ maxLength: 255, placeholder: 'jane.doe@example.com' }"
+            />
 
-          <Field name="first_name" widget="string" label="First name" :options="{ maxLength: 255 }" />
+            <Field name="first_name" widget="string" label="First name" :options="{ maxLength: 255 }" />
 
-          <Field name="last_name" widget="string" label="Last name" :options="{ maxLength: 255 }" />
+            <Field name="last_name" widget="string" label="Last name" :options="{ maxLength: 255 }" />
 
-          <Field
-            name="language"
-            widget="selection"
-            label="Language"
-            required
-            :options="{
-              choices: [
-                { value: 'fr', label: 'French' },
-                { value: 'en-us', label: 'English' },
-              ],
-            }"
-            help="Interface language for this account."
-          />
+            <Field
+              name="language"
+              widget="selection"
+              label="Language"
+              required
+              :options="{
+                choices: [
+                  { value: 'fr', label: 'French' },
+                  { value: 'en-us', label: 'English' },
+                ],
+              }"
+              help="Interface language for this account."
+            />
+
+            <!-- Not a <Field>: its value is a list of role ids, which the
+                 <Field> system cannot carry. It is passed `draft` for the same
+                 reason a widget receives `values` -- so a rule can depend on a
+                 sibling -- and everything <Field> would have forwarded is
+                 explicit here: the lock during a save, and the server error,
+                 which <Form> can only route to a registered field. -->
+            <UserRolesSelectionWidget
+              v-model="roleIds"
+              :values="draft"
+              label="Roles"
+              help="One role per category. Permissions are the union of the roles granted."
+              :readonly="saving"
+              :invalid="Boolean(fieldErrors.roles)"
+              :error="fieldErrors.roles"
+            />
+          </template>
 
           <template #actions="{ dirty }">
             <RouterLink :to="listRoute">
               <Button label="Cancel" severity="secondary" text :disabled="saving" />
             </RouterLink>
             <!-- Nothing edited means nothing to PATCH, so on an existing
-                 record Save has no work to do. A create always has. -->
+                 record Save has no work to do. A create always has.
+                 `rolesDirty` is OR-ed in because the roles widget lives outside
+                 the draft, so <Form>'s own `dirty` cannot see it. -->
             <Button
               type="submit"
               :label="saveLabel"
               icon="pi pi-check"
               :loading="saving"
-              :disabled="!isNew && !dirty"
+              :disabled="!isNew && !dirty && !rolesDirty"
             />
           </template>
         </Form>
