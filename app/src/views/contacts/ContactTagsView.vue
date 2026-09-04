@@ -7,7 +7,6 @@ import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
-import Tag from 'primevue/tag'
 import { computed, reactive } from 'vue'
 import { useRoute } from 'vue-router'
 

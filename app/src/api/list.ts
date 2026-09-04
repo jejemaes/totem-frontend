@@ -94,6 +94,51 @@ export function fetchList<T>(
   return apiFetch<Page<T>>(`${path}?${listParams(query, fields).toString()}`, { signal })
 }
 
+/**
+ * A stop, not a tuning knob: a backend answering with a non-null `next` forever
+ * would otherwise loop until the tab dies. 10 * 199 rows is far past anything a
+ * caller of `fetchAllPages` can sensibly put in front of a user.
+ */
+const MAX_PAGES = 10
+
+/**
+ * Every page of a list endpoint, concatenated.
+ *
+ * For the callers that need a WHOLE result set rather than a page of it -- a
+ * relation dropdown, a catalogue to group. Asking for MAX_PAGE_SIZE means one
+ * request in practice, but stopping at the first page would silently drop the
+ * rest, which is exactly the kind of bug that only shows up once the table
+ * grows past 199 rows.
+ *
+ * `next` is only ever TESTED, never dereferenced: it is an absolute URL built
+ * by the backend, and `apiFetch` prefixes /api/v1, so following it would
+ * request `/api/v1http://...`. The page number is ours to increment.
+ */
+export async function fetchAllPages<T>(
+  path: string,
+  fields: readonly string[],
+  options?: { filters?: ListFilters; ordering?: string | null },
+  signal?: AbortSignal,
+): Promise<T[]> {
+  const rows: T[] = []
+
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const result = await fetchList<T>(
+      path,
+      { page, pageSize: MAX_PAGE_SIZE, ordering: options?.ordering, filters: options?.filters },
+      fields,
+      signal,
+    )
+    rows.push(...result.results)
+
+    // An empty page is also a stop: without it, a backend whose `next` never
+    // goes null would spin through every allowed page for nothing.
+    if (!result.next || !result.results.length || rows.length >= result.count) break
+  }
+
+  return rows
+}
+
 // ----------------------------------------------------------------- URL state
 
 /** Structural stand-in for vue-router's LocationQuery, so this stays router-free. */

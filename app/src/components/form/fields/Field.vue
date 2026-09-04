@@ -10,6 +10,7 @@ import ColorIntegerField from './ColorIntegerField.vue'
 import DateField from './DateField.vue'
 import FloatField from './FloatField.vue'
 import IntegerField from './IntegerField.vue'
+import ManyToOneField from './ManyToOneField.vue'
 import SelectionField from './SelectionField.vue'
 import TextField from './TextField.vue'
 import type { FieldProps, FieldValue, Widget } from './types'
@@ -24,7 +25,7 @@ const props = defineProps<FieldDeclarationProps>()
 
 /**
  * The one and only widget -> component registry. This file is what loads the
- * eight field types.
+ * nine field types.
  *
  * Typed `Record<Widget, Component>` on purpose: adding a member to `Widget`
  * without adding its component here becomes a compile error rather than a blank
@@ -39,6 +40,7 @@ const WIDGETS: Record<Widget, Component> = {
   selection: SelectionField,
   date: DateField,
   color: ColorIntegerField,
+  many2one: ManyToOneField,
 }
 
 const form = useFormContext()
