@@ -1,18 +1,27 @@
 /*
  * Contracts shared by every field component.
  *
- * Types only: this module is imported by the eight components in this folder
+ * Types only: this module is imported by the ten components in this folder
  * and by ../context.ts, so it must never pull in a runtime dependency.
  */
 
 /** The widget names accepted by `<Field widget="...">`. */
-export type Widget = 'string' | 'boolean' | 'text' | 'integer' | 'float' | 'selection'
+export type Widget =
+  | 'string'
+  | 'boolean'
+  | 'text'
+  | 'integer'
+  | 'float'
+  | 'selection'
+  | 'date'
+  | 'color'
 
 /**
- * What a field can hold -- deliberately narrow: exactly what the six widgets
- * can produce.
+ * What a field can hold -- deliberately narrow: exactly what the eight widgets
+ * can produce. A date is an ISO `YYYY-MM-DD` string and a colour is a palette
+ * index, so neither of them widened this.
  *
- * INVARIANT held by all six: an empty field is `null`. Never '', never NaN,
+ * INVARIANT held by all eight: an empty field is `null`. Never '', never NaN,
  * never undefined. The payload emitted by `save` is therefore readable without
  * a per-key emptiness rule.
  */
@@ -29,7 +38,7 @@ export type ChoiceInput = string | number | SelectionChoice
 
 /**
  * Free-form configuration, interpreted by each widget. The keys below are the
- * ones the six widgets read; anything else is carried and ignored -- which is
+ * ones the eight widgets read; anything else is carried and ignored -- which is
  * what makes this an extension point rather than a fixed schema.
  */
 export interface FieldOptions {
@@ -42,7 +51,11 @@ export interface FieldOptions {
   maxLength?: number
   /** IntegerField / FloatField */
   min?: number
+  /** IntegerField / FloatField; ColorIntegerField: the highest palette index. */
   max?: number
+  /** DateField: the selectable range, as ISO `YYYY-MM-DD` strings. */
+  minDate?: string
+  maxDate?: string
   /** FloatField: how many decimals are kept. */
   maxFractionDigits?: number
   /** BooleanField: force the control shape instead of deriving it from `required`. */

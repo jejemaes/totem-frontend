@@ -4,6 +4,10 @@ import { useAuthStore } from '@/auth/authStore'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import BlankLayout from '@/layouts/BlankLayout.vue'
 
+import ContactFormView from '@/views/contacts/ContactFormView.vue'
+import ContactsView from '@/views/contacts/ContactsView.vue'
+import ContactTagFormView from '@/views/contacts/ContactTagFormView.vue'
+import ContactTagsView from '@/views/contacts/ContactTagsView.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import DiagnosticView from '@/views/DiagnosticView.vue'
 import ForbiddenView from '@/views/ForbiddenView.vue'
@@ -44,6 +48,53 @@ export const router = createRouter({
       component: AdminLayout,
       children: [
         { path: 'dashboard', name: 'dashboard', component: DashboardView, meta: { title: 'Dashboard' } },
+
+        // Contacts. Same three-route shape as the users block below, and the
+        // paths mirror the API's own (/contacts/, /contact-tags/). Tags get a
+        // top-level path rather than '/contacts/tags' so no one ever has to
+        // reason about whether ':id' could swallow it.
+        {
+          path: 'contacts',
+          name: 'contacts',
+          component: ContactsView,
+          meta: { title: 'Contacts', permissions: ['totem.contact.read'] },
+        },
+        {
+          path: 'contacts/new',
+          name: 'contact-create',
+          component: ContactFormView,
+          meta: { title: 'New contact', permissions: ['totem.contact.create'] },
+        },
+        {
+          path: 'contacts/:id',
+          name: 'contact-edit',
+          component: ContactFormView,
+          meta: {
+            title: 'Edit contact',
+            permissions: ['totem.contact.read', 'totem.contact.update'],
+          },
+        },
+        {
+          path: 'contact-tags',
+          name: 'contact-tags',
+          component: ContactTagsView,
+          meta: { title: 'Contact tags', permissions: ['totem.contacttag.read'] },
+        },
+        {
+          path: 'contact-tags/new',
+          name: 'contact-tag-create',
+          component: ContactTagFormView,
+          meta: { title: 'New tag', permissions: ['totem.contacttag.create'] },
+        },
+        {
+          path: 'contact-tags/:id',
+          name: 'contact-tag-edit',
+          component: ContactTagFormView,
+          meta: {
+            title: 'Edit tag',
+            permissions: ['totem.contacttag.read', 'totem.contacttag.update'],
+          },
+        },
         {
           path: 'settings/users',
           name: 'settings-users',
