@@ -70,7 +70,7 @@ export type UserLanguage = 'en-us' | 'fr'
 /**
  * Body of POST /users/.
  *
- * The schema accepts only these keys plus `roles`, `user_type` and `avatar`.
+ * The schema accepts only these keys plus `user_type` and `avatar`.
  * `is_active`, `password` and `id` are dropped in silence -- note there is no
  * password field in the API at all, so an account created here has no way to
  * sign in until one is set elsewhere.
@@ -87,12 +87,22 @@ export interface UserCreatePayload {
    * key is what lets the backend apply 'fr'.
    */
   language?: UserLanguage
+  /**
+   * Role ids, e.g. ['USERTYPE_ADMIN']. Relations are read as nested objects
+   * and written as id arrays.
+   *
+   * Required by the schema, so `createUser` injects `[]` for a caller that
+   * omits it. On an UPDATE the same key means something else entirely -- see
+   * UserUpdatePayload, and do not send it lightly.
+   */
+  roles?: string[]
 }
 
 /**
- * `roles` is required by the schema but has no widget -- there is no relational
- * field yet -- so it is injected here rather than carried by the form. The
- * account is therefore created with no role at all.
+ * `roles` is required by the schema, so an empty list is injected for a caller
+ * that does not carry one -- an account with no role at all. UserFormView does
+ * carry one, through UserRolesSelectionWidget, and its value wins over the
+ * default below.
  *
  * `user_type` and `avatar` are ABSENT rather than sent as `null`: both are
  * non-nullable columns with a default, so an explicit `null` is a 422. That is
@@ -128,11 +138,14 @@ export function fetchUser(id: string, signal?: AbortSignal): Promise<UserDetail>
  * `exclude_unset=True`, so **an omitted key is left untouched** while an
  * explicit `null` is written. The two are not interchangeable.
  *
- * That is what makes it safe for the edit form to leave `roles`, `user_type`
- * and `avatar` out entirely: omitting them keeps the account's existing roles,
- * where sending `roles: []` -- as creation does -- would wipe them. So would
- * `roles: null`, which the service turns into an empty list. Only omission is
- * safe.
+ * That is what makes it safe for the edit form to leave `user_type` and
+ * `avatar` out entirely, and it is why `roles` must reach this body ONLY when
+ * the user actually edited them: omitting the key keeps the account's existing
+ * roles, where `roles: []` -- as creation sends -- wipes them. So does
+ * `roles: null`, which the service turns into an empty list. There is no way to
+ * say "leave the roles alone" other than not mentioning them, so an unedited
+ * roles list must never be echoed back. Sending `roles: []` on purpose, by
+ * clearing every dropdown, is then a deliberate wipe rather than an accident.
  *
  * `user_type` must be omitted for a second reason: UserQuerySet.update fires
  * `user_change_rights` on the mere PRESENCE of that key, which invalidates the
