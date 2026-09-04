@@ -11,7 +11,7 @@ import { computed, reactive } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { can } from '@/auth/permissions'
-import { colorAt } from '@/components/form/fields/colors'
+import ColorDot from '@/components/ColorDot.vue'
 import { useResourceList } from '@/composables/useResourceList'
 import {
   CONTACT_TAG_SORTABLE,
@@ -135,7 +135,7 @@ const skeletonRows = Array.from(
         <template #body="{ data }">
           <Skeleton v-if="isInitialLoad" height="1rem" />
           <div v-else class="colour-cell">
-            <span class="colour-cell__swatch" :style="{ backgroundColor: colorAt(data.color) }" />
+            <ColorDot :color="data.color" />
           </div>
         </template>
       </Column>
@@ -184,13 +184,6 @@ const skeletonRows = Array.from(
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.colour-cell__swatch {
-  width: 1.1rem;
-  height: 1.1rem;
-  border-radius: 50%;
-  border: 1px solid var(--p-content-border-color, rgb(0 0 0 / 15%));
 }
 
 .row-actions {

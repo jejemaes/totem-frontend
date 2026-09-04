@@ -5,7 +5,7 @@ import { computed, provide, reactive, ref, toRaw, watch } from 'vue'
 
 import { FORM_CONTEXT, type FormData } from './context'
 import type { FieldValue } from './fields/types'
-import { isEmpty } from './fields/values'
+import { isEmpty, sameFieldValue } from './fields/values'
 
 const props = withDefaults(
   defineProps<{
@@ -80,12 +80,16 @@ const showActions = computed(() => !props.readonly)
  *
  * A key ABSENT from `data` counts as changed as soon as it holds anything: it
  * was filled by a <Field default>, and the caller does not have that value
- * yet. `Object.is` is enough -- a FieldValue is always a primitive.
+ * yet.
+ *
+ * `sameFieldValue` and not `Object.is`: a list-valued field is rebuilt on every
+ * pick, so reference equality would report it as edited forever -- Save would
+ * never disable, and every PATCH would carry it.
  */
 const changed = computed<FormData>(() => {
   const result: FormData = {}
   for (const [key, value] of Object.entries(draft)) {
-    if (!Object.is(value, baseline.value[key])) result[key] = value
+    if (!sameFieldValue(value, baseline.value[key])) result[key] = value
   }
   return result
 })

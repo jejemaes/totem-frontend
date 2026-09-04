@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { isEmpty, normaliseChoices, toDateOrNull, toIsoDate, toNumberOrNull } from './values'
+import {
+  isEmpty,
+  normaliseChoices,
+  sameFieldValue,
+  toDateOrNull,
+  toIsoDate,
+  toNumberOrNull,
+} from './values'
 
 describe('isEmpty', () => {
   it('treats null, undefined and the empty string as empty', () => {
@@ -19,6 +26,67 @@ describe('isEmpty', () => {
 
   it('keeps whitespace as a value', () => {
     expect(isEmpty(' ')).toBe(false)
+  })
+
+  // A list-valued field holds `[]` when nothing is picked, never `null`, so
+  // this is what `required` actually has to catch.
+  it('treats the empty list as empty', () => {
+    expect(isEmpty([])).toBe(true)
+  })
+
+  it('treats a list holding anything as filled', () => {
+    expect(isEmpty(['a'])).toBe(false)
+    expect(isEmpty([0])).toBe(false)
+  })
+})
+
+describe('sameFieldValue', () => {
+  it('compares scalars the way Object.is does', () => {
+    expect(sameFieldValue('a', 'a')).toBe(true)
+    expect(sameFieldValue(0, 0)).toBe(true)
+    expect(sameFieldValue(false, false)).toBe(true)
+    expect(sameFieldValue(null, null)).toBe(true)
+    expect(sameFieldValue(undefined, undefined)).toBe(true)
+
+    expect(sameFieldValue('a', 'b')).toBe(false)
+    expect(sameFieldValue(0, '0')).toBe(false)
+    expect(sameFieldValue(null, undefined)).toBe(false)
+    expect(sameFieldValue(false, 0)).toBe(false)
+  })
+
+  // The reason the helper exists: the widget rebuilds its array on every pick,
+  // so two equal lists are never the same object.
+  it('compares two lists by value, not by reference', () => {
+    expect(sameFieldValue(['a', 'b'], ['a', 'b'])).toBe(true)
+    expect(sameFieldValue([], [])).toBe(true)
+  })
+
+  it('ignores the order: a many-to-many is a set', () => {
+    expect(sameFieldValue(['b', 'a'], ['a', 'b'])).toBe(true)
+    expect(sameFieldValue([2, 10, 1], [1, 2, 10])).toBe(true)
+  })
+
+  it('reads a numeric id and its string form as the same id', () => {
+    expect(sameFieldValue([1, 2], ['1', '2'])).toBe(true)
+  })
+
+  it('tells different lists apart', () => {
+    expect(sameFieldValue(['a'], ['b'])).toBe(false)
+    expect(sameFieldValue(['a'], ['a', 'b'])).toBe(false)
+    expect(sameFieldValue(['a', 'b'], ['a'])).toBe(false)
+    expect(sameFieldValue([], ['a'])).toBe(false)
+  })
+
+  // A duplicate is not equality: the lists differ in length, and the widget
+  // never produces one anyway.
+  it('does not collapse duplicates', () => {
+    expect(sameFieldValue(['a', 'a'], ['a'])).toBe(false)
+  })
+
+  it('never equates a list with a scalar', () => {
+    expect(sameFieldValue(['a'], 'a')).toBe(false)
+    expect(sameFieldValue([], null)).toBe(false)
+    expect(sameFieldValue([], '')).toBe(false)
   })
 })
 

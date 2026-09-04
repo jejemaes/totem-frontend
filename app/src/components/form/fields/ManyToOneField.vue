@@ -5,8 +5,8 @@ import { computed, onScopeDispose, ref, shallowRef, useId } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
+import ColorDot from '@/components/ColorDot.vue'
 
-import { colorAt } from './colors'
 import FieldWrapper from './FieldWrapper.vue'
 import {
   displayRelation,
@@ -300,11 +300,7 @@ onScopeDispose(() => {
              right but a coloured relation (a tag) reads like a plain one. -->
         <template #value>
           <span v-if="selectedOption" class="many2one__shown">
-            <span
-              v-if="selectedOption.color !== null"
-              class="many2one__dot"
-              :style="{ backgroundColor: colorAt(selectedOption.color) }"
-            />
+            <ColorDot :color="selectedOption.color" />
             {{ selectedOption.label }}
           </span>
           <span v-else>{{ placeholder }}</span>
@@ -312,11 +308,7 @@ onScopeDispose(() => {
 
         <template #option="{ option }">
           <span class="many2one__shown">
-            <span
-              v-if="option.color !== null"
-              class="many2one__dot"
-              :style="{ backgroundColor: colorAt(option.color) }"
-            />
+            <ColorDot :color="option.color" />
             {{ option.label }}
           </span>
         </template>
@@ -334,11 +326,7 @@ onScopeDispose(() => {
        delivered, nested in the record. -->
   <FieldWrapper v-else :label="label" :help="help" :required="required" :error="error">
     <p class="many2one__shown many2one__readonly">
-      <span
-        v-if="readonlyColor !== null"
-        class="many2one__dot"
-        :style="{ backgroundColor: colorAt(readonlyColor) }"
-      />
+      <ColorDot :color="readonlyColor" />
       {{ readonlyLabel }}
     </p>
   </FieldWrapper>
@@ -356,14 +344,6 @@ onScopeDispose(() => {
      border and a padding this one does not. */
   margin: 0;
   padding: 0.5rem 0;
-}
-
-.many2one__dot {
-  width: 1.1rem;
-  height: 1.1rem;
-  flex: none;
-  border-radius: 50%;
-  border: 1px solid var(--p-content-border-color, rgb(0 0 0 / 15%));
 }
 
 .many2one__load-error {
