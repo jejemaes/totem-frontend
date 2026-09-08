@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
+import ConfirmDialog from 'primevue/confirmdialog'
 import Menu from 'primevue/menu'
 import type { MenuItem as PrimeMenuItem } from 'primevue/menuitem'
 import { ref } from 'vue'
@@ -74,5 +75,9 @@ const userMenuItems: PrimeMenuItem[] = [
     <main class="content">
       <RouterView />
     </main>
+
+    <!-- Mounted once for every authenticated screen: useConfirm() only queues a
+         request, and it needs exactly one dialog to render it. -->
+    <ConfirmDialog />
   </div>
 </template>

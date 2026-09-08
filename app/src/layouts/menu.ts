@@ -36,6 +36,24 @@ export const menu: MenuSection[] = [
     ],
   },
   {
+    label: 'Website',
+    icon: 'pi pi-globe',
+    items: [
+      {
+        label: 'Menus',
+        icon: 'pi pi-sitemap',
+        to: '/website/menus',
+        permission: 'totem.websitemenu.read',
+      },
+      {
+        label: 'Pages',
+        icon: 'pi pi-file',
+        to: '/website/pages',
+        permission: 'totem.websitepage.read',
+      },
+    ],
+  },
+  {
     label: 'Settings',
     icon: 'pi pi-cog',
     items: [

@@ -1,5 +1,6 @@
 import { apiFetch, patchJson, postJson } from '@/api/client'
-import { fetchList, type ListQuery, type Page } from '@/api/list'
+import { fetchAllPages, fetchList, type ListQuery, type Page } from '@/api/list'
+import type { RelationRecord } from '@/components/form/fields/many2one'
 
 /**
  * Fields requested from the list endpoint.
@@ -160,6 +161,59 @@ export type UserUpdatePayload = Partial<UserCreatePayload>
 
 export function updateUser(id: string, payload: UserUpdatePayload): Promise<UserDetail> {
   return patchJson<UserDetail>(`/users/${encodeURIComponent(id)}/`, payload)
+}
+
+/**
+ * A user as another resource nests it: exactly the two keys the backend sends
+ * for an author, and no more.
+ *
+ * A `type` and not an `interface` -- unlike UserRow above, which is why this
+ * exists at all: only type aliases get the implicit index signature that makes
+ * them assignable to `RelationRecord`, which is what the relation widgets take.
+ */
+export type UserRef = {
+  id: string
+  login: string
+}
+
+export const USER_RELATION_FIELDS = ['id', 'login'] as const satisfies readonly (keyof UserRef)[]
+
+/**
+ * The loader of a user dropdown: `RelationFetch` shaped.
+ *
+ * `search` is the parameter name THIS endpoint uses, and the backend matches it
+ * against the login or the email, case-insensitively. Nothing about the widget
+ * hardcodes that name.
+ *
+ * Only `id` and `login` are asked for, and that is deliberate rather than
+ * frugal: it is exactly what a nested author carries, so the dropdown entries
+ * and the loaded value are labelled by the same rule. Asking for the real name
+ * here would label the list differently from the selected record.
+ *
+ * No `ordering` is sent: the dropdown has to be sorted by what it DISPLAYS,
+ * which is a client-side notion -- see toRelationOptions.
+ */
+export function searchUsers(
+  search: string | null,
+  signal?: AbortSignal,
+): Promise<UserRef[]> {
+  return fetchAllPages<UserRef>(
+    '/users/',
+    USER_RELATION_FIELDS,
+    { filters: { search } },
+    signal,
+  )
+}
+
+/**
+ * The label of a user in a dropdown, and in a read-only relation field.
+ *
+ * The generic `displayRelation` reads `name`, which this model does not have:
+ * its human key is `login`.
+ */
+export function displayUser(record: RelationRecord): string {
+  const login = record.login
+  return typeof login === 'string' && login.trim() !== '' ? login.trim() : String(record.id)
 }
 
 /** Display name falling back to the login when no real name is set. */
