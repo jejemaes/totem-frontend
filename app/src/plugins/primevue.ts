@@ -2,6 +2,7 @@ import Aura from '@primeuix/themes/aura'
 import type { App } from 'vue'
 
 import PrimeVue from 'primevue/config'
+import ConfirmationService from 'primevue/confirmationservice'
 import ToastService from 'primevue/toastservice'
 
 import 'primeicons/primeicons.css'
@@ -25,4 +26,8 @@ export function installPrimeVue(app: App): void {
     ripple: true,
   })
   app.use(ToastService)
+  // Required by useConfirm(), which the delete buttons go through. The dialog
+  // itself is mounted once in AdminLayout: the service only carries the
+  // request to it.
+  app.use(ConfirmationService)
 }

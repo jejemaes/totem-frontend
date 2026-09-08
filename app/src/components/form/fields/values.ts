@@ -132,3 +132,49 @@ export function toIsoDate(value: unknown): string | null {
   const pad = (part: number): string => String(part).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
+
+/**
+ * Matches an ISO 8601 instant: a calendar date FOLLOWED BY a time. The time is
+ * what makes it an instant, so a bare `YYYY-MM-DD` is rejected here on purpose
+ * -- that is a calendar day, and toDateOrNull is its parser.
+ */
+const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/
+
+/**
+ * An ISO 8601 instant -> a `Date`, or `null`.
+ *
+ * `new Date(string)` is the right tool here, unlike for a calendar day: an
+ * instant HAS a timezone, so letting the runtime apply the `Z` or the offset
+ * the backend sent is exactly what is wanted. The regex is the whole
+ * difference -- it keeps the lenient constructor from accepting `2024-03-31`
+ * (a day, silently read as UTC midnight) or any of the other shapes it guesses
+ * at.
+ *
+ * What it does NOT catch, unlike toDateOrNull: an out-of-range day, which the
+ * constructor rolls over (`2024-02-30T12:00Z` reads as March 1st). Checking
+ * that would mean re-reading the components, and which ones to read depends on
+ * whether the string carried an offset -- for a value that only ever comes from
+ * the backend's own DateTimeField.
+ */
+export function toDateTimeOrNull(value: unknown): Date | null {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
+  if (typeof value !== 'string') return null
+
+  const trimmed = value.trim()
+  if (!ISO_DATE_TIME.test(trimmed)) return null
+
+  const date = new Date(trimmed)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+/**
+ * A `Date` -> an ISO 8601 instant in UTC, or `null`.
+ *
+ * `toISOString()`, which toIsoDate is forbidden from using -- there, converting
+ * to UTC would shift a calendar day. Here it is the correct serialisation of an
+ * instant, and the form the backend's DateTimeField expects.
+ */
+export function toIsoDateTime(value: unknown): string | null {
+  const date = toDateTimeOrNull(value)
+  return date ? date.toISOString() : null
+}

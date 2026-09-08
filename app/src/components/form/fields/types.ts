@@ -1,7 +1,7 @@
 /*
  * Contracts shared by every field component.
  *
- * Types only: this module is imported by the ten components in this folder
+ * Types only: this module is imported by the eleven components in this folder
  * and by ../context.ts, so it must never pull in a runtime dependency. The
  * import below is `import type`, so it is erased at compile time -- many2one.ts
  * imports FieldValue back from here, and only a runtime cycle would be a
@@ -19,18 +19,20 @@ export type Widget =
   | 'float'
   | 'selection'
   | 'date'
+  | 'datetime'
   | 'color'
   | 'many2one'
   | 'many2many_tags'
 
 /**
- * What a field can hold -- deliberately narrow: exactly what the ten widgets
- * can produce. A date is an ISO `YYYY-MM-DD` string, a colour is a palette
- * index and a many-to-one is the id of the related record, so none of those
- * widened this. A many-to-many did: its value is the list of ids of the related
- * records, and there is no primitive that carries a list.
+ * What a field can hold -- deliberately narrow: exactly what the eleven widgets
+ * can produce. A date is an ISO `YYYY-MM-DD` string, an instant is an ISO 8601
+ * one, a colour is a palette index and a many-to-one is the id of the related
+ * record, so none of those widened this. A many-to-many did: its value is the
+ * list of ids of the related records, and there is no primitive that carries a
+ * list.
  *
- * INVARIANT held by the nine scalar widgets: an empty field is `null`. Never
+ * INVARIANT held by the ten scalar widgets: an empty field is `null`. Never
  * '', never NaN, never undefined. A list-valued widget holds the same line by
  * being empty as `[]`, never as `null` -- see isEmpty, which reads both as
  * empty so `required` cannot be fooled.
@@ -53,7 +55,7 @@ export type ChoiceInput = string | number | SelectionChoice
 
 /**
  * Free-form configuration, interpreted by each widget. The keys below are the
- * ones the eight widgets read; anything else is carried and ignored -- which is
+ * ones the widgets read; anything else is carried and ignored -- which is
  * what makes this an extension point rather than a fixed schema.
  */
 export interface FieldOptions {
@@ -68,7 +70,8 @@ export interface FieldOptions {
   min?: number
   /** IntegerField / FloatField; ColorIntegerField: the highest palette index. */
   max?: number
-  /** DateField: the selectable range, as ISO `YYYY-MM-DD` strings. */
+  /** DateField: the selectable range, as ISO `YYYY-MM-DD` strings.
+      DateTimeField: the same keys, read as ISO 8601 instants. */
   minDate?: string
   maxDate?: string
   /** FloatField: how many decimals are kept. */

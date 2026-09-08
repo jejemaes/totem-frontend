@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import Card from 'primevue/card'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { FormData } from '@/components/form/context'
+import { activeSwitchField, type FieldSwitchChoice } from '@/components/form/fieldSwitch'
+import FieldSwitch from '@/components/form/FieldSwitch.vue'
 import Field from '@/components/form/fields/Field.vue'
 import Form from '@/components/form/Form.vue'
 
@@ -23,7 +25,10 @@ const data = ref<FormData>({
   quantity: 12,
   rating: 3.14159,
   due_date: '2024-03-31',
+  seen_at: '2024-03-31T14:22:00+02:00',
   swatch: 12,
+  target_page: 'about-us',
+  target_link: null,
   active: true,
   published: null,
   status: 'draft',
@@ -32,6 +37,25 @@ const data = ref<FormData>({
 
 const saved = ref<FormData | null>(null)
 const changed = ref<FormData | null>(null)
+
+/*
+ * Two mutually exclusive fields, and the switch that picks between them.
+ *
+ * `null` means "deduce it": `target_page` is filled above and `target_link` is
+ * not, so the form opens on Page without being told to. Note in the live draft
+ * below that the hidden field KEEPS its value -- a payload has to null it
+ * explicitly, which is what a resource module does.
+ */
+const TARGET_CHOICES: FieldSwitchChoice[] = [
+  { field: 'target_page', label: 'Page' },
+  { field: 'target_link', label: 'Link' },
+]
+const targetChoice = ref<string | null>(null)
+
+/** The same call the switch makes, so the `v-if` below agrees with what it shows. */
+const activeTarget = computed(() =>
+  activeSwitchField(TARGET_CHOICES, data.value, targetChoice.value),
+)
 
 /** <Form> hands over the whole draft and, separately, only the keys that differ
     from `data` -- what an update should actually PATCH. */
@@ -50,6 +74,7 @@ const DEFINITION = `<Form :data="data" @save="onSave">
   <Field name="quantity"    widget="integer"   label="Quantity" :options="{ min: 0 }" />
   <Field name="rating"      widget="float"     label="Rating" />
   <Field name="due_date"    widget="date"      label="Due date" />
+  <Field name="seen_at"     widget="datetime"  label="Seen at" />
   <Field name="swatch"      widget="color"     label="Swatch" :options="{ max: 15 }" />
   <Field name="active"      widget="boolean"   label="Active" required />
   <Field name="published"   widget="boolean"   label="Published" />
@@ -59,6 +84,9 @@ const DEFINITION = `<Form :data="data" @save="onSave">
            { value: 'done',  label: 'Done' },
          ] }" />
   <Field name="reference"   widget="string"    label="Reference" readonly />
+  <FieldSwitch v-model="targetChoice" :choices="TARGET_CHOICES" :values="data" label="Target" />
+  <Field v-if="activeTarget === 'target_page'" name="target_page" widget="string" label="Page" />
+  <Field v-else                                name="target_link" widget="string" label="Link" />
 </Form>`
 </script>
 
@@ -99,6 +127,10 @@ const DEFINITION = `<Form :data="data" @save="onSave">
             <Field name="due_date" widget="date" label="Due date"
                    help="Carried as an ISO YYYY-MM-DD string, never shifted by a timezone." />
 
+            <Field name="seen_at" widget="datetime" label="Seen at"
+                   help="An instant, carried as an ISO 8601 string: this one DOES have a
+                         timezone, and is normalised to UTC when written." />
+
             <Field name="swatch" widget="color" label="Swatch" :options="{ max: 15 }"
                    help="The value is a palette index; click the selected one again to clear it." />
 
@@ -116,6 +148,20 @@ const DEFINITION = `<Form :data="data" @save="onSave">
 
             <Field name="reference" widget="string" label="Reference" readonly
                    help="Locked, but still present in the payload." />
+
+            <!-- Purely visual: its value is in no draft and in no payload. The
+                 active field is deduced from which of the two below is filled. -->
+            <FieldSwitch v-model="targetChoice" :choices="TARGET_CHOICES" :values="data"
+                         label="Target"
+                         help="Deduced from the values, until you pick a side." />
+
+            <Field v-if="activeTarget === 'target_page'" name="target_page" widget="string"
+                   label="Page"
+                   help="Switch to Link: this key stays in the draft below, and a payload
+                         has to null it on purpose." />
+
+            <Field v-else name="target_link" widget="string" label="Link"
+                   :options="{ placeholder: 'https://example.com' }" />
 
             <p class="note">The draft, live — edited: {{ dirty ? 'yes' : 'no' }}</p>
             <pre class="preview">{{ JSON.stringify(draft, null, 2) }}</pre>

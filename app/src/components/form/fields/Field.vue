@@ -8,6 +8,7 @@ import BooleanField from './BooleanField.vue'
 import CharField from './CharField.vue'
 import ColorIntegerField from './ColorIntegerField.vue'
 import DateField from './DateField.vue'
+import DateTimeField from './DateTimeField.vue'
 import FloatField from './FloatField.vue'
 import IntegerField from './IntegerField.vue'
 import ManyToManyTagsField from './ManyToManyTagsField.vue'
@@ -26,7 +27,7 @@ const props = defineProps<FieldDeclarationProps>()
 
 /**
  * The one and only widget -> component registry. This file is what loads the
- * ten field types.
+ * eleven field types.
  *
  * Typed `Record<Widget, Component>` on purpose: adding a member to `Widget`
  * without adding its component here becomes a compile error rather than a blank
@@ -40,6 +41,7 @@ const WIDGETS: Record<Widget, Component> = {
   float: FloatField,
   selection: SelectionField,
   date: DateField,
+  datetime: DateTimeField,
   color: ColorIntegerField,
   many2one: ManyToOneField,
   many2many_tags: ManyToManyTagsField,

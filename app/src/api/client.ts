@@ -142,6 +142,19 @@ export function patchJson<T>(path: string, payload: unknown): Promise<T> {
   return apiFetch<T>(path, { method: 'PATCH', body: JSON.stringify(payload) })
 }
 
+/**
+ * DELETE, with no body either way.
+ *
+ * The backend answers 204, which apiFetch already turns into `undefined` -- so
+ * there is nothing to parse and nothing to return. A refusal is an ApiError
+ * like any other: several of these models are referenced through
+ * `on_delete=PROTECT`, so "this row is still in use" is an ordinary outcome
+ * and the caller has to show it rather than assume success.
+ */
+export function apiDelete(path: string): Promise<void> {
+  return apiFetch<void>(path, { method: 'DELETE' })
+}
+
 /** Subset of the profile returned by GET /api/v1/users/me/. */
 export interface UserProfile {
   id: string

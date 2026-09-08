@@ -6,18 +6,28 @@ Interface d'administration du SaaS Totem : SPA Vue 3 + TypeScript, servie par ng
 par nom de domaine via [`totem-proxy`](../totem-proxy).
 
 > **État actuel :** chaîne de déploiement validée, authentification OAuth2, mise en page
-> d'administration (PrimeVue) et première liste. Les écrans de création/édition restent à faire.
+> d'administration (PrimeVue), et les écrans de liste et de création/édition pour les
+> utilisateurs, les contacts et le contenu du site web.
 
 ## Routes
 
-| Route             | Accès                | Contenu                                          |
-| ----------------- | -------------------- | ------------------------------------------------ |
-| `/`               | public               | Page ouverte à tous                              |
-| `/diagnostic`     | public               | Domaine, préfixe et mode de build résolus        |
-| `/login`          | visiteurs uniquement | Connexion OAuth2 ; redirige si déjà authentifié  |
-| `/dashboard`      | authentifié          | Point d'arrivée après connexion                  |
-| `/settings/users` | `totem.user.read`    | Liste des utilisateurs (pagination serveur)      |
-| `/403`            | public               | Connecté mais pas autorisé                       |
+| Route              | Accès                     | Contenu                                         |
+| ------------------ | ------------------------- | ----------------------------------------------- |
+| `/`                | public                    | Page ouverte à tous                             |
+| `/diagnostic`      | public                    | Domaine, préfixe et mode de build résolus       |
+| `/login`           | visiteurs uniquement      | Connexion OAuth2 ; redirige si déjà authentifié |
+| `/form-demo`       | public                    | Terrain d'essai de `<Form>` et `<Field>`        |
+| `/dashboard`       | authentifié               | Point d'arrivée après connexion                 |
+| `/contacts`        | `totem.contact.read`      | Liste des contacts                              |
+| `/contact-tags`    | `totem.contacttag.read`   | Liste des étiquettes de contact                 |
+| `/website/menus`   | `totem.websitemenu.read`  | Liste des entrées de menu du site               |
+| `/website/pages`   | `totem.websitepage.read`  | Liste des pages du site                         |
+| `/settings/users`  | `totem.user.read`         | Liste des utilisateurs                          |
+| `/403`             | public                    | Connecté mais pas autorisé                      |
+
+Chaque ressource ajoute deux routes sœurs à sa liste : `<liste>/new` (scope `.create`) et
+`<liste>/:id` (scopes `.read` + `.update`), un seul composant servant la création et l'édition.
+Les listes paginent côté serveur et synchronisent page, tri et recherche dans l'URL.
 
 Les routes authentifiées sont rendues dans `AdminLayout` (barre latérale + en-tête) ; les autres
 dans `BlankLayout`.

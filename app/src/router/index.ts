@@ -17,6 +17,10 @@ import NotFoundView from '@/views/NotFoundView.vue'
 import PublicView from '@/views/PublicView.vue'
 import UserFormView from '@/views/settings/UserFormView.vue'
 import UsersView from '@/views/settings/UsersView.vue'
+import WebsiteMenuFormView from '@/views/website/WebsiteMenuFormView.vue'
+import WebsiteMenusView from '@/views/website/WebsiteMenusView.vue'
+import WebsitePageFormView from '@/views/website/WebsitePageFormView.vue'
+import WebsitePagesView from '@/views/website/WebsitePagesView.vue'
 
 import { HOME_ROUTE } from './constants'
 
@@ -93,6 +97,51 @@ export const router = createRouter({
           meta: {
             title: 'Edit tag',
             permissions: ['totem.contacttag.read', 'totem.contacttag.update'],
+          },
+        },
+        // The website menu tree and the pages it points at. Paths mirror the
+        // API's own two-segment prefix (/website/menus/, /website/pages/), and
+        // each resource follows the same list / new / :id shape as the others.
+        {
+          path: 'website/menus',
+          name: 'website-menus',
+          component: WebsiteMenusView,
+          meta: { title: 'Website menus', permissions: ['totem.websitemenu.read'] },
+        },
+        {
+          path: 'website/menus/new',
+          name: 'website-menu-create',
+          component: WebsiteMenuFormView,
+          meta: { title: 'New menu item', permissions: ['totem.websitemenu.create'] },
+        },
+        {
+          path: 'website/menus/:id',
+          name: 'website-menu-edit',
+          component: WebsiteMenuFormView,
+          meta: {
+            title: 'Edit menu item',
+            permissions: ['totem.websitemenu.read', 'totem.websitemenu.update'],
+          },
+        },
+        {
+          path: 'website/pages',
+          name: 'website-pages',
+          component: WebsitePagesView,
+          meta: { title: 'Website pages', permissions: ['totem.websitepage.read'] },
+        },
+        {
+          path: 'website/pages/new',
+          name: 'website-page-create',
+          component: WebsitePageFormView,
+          meta: { title: 'New page', permissions: ['totem.websitepage.create'] },
+        },
+        {
+          path: 'website/pages/:id',
+          name: 'website-page-edit',
+          component: WebsitePageFormView,
+          meta: {
+            title: 'Edit page',
+            permissions: ['totem.websitepage.read', 'totem.websitepage.update'],
           },
         },
         {

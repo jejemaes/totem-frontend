@@ -5,7 +5,9 @@ import {
   normaliseChoices,
   sameFieldValue,
   toDateOrNull,
+  toDateTimeOrNull,
   toIsoDate,
+  toIsoDateTime,
   toNumberOrNull,
 } from './values'
 
@@ -201,6 +203,86 @@ describe('toIsoDate', () => {
     // Europe/Paris springs forward on 2024-03-31 and falls back on 2024-10-27.
     for (const iso of ['2024-03-30', '2024-03-31', '2024-04-01', '2024-10-27', '2024-12-31', '1970-01-01']) {
       expect(toIsoDate(toDateOrNull(iso))).toBe(iso)
+    }
+  })
+})
+
+describe('toDateTimeOrNull', () => {
+  it('applies the offset the backend sent', () => {
+    // The same instant, written three ways: 12:00Z, 14:00+02:00, 07:00-05:00.
+    const utc = toDateTimeOrNull('2024-03-31T12:00:00Z')
+    expect(utc?.getTime()).toBe(Date.UTC(2024, 2, 31, 12, 0, 0))
+    expect(toDateTimeOrNull('2024-03-31T14:00:00+02:00')?.getTime()).toBe(utc?.getTime())
+    expect(toDateTimeOrNull('2024-03-31T07:00:00-05:00')?.getTime()).toBe(utc?.getTime())
+  })
+
+  it('accepts what the backend actually emits', () => {
+    expect(toDateTimeOrNull('2024-03-31T12:00:00.123456Z')).not.toBeNull()
+    expect(toDateTimeOrNull('2024-03-31T12:00:00')).not.toBeNull()
+    expect(toDateTimeOrNull('2024-03-31T12:00')).not.toBeNull()
+    expect(toDateTimeOrNull('2024-03-31 12:00:00+00:00')).not.toBeNull()
+  })
+
+  /*
+   * The point of the regex. `new Date('2024-03-31')` succeeds and reads as UTC
+   * midnight, which is the previous DAY west of Greenwich -- a calendar day
+   * silently promoted to an instant. That is toDateOrNull's job, not this one's.
+   */
+  it('rejects a calendar day, and everything that is not an instant', () => {
+    expect(toDateTimeOrNull('2024-03-31')).toBeNull()
+    expect(toDateTimeOrNull('31/03/2024 12:00')).toBeNull()
+    expect(toDateTimeOrNull('nope')).toBeNull()
+    expect(toDateTimeOrNull('')).toBeNull()
+    expect(toDateTimeOrNull(null)).toBeNull()
+    expect(toDateTimeOrNull(undefined)).toBeNull()
+    expect(toDateTimeOrNull(1711886400000)).toBeNull()
+  })
+
+  it('rejects an invalid Date', () => {
+    expect(toDateTimeOrNull(new Date('nope'))).toBeNull()
+  })
+
+  /*
+   * Documented rather than fixed: `new Date` rolls an out-of-range day over to
+   * the next month instead of failing, and unlike toDateOrNull -- which builds
+   * its Date from the three components and can re-read them -- there is nothing
+   * cheap to compare against here, since which components to check depends on
+   * whether the string carried an offset. The value always comes from the
+   * backend's own DateTimeField, which cannot emit a February 30th.
+   */
+  it('rolls an out-of-range day over, as the Date constructor does', () => {
+    expect(toIsoDateTime('2024-02-30T12:00:00Z')).toBe('2024-03-01T12:00:00.000Z')
+  })
+
+  it('passes a valid Date through', () => {
+    const date = new Date(Date.UTC(2024, 2, 31, 12))
+    expect(toDateTimeOrNull(date)).toBe(date)
+  })
+})
+
+describe('toIsoDateTime', () => {
+  it('serialises in UTC', () => {
+    expect(toIsoDateTime(new Date(Date.UTC(2024, 2, 31, 12, 30)))).toBe('2024-03-31T12:30:00.000Z')
+  })
+
+  it('returns null when there is no instant', () => {
+    expect(toIsoDateTime(null)).toBeNull()
+    expect(toIsoDateTime('2024-03-31')).toBeNull()
+  })
+
+  /*
+   * Unlike toIsoDate, this round trip must NOT be string-exact: the backend may
+   * send any offset and this normalises to UTC. What has to survive is the
+   * instant, whatever the machine's timezone.
+   */
+  it('round-trips the instant, not the notation', () => {
+    for (const iso of [
+      '2024-03-31T00:30:00+02:00',
+      '2024-10-27T02:30:00Z',
+      '1970-01-01T00:00:00Z',
+    ]) {
+      const once = toIsoDateTime(iso)
+      expect(toDateTimeOrNull(once)?.getTime()).toBe(toDateTimeOrNull(iso)?.getTime())
     }
   })
 })
