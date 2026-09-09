@@ -3,18 +3,25 @@ import Avatar from 'primevue/avatar'
 import Button from 'primevue/button'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
-import IconField from 'primevue/iconfield'
-import InputIcon from 'primevue/inputicon'
-import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
-import { computed, reactive } from 'vue'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { can } from '@/auth/permissions'
+import MultiRecordFilters from '@/components/list/MultiRecordFilters.vue'
+import type { FilterFields } from '@/components/list/filters'
+import { useFilter } from '@/composables/useFilter'
 import { useResourceList } from '@/composables/useResourceList'
-import { fullName, initials, listUsers, USER_SORTABLE, type UserRow } from '@/resources/users'
+import {
+  fullName,
+  initials,
+  listUsers,
+  USER_SORTABLE,
+  type UserFilters,
+  type UserRow,
+} from '@/resources/users'
 
 const route = useRoute()
 
@@ -38,8 +45,37 @@ function editRoute(id: string) {
   return { name: 'settings-user-edit', params: { id }, query: route.query }
 }
 
-/** Every key is sent as a query param; any change resets to page 1. */
-const filters = reactive({ search: '' })
+/**
+ * The filters this screen offers. The key of each entry is the query parameter
+ * the API takes and the one that ends up in the URL -- one name, so a link is
+ * always a faithful description of the request behind it.
+ */
+const FILTER_FIELDS: FilterFields = {
+  search: {
+    type: 'string',
+    label: 'Search',
+    help_text: 'Matches the login or the email.',
+  },
+  login: {
+    type: 'string',
+    label: 'Login',
+    help_text: 'Filter on the login.',
+  },
+  email: {
+    type: 'string',
+    label: 'Email',
+    help_text: 'Filter on the email address.',
+  },
+  is_active: {
+    type: 'boolean',
+    label: 'Active',
+    help_text: 'Keep the active accounts, or the deactivated ones.',
+  },
+}
+
+const { filters, setFilters, updateFilters, activeFilters } = useFilter<UserFilters>(
+  FILTER_FIELDS,
+)
 
 const {
   rows,
@@ -112,20 +148,16 @@ const skeletonRows = Array.from({ length: 5 }, (_, i) => ({ id: `skeleton-${i}` 
       @sort="onSort"
     >
       <template #header>
-        <div class="table-toolbar">
-          <IconField class="table-toolbar__search">
-            <InputIcon class="pi pi-search" />
-            <InputText v-model="filters.search" placeholder="Rechercher un identifiant ou un courriel…" />
-          </IconField>
-          <Button
-            icon="pi pi-refresh"
-            severity="secondary"
-            outlined
-            aria-label="Rafraîchir"
-            :loading="loading"
-            @click="reload"
-          />
-        </div>
+        <MultiRecordFilters
+          :fields="FILTER_FIELDS"
+          :filters="filters"
+          :active-filters="activeFilters"
+          :loading="loading"
+          search-placeholder="Rechercher un identifiant ou un courriel…"
+          @apply="setFilters"
+          @patch="updateFilters"
+          @refresh="reload"
+        />
       </template>
 
       <template #empty>
@@ -193,21 +225,6 @@ const skeletonRows = Array.from({ length: 5 }, (_, i) => ({ id: `skeleton-${i}` 
 </template>
 
 <style scoped>
-.table-toolbar {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.table-toolbar__search {
-  flex: 1;
-  max-width: 24rem;
-}
-
-.table-toolbar__search :deep(input) {
-  width: 100%;
-}
-
 .user-cell {
   display: flex;
   align-items: center;
