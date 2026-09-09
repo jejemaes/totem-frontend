@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Message from 'primevue/message'
-import { computed, onScopeDispose, watchEffect, type Component } from 'vue'
+import { computed, defineAsyncComponent, onScopeDispose, watchEffect, type Component } from 'vue'
 
 import { useFormContext } from '@/components/form/context'
 
@@ -27,7 +27,7 @@ const props = defineProps<FieldDeclarationProps>()
 
 /**
  * The one and only widget -> component registry. This file is what loads the
- * eleven field types.
+ * field types.
  *
  * Typed `Record<Widget, Component>` on purpose: adding a member to `Widget`
  * without adding its component here becomes a compile error rather than a blank
@@ -45,6 +45,17 @@ const WIDGETS: Record<Widget, Component> = {
   color: ColorIntegerField,
   many2one: ManyToOneField,
   many2many_tags: ManyToManyTagsField,
+  /*
+   * The only lazily-loaded widget. TipTap and prosemirror are ~130 kB gzipped,
+   * router/index.ts imports every view statically, and one screen uses this --
+   * so a static import here would put a rich text editor in the entry chunk of
+   * the login page.
+   *
+   * Safe precisely because `register` above is synchronous: the key and its
+   * `required` constraint are already in the draft, so the form cannot lose a
+   * value or skip a validation while the chunk is in flight.
+   */
+  html: defineAsyncComponent(() => import('./HtmlField.vue')),
 }
 
 const form = useFormContext()

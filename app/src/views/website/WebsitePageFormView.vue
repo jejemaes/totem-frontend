@@ -11,10 +11,12 @@ import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
+import { htmlOrNull } from '@/components/form/fields/html'
 import type { FieldValue } from '@/components/form/fields/types'
 import Form from '@/components/form/Form.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import { displayUser, searchUsers, type UserRef } from '@/resources/users'
+import { browseWebsiteMedias, uploadWebsiteMedia } from '@/resources/websiteMedias'
 import {
   createWebsitePage,
   deleteWebsitePage,
@@ -75,7 +77,11 @@ const form = useResourceForm<WebsitePageDetail>({
     slug: page.slug,
     user: page.user?.id ?? null,
     is_published: page.is_published,
-    content: page.content,
+    // htmlOrNull, not the raw string: a record stored as "<p></p>" by another
+    // client would otherwise seed the draft with a value `isEmpty` reads as
+    // filled, and `required` below would pass on an empty page body. The
+    // baseline is built from this same object, so it creates no dirt.
+    content: htmlOrNull(page.content),
     date_published: page.date_published,
   }),
   fetchOne: fetchWebsitePage,
@@ -264,13 +270,28 @@ function askDelete(): void {
 
             <Field name="is_published" widget="boolean" label="Published" required />
 
+            <!-- A rich text editor, not a textarea. `allowWidget` here and
+                 nowhere else, matching HtmlField(allow_widget=True) on
+                 Page.content: this is the only column in the app that accepts a
+                 <t-widget> marker, so it is the only <Field> that should offer
+                 to keep one. -->
             <Field
               name="content"
-              widget="text"
+              widget="html"
               label="Content"
               required
-              :options="{ rows: 12, placeholder: '<h1>About us</h1>' }"
-              help="HTML. The backend validates the tags and attributes it accepts."
+              :options="{
+                rows: 14,
+                placeholder: 'Tell them about us…',
+                allowWidget: true,
+                uploadImage: uploadWebsiteMedia,
+                uploadPermission: 'totem.websitemedia.create',
+                maxUploadBytes: 5 * 1024 * 1024,
+                browseImages: browseWebsiteMedias,
+                browsePermission: 'totem.websitemedia.read',
+              }"
+              help="Rich text. Switch to the source view to edit the HTML directly; the
+                    backend validates the tags and attributes it accepts."
             />
 
             <!-- Owned by the backend: it stamps this whenever the publication
@@ -303,9 +324,10 @@ function askDelete(): void {
 </template>
 
 <style scoped>
-/* Wider than the other forms: this one carries an HTML textarea. */
+/* Wider than the other forms: this one carries a rich text editor, whose
+   toolbar needs the room and whose tables are unusable in a narrow column. */
 .page-form {
-  max-width: 48rem;
+  max-width: 64rem;
 }
 
 .page-form__skeleton {
