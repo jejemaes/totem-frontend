@@ -263,6 +263,9 @@ export interface HtmlActiveState {
   codeBlock: boolean
   link: boolean
   table: boolean
+  /** A widget marker is the current node selection, so the button edits it
+      instead of inserting a new one. */
+  widget: boolean
 }
 
 /** The groups of buttons a caller can ask HtmlToolbar to show. */
@@ -275,6 +278,7 @@ export type HtmlToolbarGroup =
   | 'link'
   | 'table'
   | 'image'
+  | 'widget'
   | 'history'
   | 'source'
 
@@ -288,6 +292,7 @@ export const HTML_TOOLBAR_GROUPS: HtmlToolbarGroup[] = [
   'link',
   'table',
   'image',
+  'widget',
   'history',
   'source',
 ]
@@ -341,6 +346,41 @@ export interface HtmlImageBrowsePage {
   /** Total number of matches, not the length of `items`: it is what paginates. */
   total: number
 }
+
+/**
+ * One entry of GET /website/widgets/: a kind of block an author may drop into
+ * the content, and the parameters it takes.
+ *
+ * Keys stay as the wire sends them -- `attribute_schema`, not `attributeSchema`
+ * -- like every other resource type in the app.
+ */
+export interface HtmlWidgetType {
+  /** The registry id. It is what the marker carries as its `name`. */
+  id: string
+  /** Shown in the picker and on the block in the editor. */
+  title: string
+  /**
+   * JSON Schema of the parameters, straight out of pydantic's
+   * `model_json_schema()`. The editor builds its options form from this rather
+   * than restating every widget's parameters here -- see htmlWidget.ts, which
+   * is where that mapping lives and is tested.
+   */
+  attribute_schema: Record<string, unknown>
+}
+
+/**
+ * Loads the widget catalogue.
+ *
+ * Optional, and gated by `options.allowWidget` on top: without it the markers
+ * already in the content are still preserved and shown, there is simply no way
+ * to add one. It knows no endpoint, exactly like `fetch` on a relation field
+ * and `browseImages` above -- /website/widgets/ belongs to a resource module.
+ *
+ * Not paginated, unlike the media browse: the backend route answers a bare JSON
+ * array, because the registry is small and lives in memory rather than in a
+ * table.
+ */
+export type HtmlWidgetFetch = (signal?: AbortSignal) => Promise<HtmlWidgetType[]>
 
 /** One tile of the grid. */
 export interface HtmlImageItem {

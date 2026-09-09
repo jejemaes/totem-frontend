@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { NodeSelection } from '@tiptap/pm/state'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Popover from 'primevue/popover'
 import Textarea from 'primevue/textarea'
-import { computed, onMounted, onScopeDispose, ref, useId, watch, watchEffect } from 'vue'
+import { computed, onMounted, onScopeDispose, ref, shallowRef, useId, watch, watchEffect } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
@@ -23,10 +24,13 @@ import {
   type HtmlActiveState,
   type HtmlImageItem,
   type HtmlToolbarGroup,
+  type HtmlWidgetType,
 } from './html'
 import { htmlExtensions } from './htmlExtensions'
 import HtmlImagePicker from './HtmlImagePicker.vue'
 import HtmlToolbar from './HtmlToolbar.vue'
+import { createWidgetCatalogue } from './htmlWidget'
+import HtmlWidgetDialog from './HtmlWidgetDialog.vue'
 import type { FieldValue, WidgetProps } from './types'
 
 /*
@@ -110,10 +114,145 @@ const canBrowse = computed(() => {
 /** What the toolbar's image button needs: at least one source of images. */
 const canImage = computed(() => canUpload.value || canBrowse.value)
 
+/**
+ * Whether an author may ADD a widget here.
+ *
+ * Three conditions, and they are not redundant. `allowWidget` says this column
+ * accepts a marker at all -- it mirrors the backend field's own
+ * `allow_widget`, and without it the marker node is not even in the schema.
+ * `fetchWidgets` says someone wired the catalogue up. The permission is the
+ * scope on /website/widgets/.
+ *
+ * Failing any of them is NOT the same as widget support being off: the markers
+ * already in the content are still parsed, preserved and displayed whenever
+ * `allowWidget` holds. Only the button goes away.
+ */
+const canWidget = computed(() => {
+  if (!allowWidget || typeof props.options?.fetchWidgets !== 'function') return false
+  const permission = props.options?.widgetPermission
+  return typeof permission === 'string' && permission !== '' ? can(permission) : true
+})
+
+/*
+ * The catalogue is shared with the marker's node views, which are imperative
+ * DOM outside Vue's reactivity -- hence a plain subscribable holder rather than
+ * a ref. `widgetTypes` is the Vue-side mirror, for the dialog.
+ *
+ * Created unconditionally: it is three closures, and passing it in
+ * conditionally would mean the extension list depends on a permission read at
+ * setup, which is exactly the kind of thing that changes under you.
+ */
+const widgetCatalogue = createWidgetCatalogue()
+const widgetTypes = shallowRef<readonly HtmlWidgetType[]>([])
+const widgetsLoading = ref(false)
+const widgetsError = ref<string | null>(null)
+
 const minHeight = computed(() => {
   const rows = Number(props.options?.rows ?? 12)
   return `${(Number.isFinite(rows) ? rows : 12) * 1.6}rem`
 })
+
+/*
+ * Loads the catalogue once, on mount.
+ *
+ * Eagerly rather than when the button is first pressed, because it is not only
+ * the dialog that needs it: every marker already in the document shows its
+ * widget's TITLE, which the marker itself does not carry. Waiting for a click
+ * would leave those blocks labelled with a bare id until someone opened the
+ * dialog.
+ *
+ * The ticket-and-abort idiom is the same one useResourceList and
+ * ManyToOneField use, for the same reason -- the field can be unmounted, or its
+ * record swapped, while the request is in flight.
+ */
+let widgetSeq = 0
+let widgetInFlight: AbortController | undefined
+
+onScopeDispose(() => widgetInFlight?.abort())
+
+async function loadWidgets(): Promise<void> {
+  const fetchWidgets = props.options?.fetchWidgets
+  if (!canWidget.value || typeof fetchWidgets !== 'function') return
+
+  const ticket = ++widgetSeq
+  widgetInFlight?.abort()
+  const controller = (widgetInFlight = new AbortController())
+
+  widgetsLoading.value = true
+  widgetsError.value = null
+  try {
+    const types = await fetchWidgets(controller.signal)
+    if (ticket !== widgetSeq) return
+    widgetTypes.value = types
+    // What re-labels the blocks that are already on screen.
+    widgetCatalogue.set(types)
+  } catch (caught) {
+    if (ticket !== widgetSeq || controller.signal.aborted) return
+    widgetsError.value =
+      caught instanceof ApiError ? caught.message : 'The widgets could not be loaded.'
+  } finally {
+    if (ticket === widgetSeq) widgetsLoading.value = false
+  }
+}
+
+/* ------------------------------------------------------------ the widget UI */
+
+const widgetDialogVisible = ref(false)
+/** Set when the dialog is editing a marker, with the position to write back to. */
+const widgetEditing = ref<{ pos: number; name: string; attrs: unknown } | null>(null)
+
+/** The marker under the current node selection, if that is what is selected. */
+function selectedWidget(): { pos: number; name: string; attrs: unknown } | null {
+  const instance = editor.value
+  if (!instance) return null
+  const selection = instance.state.selection
+  if (!(selection instanceof NodeSelection)) return null
+  if (selection.node.type.name !== 'widgetMarker') return null
+  return {
+    pos: selection.from,
+    name: typeof selection.node.attrs.name === 'string' ? selection.node.attrs.name : '',
+    attrs: selection.node.attrs.attrs,
+  }
+}
+
+function openWidgetDialog(target: { pos: number; name: string; attrs: unknown } | null): void {
+  widgetEditing.value = target
+  widgetDialogVisible.value = true
+  // A catalogue that failed, or was never loaded because the permission arrived
+  // later, gets another chance every time the dialog opens.
+  if (widgetTypes.value.length === 0) void loadWidgets()
+}
+
+/**
+ * The toolbar's widget button: edits the selected marker, or inserts a new one.
+ *
+ * One button for both, because "insert" and "edit" are the same question --
+ * which widget, with which parameters -- and a selected block makes the answer
+ * unambiguous.
+ */
+function onInsertWidget(): void {
+  openWidgetDialog(selectedWidget())
+}
+
+function onWidgetSubmit(payload: { name: string; attrs: string | null }): void {
+  const instance = editor.value
+  if (!instance) return
+
+  const target = widgetEditing.value
+  const attrs = { name: payload.name, attrs: payload.attrs }
+
+  if (target) {
+    /*
+     * Selected first, then updated: the dialog may have been opened by a
+     * double-click, which sets no selection, and `updateAttributes` works on
+     * what is selected.
+     */
+    instance.chain().focus().setNodeSelection(target.pos).updateAttributes('widgetMarker', attrs).run()
+  } else {
+    instance.chain().focus().insertContent({ type: 'widgetMarker', attrs }).run()
+  }
+  widgetEditing.value = null
+}
 
 /** The last value this field emitted, for the guard in pushValue. */
 let emitted: FieldValue = props.modelValue
@@ -138,6 +277,7 @@ const editor = useEditor({
   extensions: htmlExtensions({
     placeholder: typeof props.options?.placeholder === 'string' ? props.options.placeholder : '',
     allowWidget,
+    widgetCatalogue,
   }),
   editable: !props.readonly,
   editorProps: {
@@ -164,6 +304,23 @@ const editor = useEditor({
      */
     handlePaste: (_view, event) => interceptImageFiles(event.clipboardData?.files),
     handleDrop: (_view, event) => interceptImageFiles((event as DragEvent).dataTransfer?.files),
+    /*
+     * Double-clicking a widget block opens its parameters.
+     *
+     * The block is an atom with nothing to select inside it, so a double-click
+     * would otherwise do nothing at all -- and nothing on the block says it is
+     * editable. The toolbar button does the same job for a selected block; this
+     * is the discoverable half.
+     */
+    handleDoubleClickOn: (_view, pos, node) => {
+      if (node.type.name !== 'widgetMarker' || !canWidget.value) return false
+      openWidgetDialog({
+        pos,
+        name: typeof node.attrs.name === 'string' ? node.attrs.name : '',
+        attrs: node.attrs.attrs,
+      })
+      return true
+    },
   },
   onUpdate: ({ editor: instance, transaction }) => {
     /*
@@ -224,6 +381,7 @@ const active = computed<HtmlActiveState>(() => {
     codeBlock: e?.isActive('codeBlock') ?? false,
     link: e?.isActive('link') ?? false,
     table: e?.isActive('table') ?? false,
+    widget: e?.isActive('widgetMarker') ?? false,
   }
 })
 
@@ -297,6 +455,8 @@ watch(
  * in registration order, so `editor.value` is set by the time we read it.
  */
 onMounted(() => {
+  void loadWidgets()
+
   const stored = props.modelValue
   const dropped = tagsDroppedBy(stored, editor.value?.getHTML())
   if (!dropped.length) return
@@ -582,7 +742,9 @@ function report(_file: File, message: string): void {
           :surface-id="surfaceId"
           @toggle-source="onToggleSource"
           @insert-link="onInsertLink"
+          :can-widget="canWidget"
           @insert-image="onInsertImage"
+          @insert-widget="onInsertWidget"
         />
 
         <Message v-if="notice" severity="warn" closable class="html-field__notice">
@@ -636,6 +798,16 @@ function report(_file: File, message: string): void {
            here rather than in the dialog: `uploadAndInsert` is shared with
            paste and drop, so the size limit and the abort handling cannot drift
            between the three ways in. -->
+      <HtmlWidgetDialog
+        v-if="canWidget"
+        v-model:visible="widgetDialogVisible"
+        :types="widgetTypes"
+        :loading="widgetsLoading"
+        :error="widgetsError"
+        :initial="widgetEditing"
+        @submit="onWidgetSubmit"
+      />
+
       <HtmlImagePicker
         v-model:visible="pickerOpen"
         :browse="canBrowse ? options?.browseImages : undefined"
@@ -995,13 +1167,73 @@ function report(_file: File, message: string): void {
 
 /* ------------------------------------------------------- the widget marker */
 
-/* An unknown element is display:inline with no box, so the marker would be an
-   invisible zero-width thing the author can neither see nor select. */
+/*
+ * The widget block, in the EDITOR: what the node view builds.
+ *
+ * Violet rather than the primary colour, and deliberately: a widget is not
+ * content, it is a placeholder for content the server will produce, and it
+ * should not read as part of the prose around it. The token is the one
+ * components/colors.ts already uses, so it follows the theme instead of being
+ * a hex value pinned to one of them.
+ */
+.html-prose :deep([data-widget-marker]) {
+  display: block;
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--p-violet-500);
+  border-left-width: 4px;
+  border-radius: var(--p-content-border-radius, 6px);
+  background: var(--app-inset);
+  /* An atom: the caret cannot go in, so a text cursor over it would lie. */
+  cursor: pointer;
+  user-select: none;
+}
+
+.html-prose :deep([data-widget-title]) {
+  display: block;
+  color: var(--p-violet-500);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* "Heading: Latest, Limit: 5" -- empty for a widget with no parameters, which
+   is why it is a block that collapses rather than a line that stays. */
+.html-prose :deep([data-widget-attrs]) {
+  display: block;
+  color: var(--app-muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.html-prose :deep([data-widget-attrs]:empty) {
+  display: none;
+}
+
+/* A marker naming a widget the registry does not know. It would be refused on
+   save with "Unknown widget", so it is worth saying so before then. */
+.html-prose :deep([data-widget-unknown='true']) {
+  border-color: var(--p-red-500);
+}
+
+.html-prose :deep([data-widget-unknown='true'] [data-widget-title]) {
+  color: var(--p-red-500);
+}
+
+/*
+ * The same block in the READ-ONLY branch, where there is no editor and no node
+ * view: v-html renders the stored `<t-widget>` element itself. CSS is all there
+ * is there, so it can show the id -- `attr(name)` -- but not the title, which
+ * only the catalogue knows.
+ *
+ * An unknown element is display:inline with no box, so without this the marker
+ * would be an invisible zero-width thing the reader cannot see at all.
+ */
 .html-prose :deep(t-widget) {
   display: block;
   margin: 0.75rem 0;
   padding: 0.6rem 0.75rem;
-  border: 1px dashed var(--p-primary-color);
+  border: 1px solid var(--p-violet-500);
+  border-left-width: 4px;
   border-radius: var(--p-content-border-radius, 6px);
   background: var(--app-inset);
   color: var(--app-muted);

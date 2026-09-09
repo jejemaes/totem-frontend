@@ -31,6 +31,13 @@ import { Underline } from '@tiptap/extension-underline'
 import { Placeholder } from '@tiptap/extensions'
 import { StarterKit } from '@tiptap/starter-kit'
 
+import {
+  parseWidgetAttrs,
+  summariseWidgetAttrs,
+  widgetForm,
+  type WidgetCatalogue,
+} from './htmlWidget'
+
 /**
  * Underline, rendered as a styled span instead of `<u>`.
  *
@@ -89,18 +96,97 @@ const SafeStrike = Strike.extend({
  * Inserting a NEW one is deliberately not a feature: no endpoint exposes the
  * list of available widgets yet. This node only preserves what is already there.
  */
-const WidgetMarker = Node.create({
+interface WidgetMarkerOptions {
+  /**
+   * The shared view of the widget catalogue, or undefined when the field was
+   * given no loader.
+   *
+   * A node view needs it for one thing only -- the widget's TITLE, which the
+   * marker itself does not carry -- and it cannot wait for it: ProseMirror
+   * builds the block the moment the document is parsed, while the catalogue is
+   * still in flight. Hence a subscription rather than a value.
+   */
+  catalogue?: WidgetCatalogue
+}
+
+const WidgetMarker = Node.create<WidgetMarkerOptions>({
   name: 'widgetMarker',
   group: 'block',
   atom: true,
   selectable: true,
   draggable: true,
+  addOptions: () => ({ catalogue: undefined }),
   addAttributes: () => ({
     name: { default: null },
     attrs: { default: null },
   }),
   parseHTML: () => [{ tag: 't-widget' }],
   renderHTML: ({ HTMLAttributes }) => ['t-widget', mergeAttributes(HTMLAttributes)],
+
+  /*
+   * The block an author sees, which is NOT what gets saved: `renderHTML` above
+   * owns the serialisation and still emits a bare `<t-widget>`. That separation
+   * is the point -- the editor can show a title and a parameter summary that
+   * the marker does not contain, without any of it reaching the stored HTML.
+   *
+   * Plain DOM rather than a Vue node view: this file must stay importable from
+   * a spec, and a VueNodeViewRenderer would drag a component in for two spans.
+   */
+  addNodeView() {
+    const catalogue = this.options.catalogue
+
+    return ({ node }) => {
+      let current = node
+
+      const dom = document.createElement('div')
+      dom.dataset.widgetMarker = ''
+      // An atom has no editable content; without this the caret can be placed
+      // inside the block and the summary becomes typeable.
+      dom.contentEditable = 'false'
+
+      const titleEl = document.createElement('span')
+      titleEl.dataset.widgetTitle = ''
+      const attrsEl = document.createElement('span')
+      attrsEl.dataset.widgetAttrs = ''
+      dom.append(titleEl, attrsEl)
+
+      const render = (): void => {
+        const id = typeof current.attrs.name === 'string' ? current.attrs.name : ''
+        const type = catalogue?.find(id)
+        const attrs = parseWidgetAttrs(current.attrs.attrs)
+        const fields = type ? widgetForm(type.attribute_schema).fields : []
+
+        titleEl.textContent = type ? type.title : id || 'Widget'
+        attrsEl.textContent = summariseWidgetAttrs(attrs, fields)
+
+        /*
+         * Only once the catalogue has actually arrived: an empty one means "not
+         * loaded yet", and flagging every block as unknown for the first
+         * moment of every page would be worse than saying nothing.
+         */
+        const known = !catalogue || catalogue.types().length === 0 || type !== undefined
+        dom.dataset.widgetUnknown = known ? 'false' : 'true'
+        dom.title = known
+          ? `Widget: ${id}`
+          : `No widget named "${id}" is registered -- it will be refused when the page is saved.`
+      }
+
+      render()
+      // The catalogue resolving is what turns the id into the title.
+      const unsubscribe = catalogue?.subscribe(render)
+
+      return {
+        dom,
+        update: (updated) => {
+          if (updated.type !== current.type) return false
+          current = updated
+          render()
+          return true
+        },
+        destroy: () => unsubscribe?.(),
+      }
+    }
+  },
 })
 
 /**
@@ -184,6 +270,8 @@ export interface HtmlExtensionOptions {
    * concept. Only `Page.content` sets it today.
    */
   allowWidget?: boolean
+  /** Passed to the marker's node view, which needs it for the widget title. */
+  widgetCatalogue?: WidgetCatalogue
 }
 
 /**
@@ -262,7 +350,9 @@ export function htmlExtensions(options: HtmlExtensionOptions = {}): Extensions {
     ResizableImage,
   ]
 
-  if (options.allowWidget) extensions.push(WidgetMarker)
+  if (options.allowWidget) {
+    extensions.push(WidgetMarker.configure({ catalogue: options.widgetCatalogue }))
+  }
 
   return extensions
 }
