@@ -17,6 +17,7 @@ import Form from '@/components/form/Form.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import { displayUser, searchUsers, type UserRef } from '@/resources/users'
 import { browseWebsiteMedias, uploadWebsiteMedia } from '@/resources/websiteMedias'
+import { fetchWebsiteWidgets } from '@/resources/websiteWidgets'
 import {
   createWebsitePage,
   deleteWebsitePage,
@@ -284,6 +285,8 @@ function askDelete(): void {
                 rows: 14,
                 placeholder: 'Tell them about us…',
                 allowWidget: true,
+                fetchWidgets: fetchWebsiteWidgets,
+                widgetPermission: 'totem.websitewidget.read',
                 uploadImage: uploadWebsiteMedia,
                 uploadPermission: 'totem.websitemedia.create',
                 maxUploadBytes: 5 * 1024 * 1024,

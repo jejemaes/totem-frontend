@@ -8,7 +8,12 @@
  * would be a problem.
  */
 
-import type { HtmlImageBrowse, HtmlImageUpload, HtmlToolbarGroup } from './html'
+import type {
+  HtmlImageBrowse,
+  HtmlImageUpload,
+  HtmlToolbarGroup,
+  HtmlWidgetFetch,
+} from './html'
 import type { RelationDisplay, RelationFetch, RelationRecord } from './many2one'
 
 /** The widget names accepted by `<Field widget="...">`. */
@@ -161,6 +166,19 @@ export interface FieldOptions {
    * in source mode with a notice rather than having it silently parsed away.
    */
   allowWidget?: boolean
+  /**
+   * HtmlField: loads the widget catalogue for the toolbar's widget button.
+   *
+   * Needed on TOP of `allowWidget`, not instead of it: that flag is what lets
+   * the field carry markers at all, and it keeps preserving and displaying the
+   * ones already in the content even with no loader here. This only adds the
+   * ability to insert one.
+   */
+  fetchWidgets?: HtmlWidgetFetch
+  /** HtmlField: permission required to list the widget types. Without the scope
+      the widget button is hidden, exactly as `uploadPermission` hides the image
+      upload -- and the markers already in the content are still shown. */
+  widgetPermission?: string
   /** HtmlField: which groups of buttons to show, in this order. Defaults to all
       of them. */
   toolbar?: HtmlToolbarGroup[]

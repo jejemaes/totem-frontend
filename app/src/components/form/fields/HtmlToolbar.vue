@@ -41,6 +41,9 @@ const props = defineProps<{
   /** False hides the image button entirely: neither an uploader nor a library
       is reachable, so the picker it opens would have nothing to offer. */
   canImage?: boolean
+  /** False hides the widget button: not a field that accepts markers, no
+      catalogue loader, or no permission on the catalogue. */
+  canWidget?: boolean
   /** The id of the surface these buttons drive, for aria-controls. */
   surfaceId?: string
   /** Locked by a save in flight -- unlike `disabled`, this also stops the
@@ -52,6 +55,7 @@ const emit = defineEmits<{
   'toggle-source': []
   'insert-link': [event: MouseEvent]
   'insert-image': [event: MouseEvent]
+  'insert-widget': []
 }>()
 
 const tableMenu = ref<InstanceType<typeof Menu> | null>(null)
@@ -346,6 +350,24 @@ const TABLE_ITEMS = computed(() => [
         @click="emit('insert-image', $event)"
       >
         <i class="pi pi-image" aria-hidden="true" />
+      </button>
+    </div>
+
+    <!-- Inserts a widget, or edits the selected one -- `active.widget` is what
+         tells the two apart, and what makes the button read as pressed while a
+         block is selected. -->
+    <div v-if="shows('widget') && canWidget" class="html-tb__group">
+      <button
+        type="button"
+        class="html-tb__btn"
+        :class="{ 'html-tb__btn--on': active.widget }"
+        :title="active.widget ? 'Edit this widget' : 'Insert a widget'"
+        :aria-label="active.widget ? 'Edit this widget' : 'Insert a widget'"
+        aria-haspopup="dialog"
+        :disabled="disabled"
+        @click="emit('insert-widget')"
+      >
+        <i class="pi pi-th-large" aria-hidden="true" />
       </button>
     </div>
 

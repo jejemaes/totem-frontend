@@ -8,6 +8,7 @@ import type {
   HtmlImageBrowse,
   HtmlImageItem,
   HtmlImageUpload,
+  HtmlWidgetFetch,
 } from '@/components/form/fields/html'
 import FieldSwitch from '@/components/form/FieldSwitch.vue'
 import Field from '@/components/form/fields/Field.vue'
@@ -87,6 +88,106 @@ const demoBrowse: HtmlImageBrowse = async (query) => {
   return { items: matches.slice(start, start + query.pageSize), total: matches.length }
 }
 
+/*
+ * A stand-in widget catalogue, so the generated options form is exercisable on
+ * a page with no session that reaches no backend.
+ *
+ * Deliberately richer than the one widget the backend registers today: an enum
+ * reached through `$ref`/`$defs`, a boolean, a float, a required string, and
+ * one ARRAY property the generated form cannot express -- so the "not a simple
+ * value" warning and its raw-JSON box are visible here without inventing a
+ * backend widget to trigger them.
+ */
+const demoWidgets: HtmlWidgetFetch = async () => [
+  {
+    id: 'last-page',
+    title: 'Last Updated Pages',
+    // Copied verbatim from LastUpdatePageWidget.Attributes.model_json_schema().
+    attribute_schema: {
+      additionalProperties: false,
+      properties: {
+        heading: {
+          default: '',
+          description: 'Optional heading above the list.',
+          maxLength: 256,
+          title: 'Heading',
+          type: 'string',
+        },
+        limit: {
+          default: 5,
+          description: 'How many pages to list, at most.',
+          maximum: 10,
+          minimum: 1,
+          title: 'Limit',
+          type: 'integer',
+        },
+      },
+      title: 'Attributes',
+      type: 'object',
+    },
+  },
+  {
+    id: 'side-menu',
+    title: 'Side Menu',
+    // Also verbatim: SideMenuWidget.Attributes.model_json_schema(). It brings a
+    // REQUIRED string and a `pattern`, which the dialog checks itself -- the
+    // backend refuses a bad one too, but as "Invalid widget parameters" on
+    // `content`, pointing at the page body rather than at the field.
+    attribute_schema: {
+      additionalProperties: false,
+      properties: {
+        menu_id: {
+          description: 'Identifier of the root menu item, whose descendants are listed.',
+          maxLength: 32,
+          title: 'Menu Id',
+          type: 'string',
+        },
+        heading: {
+          default: '',
+          description: "Optional heading, overriding the root menu item's name.",
+          maxLength: 256,
+          title: 'Heading',
+          type: 'string',
+        },
+        css_class: {
+          default: '',
+          description: 'Optional CSS classes added to every item of the list.',
+          maxLength: 128,
+          pattern: '^[A-Za-z0-9_\\- ]*$',
+          title: 'Css Class',
+          type: 'string',
+        },
+      },
+      required: ['menu_id'],
+      title: 'Attributes',
+      type: 'object',
+    },
+  },
+  {
+    id: 'demo-gallery',
+    title: 'Image Gallery',
+    attribute_schema: {
+      $defs: { Layout: { enum: ['grid', 'carousel'], title: 'Layout', type: 'string' } },
+      properties: {
+        album: { description: 'Which album to show.', title: 'Album', type: 'string' },
+        layout: { $ref: '#/$defs/Layout', default: 'grid', description: 'How to arrange them.' },
+        columns: { default: 3, maximum: 6, minimum: 1, title: 'Columns', type: 'integer' },
+        ratio: { default: 1.5, title: 'Aspect ratio', type: 'number' },
+        captions: {
+          default: true,
+          description: 'Show a caption under each image.',
+          title: 'Captions',
+          type: 'boolean',
+        },
+        tags: { items: { type: 'string' }, title: 'Tags', type: 'array' },
+      },
+      required: ['album'],
+      title: 'Attributes',
+      type: 'object',
+    },
+  },
+]
+
 /** Reads the picked file into a data URI: no request, no endpoint. */
 const demoUpload: HtmlImageUpload = (file) =>
   new Promise((resolve, reject) => {
@@ -147,6 +248,7 @@ const DEFINITION = `<Form :data="data" @save="onSave">
   <Field name="reference"   widget="string"    label="Reference" readonly />
   <Field name="body"        widget="html"      label="Body" required
          :options="{ rows: 8, allowWidget: true,
+                     fetchWidgets: demoWidgets,
                      uploadImage: demoUpload, browseImages: demoBrowse }" />
   <Field name="legacy_body" widget="html"      label="Legacy body" />
   <FieldSwitch v-model="targetChoice" :choices="TARGET_CHOICES" :values="data" label="Target" />
@@ -216,10 +318,12 @@ const DEFINITION = `<Form :data="data" @save="onSave">
 
             <Field name="body" widget="html" label="Body" required
                    :options="{ rows: 8, allowWidget: true,
+                               fetchWidgets: demoWidgets,
                                uploadImage: demoUpload, browseImages: demoBrowse }"
                    help="Rich text. Empty out the document and save: the value is null, not
                          '<p></p>', so `required` still catches it. The image button opens a
-                         picker over a fake in-memory library." />
+                         picker over a fake in-memory library, and the widget button a
+                         stand-in catalogue." />
 
             <!-- The same widget WITHOUT allowWidget, on content carrying a
                  marker and a <section>. It must open in source mode with a
