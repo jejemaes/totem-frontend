@@ -4,6 +4,11 @@ import { computed, ref } from 'vue'
 
 import type { FormData } from '@/components/form/context'
 import { activeSwitchField, type FieldSwitchChoice } from '@/components/form/fieldSwitch'
+import type {
+  HtmlImageBrowse,
+  HtmlImageItem,
+  HtmlImageUpload,
+} from '@/components/form/fields/html'
 import FieldSwitch from '@/components/form/FieldSwitch.vue'
 import Field from '@/components/form/fields/Field.vue'
 import Form from '@/components/form/Form.vue'
@@ -33,7 +38,63 @@ const data = ref<FormData>({
   published: null,
   status: 'draft',
   reference: 'REF-001',
+  body: '<h2>About us</h2><p>A <strong>reception kiosk</strong> in the main hall.</p>',
+  // Deliberately carries a marker AND a <section>, neither of which the editor
+  // schema knows without `allowWidget`: this field must therefore open in
+  // source mode rather than parsing them away. It is the only place that
+  // degradation can be seen without a backend.
+  legacy_body:
+    '<section><p>Written in the old textarea.</p></section>' +
+    '<t-widget name="last-page" attrs=\'{"limit":5}\'></t-widget>',
 })
+
+/*
+ * A fake media store, so the editor's image picker can be exercised here.
+ *
+ * In-memory and offline, like everything else on this page: `uploadImage` and
+ * `browseImages` are plain functions the caller supplies, so a demo can satisfy
+ * their contract with data URIs and never touch /website/medias/. The real ones
+ * live in resources/websiteMedias.
+ */
+const SWATCHES = ['4f46e5', '0891b2', 'ca8a04', 'be123c', '15803d', '7c3aed']
+
+function fakeImage(label: string, colour: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160">
+    <rect width="240" height="160" fill="#${colour}"/>
+    <text x="120" y="88" font-family="sans-serif" font-size="22" fill="#fff"
+          text-anchor="middle">${label}</text>
+  </svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+}
+
+/** Enough rows for the picker's paginator to have something to do. */
+const LIBRARY: HtmlImageItem[] = Array.from({ length: 27 }, (_, index) => {
+  const kind = index % 3 === 0 ? 'diagram' : index % 3 === 1 ? 'photo' : 'logo'
+  const name = `${kind}-${String(index + 1).padStart(2, '0')}.png`
+  return {
+    id: String(index),
+    url: fakeImage(name, SWATCHES[index % SWATCHES.length]),
+    name,
+    mimetype: 'image/png',
+  }
+})
+
+/** Paged and searched in memory, the same shape the backend answers. */
+const demoBrowse: HtmlImageBrowse = async (query) => {
+  const term = query.search?.toLowerCase() ?? ''
+  const matches = term ? LIBRARY.filter((item) => item.name.includes(term)) : LIBRARY
+  const start = (query.page - 1) * query.pageSize
+  return { items: matches.slice(start, start + query.pageSize), total: matches.length }
+}
+
+/** Reads the picked file into a data URI: no request, no endpoint. */
+const demoUpload: HtmlImageUpload = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve({ url: String(reader.result), name: file.name })
+    reader.onerror = () => reject(new Error('This file could not be read.'))
+    reader.readAsDataURL(file)
+  })
 
 const saved = ref<FormData | null>(null)
 const changed = ref<FormData | null>(null)
@@ -84,6 +145,10 @@ const DEFINITION = `<Form :data="data" @save="onSave">
            { value: 'done',  label: 'Done' },
          ] }" />
   <Field name="reference"   widget="string"    label="Reference" readonly />
+  <Field name="body"        widget="html"      label="Body" required
+         :options="{ rows: 8, allowWidget: true,
+                     uploadImage: demoUpload, browseImages: demoBrowse }" />
+  <Field name="legacy_body" widget="html"      label="Legacy body" />
   <FieldSwitch v-model="targetChoice" :choices="TARGET_CHOICES" :values="data" label="Target" />
   <Field v-if="activeTarget === 'target_page'" name="target_page" widget="string" label="Page" />
   <Field v-else                                name="target_link" widget="string" label="Link" />
@@ -148,6 +213,22 @@ const DEFINITION = `<Form :data="data" @save="onSave">
 
             <Field name="reference" widget="string" label="Reference" readonly
                    help="Locked, but still present in the payload." />
+
+            <Field name="body" widget="html" label="Body" required
+                   :options="{ rows: 8, allowWidget: true,
+                               uploadImage: demoUpload, browseImages: demoBrowse }"
+                   help="Rich text. Empty out the document and save: the value is null, not
+                         '<p></p>', so `required` still catches it. The image button opens a
+                         picker over a fake in-memory library." />
+
+            <!-- The same widget WITHOUT allowWidget, on content carrying a
+                 marker and a <section>. It must open in source mode with a
+                 notice: the schema would otherwise delete both on the first
+                 keystroke. -->
+            <Field name="legacy_body" widget="html" label="Legacy body"
+                   :options="{ rows: 6 }"
+                   help="Content the editor cannot represent: it opens as HTML source instead
+                         of silently dropping what it does not know." />
 
             <!-- Purely visual: its value is in no draft and in no payload. The
                  active field is deduced from which of the two below is filled. -->

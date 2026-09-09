@@ -66,7 +66,7 @@ const allowed = computed(() => {
  * Read once and kept: `form.readonly` is also true for the duration of a PATCH,
  * and a dropdown that turns into a line of text and back reads as a rendering
  * bug. Being locked is what `:disabled` on the <Select> expresses, exactly as
- * the other eight widgets do.
+ * the other widgets do.
  */
 const declaredReadonly = props.readonly ?? false
 

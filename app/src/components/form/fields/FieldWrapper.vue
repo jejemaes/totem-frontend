@@ -2,8 +2,8 @@
 import { useId } from 'vue'
 
 /*
- * The chrome shared by the eight widgets: label, "required" marker, help text and
- * error message. Without it, all six would repeat the exact same block.
+ * The chrome shared by every widget in this folder: label, "required" marker,
+ * help text and error message. Without it, each would repeat the same block.
  *
  * It is used INSIDE each widget rather than around Field.vue's
  * `<component :is>`, for two reasons: the `<label for>` must point at an id the

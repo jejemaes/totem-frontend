@@ -74,7 +74,7 @@ const allowed = computed(() => {
  *
  * Read once and kept: `form.readonly` is also true for the duration of a PATCH,
  * and a control that turns into a row of pills and back reads as a rendering
- * bug. Being locked is what `:disabled` expresses, exactly as the other nine
+ * bug. Being locked is what `:disabled` expresses, exactly as the other
  * widgets do.
  */
 const declaredReadonly = props.readonly ?? false

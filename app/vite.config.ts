@@ -15,6 +15,15 @@ export default defineConfig(({ mode }) => {
   // totem-backend join. Resolved by Docker DNS, so it needs no published port.
   const backend = env.VITE_DEV_PROXY_TARGET || 'http://totem-backend:8000'
 
+  // Django does NOT serve public media: its only /media/ route is a catch-all
+  // to ServeSignedUrlsStorageNginxView, which refuses any URL without a
+  // `signature` query param -- and answers with Django's HTML 403 page, since
+  // that route is not under NinjaAPI. So an <img src="/media/public/...">
+  // proxied to the backend directly just breaks, with nothing useful in the
+  // console. totem-backend-nginx is what serves that path from the media
+  // volume, and it shares totem-saas-network with this container.
+  const media = env.VITE_DEV_MEDIA_PROXY_TARGET || 'http://totem-backend-nginx:80'
+
   return {
     // Public base path. Baked in at BUILD time (Vite rewrites every asset URL),
     // which is why it is a build arg in docker/Dockerfile and not a runtime
@@ -57,10 +66,12 @@ export default defineConfig(({ mode }) => {
         '/api': { target: backend, changeOrigin: true },
         '/o': { target: backend, changeOrigin: true },
         // The Django-rendered pages (/admin, the OAuth authorize view) pull
-        // their assets from /static and /media.
+        // their assets from /static.
         '/admin': { target: backend, changeOrigin: true },
         '/static': { target: backend, changeOrigin: true },
-        '/media': { target: backend, changeOrigin: true },
+        // Not `backend`: see the comment on `media` above. This is also what
+        // the rich text editor's uploaded images are served from.
+        '/media': { target: media, changeOrigin: true },
       },
     },
 
