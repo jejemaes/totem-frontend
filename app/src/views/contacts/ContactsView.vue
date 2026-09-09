@@ -3,24 +3,27 @@ import Avatar from 'primevue/avatar'
 import Button from 'primevue/button'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
-import IconField from 'primevue/iconfield'
-import InputIcon from 'primevue/inputicon'
-import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
-import { computed, reactive } from 'vue'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { can } from '@/auth/permissions'
 import ColorTag from '@/components/ColorTag.vue'
+import MultiRecordFilters from '@/components/list/MultiRecordFilters.vue'
+import type { FilterFields } from '@/components/list/filters'
+import { useFilter } from '@/composables/useFilter'
 import { useResourceList } from '@/composables/useResourceList'
 import {
   CONTACT_SORTABLE,
   displayName,
   initials,
   listContacts,
+  type ContactFilters,
   type ContactRow,
 } from '@/resources/contacts'
+import { searchContactTags } from '@/resources/contactTags'
+import { searchCountries } from '@/resources/countries'
 
 const route = useRoute()
 
@@ -40,8 +43,47 @@ function editRoute(id: string) {
   return { name: 'contact-edit', params: { id }, query: route.query }
 }
 
-/** Every key is sent as a query param; any change resets to page 1. */
-const filters = reactive({ search: '' })
+/**
+ * The filters this screen offers. The key of each entry is the query parameter
+ * the API takes and the one that ends up in the URL -- one name, so a link is
+ * always a faithful description of the request behind it.
+ */
+const FILTER_FIELDS: FilterFields = {
+  search: {
+    type: 'string',
+    label: 'Search',
+    help_text: 'Matches the first name, the last name or the email.',
+  },
+  email: {
+    type: 'string',
+    label: 'Email',
+    help_text: 'Filter on the email address.',
+  },
+  city: {
+    type: 'string',
+    label: 'City',
+    help_text: 'Filter on the city.',
+  },
+  country: {
+    type: 'many2one',
+    label: 'Country',
+    help_text: 'Keep the contacts of one country.',
+    // The same loader the contact form's own country field uses: the endpoint,
+    // its `?fields=` list and the name of its search parameter all belong to
+    // the resource module, not here.
+    options: { fetch: searchCountries, permission: 'totem.country.read' },
+  },
+  tag: {
+    type: 'many2one',
+    label: 'Tag',
+    help_text: 'Keep the contacts carrying this tag.',
+    options: { fetch: searchContactTags, permission: 'totem.contacttag.read' },
+  },
+}
+
+const { filters, setFilters, updateFilters, activeFilters } = useFilter<ContactFilters>(
+  FILTER_FIELDS,
+)
 
 const {
   rows,
@@ -112,20 +154,16 @@ const skeletonRows = Array.from({ length: 5 }, (_, i) => ({ id: `skeleton-${i}` 
       @sort="onSort"
     >
       <template #header>
-        <div class="table-toolbar">
-          <IconField class="table-toolbar__search">
-            <InputIcon class="pi pi-search" />
-            <InputText v-model="filters.search" placeholder="Search a name or an email…" />
-          </IconField>
-          <Button
-            icon="pi pi-refresh"
-            severity="secondary"
-            outlined
-            aria-label="Refresh"
-            :loading="loading"
-            @click="reload"
-          />
-        </div>
+        <MultiRecordFilters
+          :fields="FILTER_FIELDS"
+          :filters="filters"
+          :active-filters="activeFilters"
+          :loading="loading"
+          search-placeholder="Search a name or an email…"
+          @apply="setFilters"
+          @patch="updateFilters"
+          @refresh="reload"
+        />
       </template>
 
       <template #empty>
@@ -201,21 +239,6 @@ const skeletonRows = Array.from({ length: 5 }, (_, i) => ({ id: `skeleton-${i}` 
 </template>
 
 <style scoped>
-.table-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.table-toolbar__search {
-  flex: 1;
-  max-width: 24rem;
-}
-
-.table-toolbar__search :deep(input) {
-  width: 100%;
-}
-
 .contact-cell {
   display: flex;
   align-items: center;

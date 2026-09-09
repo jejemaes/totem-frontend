@@ -2,24 +2,27 @@
 import Button from 'primevue/button'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
-import IconField from 'primevue/iconfield'
-import InputIcon from 'primevue/inputicon'
-import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import { useConfirm } from 'primevue/useconfirm'
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
+import MultiRecordFilters from '@/components/list/MultiRecordFilters.vue'
+import type { FilterFields } from '@/components/list/filters'
+import { useFilter } from '@/composables/useFilter'
 import { useResourceList } from '@/composables/useResourceList'
 import {
   deleteWebsiteMenu,
   listWebsiteMenus,
+  searchWebsiteMenus,
   WEBSITE_MENU_SORTABLE,
+  type WebsiteMenuFilters,
   type WebsiteMenuRow,
 } from '@/resources/websiteMenus'
+import { searchWebsitePages } from '@/resources/websitePages'
 
 const route = useRoute()
 const confirm = useConfirm()
@@ -33,7 +36,41 @@ function editRoute(id: string) {
   return { name: 'website-menu-edit', params: { id }, query: route.query }
 }
 
-const filters = reactive({ search: '' })
+/**
+ * The filters this screen offers. The key of each entry is the query parameter
+ * the API takes and the one that ends up in the URL -- one name, so a link is
+ * always a faithful description of the request behind it.
+ */
+const FILTER_FIELDS: FilterFields = {
+  search: {
+    type: 'string',
+    label: 'Search',
+    help_text: 'Matches the name or the link.',
+  },
+  name: {
+    type: 'string',
+    label: 'Name',
+    help_text: 'Filter on the menu name.',
+  },
+  parent: {
+    type: 'many2one',
+    label: 'Parent',
+    help_text: 'Keep the direct children of one menu item.',
+    // The same loader the menu form's own parent field uses: the endpoint and
+    // its `?fields=` list belong to the resource module, not here.
+    options: { fetch: searchWebsiteMenus, permission: 'totem.websitemenu.read' },
+  },
+  target_page: {
+    type: 'many2one',
+    label: 'Target page',
+    help_text: 'Keep the items pointing at one page.',
+    options: { fetch: searchWebsitePages, permission: 'totem.websitepage.read' },
+  },
+}
+
+const { filters, setFilters, updateFilters, activeFilters } = useFilter<WebsiteMenuFilters>(
+  FILTER_FIELDS,
+)
 
 const {
   rows,
@@ -142,20 +179,16 @@ function askDelete(row: WebsiteMenuRow): void {
       @sort="onSort"
     >
       <template #header>
-        <div class="table-toolbar">
-          <IconField class="table-toolbar__search">
-            <InputIcon class="pi pi-search" />
-            <InputText v-model="filters.search" placeholder="Search a menu name or link…" />
-          </IconField>
-          <Button
-            icon="pi pi-refresh"
-            severity="secondary"
-            outlined
-            aria-label="Refresh"
-            :loading="loading"
-            @click="reload"
-          />
-        </div>
+        <MultiRecordFilters
+          :fields="FILTER_FIELDS"
+          :filters="filters"
+          :active-filters="activeFilters"
+          :loading="loading"
+          search-placeholder="Search a menu name or link…"
+          @apply="setFilters"
+          @patch="updateFilters"
+          @refresh="reload"
+        />
       </template>
 
       <template #empty>
@@ -230,21 +263,6 @@ function askDelete(row: WebsiteMenuRow): void {
 </template>
 
 <style scoped>
-.table-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.table-toolbar__search {
-  flex: 1;
-  max-width: 24rem;
-}
-
-.table-toolbar__search :deep(input) {
-  width: 100%;
-}
-
 .table-empty {
   display: grid;
   justify-items: center;

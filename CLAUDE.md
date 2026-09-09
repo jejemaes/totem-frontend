@@ -36,7 +36,8 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
     auth/         oauth.ts, tokenStorage.ts, authStore.ts (Pinia), permissions.ts
     components/   ColorDot.vue, ColorTag.vue, colors.ts
       form/       Form.vue, context.ts, FieldSwitch, fields/, widget/
-    composables/  useResourceList.ts, useResourceForm.ts, useTheme.ts
+      list/       MultiRecordFilters.vue, filters.ts
+    composables/  useResourceList.ts, useResourceForm.ts, useFilter.ts, useTheme.ts
     layouts/      AdminLayout.vue, BlankLayout.vue, AppMenu.vue, menu.ts
     plugins/      primevue.ts
     resources/    one module per backend endpoint
@@ -223,15 +224,54 @@ serves create and edit; the difference is only the scopes.
    `<NAME>_LIST_FIELDS` array declared `as const satisfies readonly (keyof XxxRow)[]`, a
    `<NAME>_SORTABLE` list of what the backend accepts in `?ordering=`, a `Filters` type, and a
    three-line `listXxx()` calling `fetchList`.
-2. In `app/src/views/<feature>/XxxView.vue`: `useResourceList({ fetchPage, filters, pageSize,
+2. In `app/src/views/<feature>/XxxView.vue`: a `FILTER_FIELDS` dict, then
+   `useFilter<XxxFilters>(FILTER_FIELDS)` and `useResourceList({ fetchPage, filters, pageSize,
    sortField, sortable, syncUrl: true })` behind a PrimeVue `DataTable lazy paginator row-hover
-   removable-sort data-key="id"`, with a `#header` toolbar (`IconField` + `InputText` search +
-   refresh), an `#empty` block, and `Skeleton` rows while `isInitialLoad`.
+   removable-sort data-key="id"`, with `<MultiRecordFilters>` as the `#header` toolbar, an
+   `#empty` block, and `Skeleton` rows while `isInitialLoad`.
 3. Three routes in `router/index.ts` with `meta.permissions`, and an entry in `layouts/menu.ts`.
 
 Copy `views/contacts/ContactTagsView.vue` — it is the smallest complete example. Wrap permission
 checks in a `computed`, never a bare `can()` in the template: `can()` instantiates the store on
 every evaluation. `editRoute(id)` carries `route.query` along so Back returns to the same page.
+
+### The filter bar
+
+`components/list/MultiRecordFilters.vue` is the `#header` of every list: a search box, a **Filters**
+button badged with the number of active filters, and a refresh button. The button opens a dialog
+holding an ordinary `<Form>` with one `<Field>` per declared filter — which is the whole point of
+`FilterType` being a **subset of `Widget`**: a filter form needed nothing added to the form
+framework.
+
+A screen declares its filters as data, keyed by the query parameter name — the SAME name in the URL
+and in the request, so a link always describes the call behind it:
+
+```ts
+const FILTER_FIELDS: FilterFields = {
+  search: { type: 'string', label: 'Search', help_text: 'Matches the login or the email.' },
+  is_active: { type: 'boolean', label: 'Active', help_text: 'Keep the active accounts.' },
+}
+const { filters, setFilters, updateFilters, activeFilters } = useFilter<UserFilters>(FILTER_FIELDS)
+```
+
+`filters` goes straight to `useResourceList`. `setFilters` replaces the whole set (the dialog's
+Apply, so emptying a control drops the filter), `updateFilters` merges a subset (the search box),
+and `activeFilters` lists what is on **with `search` excluded** — its box is already on screen, so
+counting it in the badge would claim a filter is hidden when it is not.
+
+Two rules worth not rediscovering:
+
+- **`useFilter` reads the URL, `useResourceList` writes it.** Page, page size, ordering and the
+  filters share one query string and must be replaced in one `router.replace`; two writers would
+  each preserve a stale copy of the other's keys. `useResourceList` then re-hydrates those keys
+  from the same query string as RAW STRINGS, which is safe only because every consumer parses
+  (`parseFilterValue`) — a boolean restored from a link arrives as `"false"`, a non-empty string.
+- **Every declared key is present in `filters`, holding `null` when unset.** `useResourceList`
+  reads `Object.keys(filters)` once, at creation, to know which parameters it owns; a key added
+  later would never reach the URL and never be cleared from it.
+
+The conversions live in `components/list/filters.ts`, Vue-free and with a spec, for the same reason
+`fields/values.ts` does.
 
 ### Adding a form screen
 
@@ -399,6 +439,7 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | `HtmlField.vue`                | `html.ts`               |
 | `FieldSwitch.vue`              | `fieldSwitch.ts`        |
 | `UserRolesSelectionWidget.vue` | `userRolesSelection.ts` |
+| `MultiRecordFilters.vue`       | `list/filters.ts`       |
 | `ColorTag.vue`                 | `colors.ts`             |
 | every field                    | `fields/values.ts`      |
 
