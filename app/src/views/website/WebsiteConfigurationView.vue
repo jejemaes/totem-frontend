@@ -11,6 +11,11 @@ import Field from '@/components/form/fields/Field.vue'
 import { htmlOrNull } from '@/components/form/fields/html'
 import type { FieldValue } from '@/components/form/fields/types'
 import Form from '@/components/form/Form.vue'
+import WebsiteThemeOptionSubform from '@/components/form/widget/WebsiteThemeOptionSubform.vue'
+import {
+  sameThemeOptions,
+  type ThemeOptionSource,
+} from '@/components/form/widget/websiteThemeOptions'
 import { useResourceForm, type ResourceForm } from '@/composables/useResourceForm'
 import {
   fetchCurrentWebsite,
@@ -44,10 +49,14 @@ import { fetchWebsiteWidgets } from '@/resources/websiteWidgets'
  *    reloaded instead, which re-seeds <Form>'s baseline -- otherwise the fields
  *    would stay dirty and Save enabled over values already written.
  *
- * `theme_options` is NOT edited here. Its shape is the selected theme's
- * `option_schema`, i.e. JSON Schema, and building a form from that is a screen
- * of its own. Leaving it out is also what keeps this one safe: see the note on
- * `updateCurrentWebsite` about what merely sending `theme` does to the options.
+ * `theme_options` is the one value that does NOT live in the <Form> draft: it
+ * is a bag keyed by the selected theme's own option names, which no
+ * `FieldValue` can carry. It is owned here and edited by a detached widget,
+ * <WebsiteThemeOptionSubform>, so this view re-implements the four things
+ * <Form> would have done for it -- seeding on load (`onLoaded`), telling an
+ * edit from an untouched bag (`optionsDirty`), enabling Save, and reaching the
+ * payload. See the note on `updateCurrentWebsite` for why it must travel in the
+ * SAME request as a theme change.
  */
 
 /** The `/current/` alias, as an id: there is no pk a client could know. */
@@ -115,6 +124,22 @@ if (canReadThemes.value) {
 const menu = ref<WebsiteDetail['menu']>(null)
 const homepage = ref<WebsiteDetail['homepage']>(null)
 
+/**
+ * The theme's options, and what the record carried, to tell an edit from an
+ * untouched bag.
+ *
+ * `Record<string, unknown>`: the keys belong to the selected theme's
+ * `option_schema` and are unknown to this app. The sub-form narrows them to
+ * what that schema declares -- this view only carries the bag.
+ */
+const themeOptions = ref<Record<string, unknown>>({})
+const themeOptionsBaseline = ref<Record<string, unknown>>({})
+
+/** Compared as a set of pairs: `jsonb` does not preserve key order. */
+const optionsDirty = computed(
+  () => !sameThemeOptions(themeOptions.value, themeOptionsBaseline.value),
+)
+
 /** Cleared on every save, so it can never describe an older one. */
 const saved = ref(false)
 
@@ -165,7 +190,15 @@ const form: ResourceForm = useResourceForm<WebsiteDetail>({
   onLoaded: (website) => {
     menu.value = website?.menu ?? null
     homepage.value = website?.homepage ?? null
+    // Both, and from a fresh object each time: the baseline is what `dirty`
+    // compares against, so sharing one reference with the live bag would make
+    // every edit invisible.
+    themeOptions.value = { ...(website?.theme_options ?? {}) }
+    themeOptionsBaseline.value = { ...(website?.theme_options ?? {}) }
   },
+  // An edit confined to the sub-form leaves `changed` empty, and an empty
+  // `changed` makes useResourceForm skip the PATCH entirely.
+  hasExternalChanges: () => optionsDirty.value,
   // Required by the composable's contract and UNREACHABLE: `id` is a constant,
   // so `save` always takes the update branch. The row is provisioned by the
   // backend; there is no POST route to call.
@@ -182,6 +215,11 @@ const form: ResourceForm = useResourceForm<WebsiteDetail>({
     form.data.value = toForm(website)
     menu.value = website.menu
     homepage.value = website.homepage
+    // The options live outside that object, so they need re-seeding of their
+    // own -- and from the RESPONSE, which is the only thing that says what the
+    // backend actually stored: it resets the bag whenever the theme moved.
+    themeOptions.value = { ...website.theme_options }
+    themeOptionsBaseline.value = { ...website.theme_options }
   },
 })
 
@@ -202,6 +240,20 @@ const theme = computed<WebsiteThemeRef | { id: string } | null>(() => {
   if (!id) return null
   return themes.value.find((entry) => entry.id === id) ?? { id }
 })
+
+/**
+ * The catalogue entry for the theme the DRAFT currently holds.
+ *
+ * Off the draft and not off `data`, unlike the `record` above: the sub-form has
+ * to follow the picker, so that switching theme swaps the option fields at
+ * once. `null` until the catalogue lands, which is what keeps the sub-form off
+ * the screen until it has a schema to build from.
+ */
+function optionTheme(id: FieldValue): ThemeOptionSource | null {
+  const themeId = text(id)
+  if (!themeId) return null
+  return themes.value.find((entry) => entry.id === themeId) ?? null
+}
 
 /**
  * Only the keys <Form> reports as edited reach the PATCH -- built key by key,
@@ -230,6 +282,19 @@ function updatePayload(changed: FormData): WebsiteUpdatePayload {
   if ('theme' in changed) {
     const themeId = text(changed.theme)
     if (themeId) body.theme = themeId
+  }
+  /*
+   * The options travel WHOLE, and they travel with a theme change even when the
+   * bag itself reads as untouched.
+   *
+   * That second half is the load-bearing one: the backend resets
+   * `theme_options` to `{}` on the mere presence of `theme`, through a
+   * `setdefault` -- so options sent in the SAME request win, and a request that
+   * omits them cannot be corrected by a second one. Sending the bag the
+   * sub-form is showing is therefore the only way the two stay in step.
+   */
+  if (optionsDirty.value || body.theme !== undefined) {
+    body.theme_options = { ...themeOptions.value }
   }
   return body
 }
@@ -289,7 +354,7 @@ function discard(): void {
           :errors="fieldErrors"
           @save="onSave"
         >
-          <template #default>
+          <template #default="{ draft }">
             <Field
               name="name"
               widget="string"
@@ -327,6 +392,22 @@ function discard(): void {
               }"
               help="Changing the theme RESETS its options: they are keyed by the options the
                     previous theme declared, and nothing maps them onto another's."
+            />
+
+            <!-- The options of the theme above, built on the fly from the
+                 schema it publishes. A detached widget, not a <Field>: its
+                 value is a bag, which no FieldValue can carry. `saving` is
+                 OR-ed into `readonly` by hand -- it provides its own form
+                 context, so <Form>'s own lock does not reach it. -->
+            <WebsiteThemeOptionSubform
+              v-if="canReadThemes"
+              v-model="themeOptions"
+              :theme="optionTheme(draft.theme)"
+              label="Theme options"
+              help="What the selected theme lets you change without touching code. An option
+                    left empty keeps the theme's own value."
+              :readonly="!canUpdate || saving"
+              :error="fieldErrors.theme_options"
             />
 
             <!-- The page served at the root of the site. Nullable: a freshly
@@ -416,11 +497,15 @@ function discard(): void {
           </template>
 
           <template #actions="{ dirty }">
+            <!-- `optionsDirty` is OR-ed in everywhere `dirty` is read: the theme
+                 options live outside the draft, so <Form>'s own dirtiness
+                 cannot see them, and without this an edit confined to the
+                 sub-form would leave Save disabled. -->
             <Button
               label="Discard"
               severity="secondary"
               text
-              :disabled="saving || !dirty"
+              :disabled="saving || (!dirty && !optionsDirty)"
               @click="discard"
             />
             <Button
@@ -428,7 +513,7 @@ function discard(): void {
               label="Save"
               icon="pi pi-check"
               :loading="saving"
-              :disabled="!dirty"
+              :disabled="!dirty && !optionsDirty"
             />
           </template>
         </Form>
