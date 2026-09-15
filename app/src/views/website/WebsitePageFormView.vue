@@ -4,7 +4,7 @@ import Card from 'primevue/card'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import { useConfirm } from 'primevue/useconfirm'
-import { computed, ref } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '@/api/client'
@@ -17,6 +17,12 @@ import Form from '@/components/form/Form.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import { displayUser, searchUsers, type UserRef } from '@/resources/users'
 import { browseWebsiteMedias, uploadWebsiteMedia } from '@/resources/websiteMedias'
+import {
+  displayLayout,
+  listWebsiteLayouts,
+  searchWebsiteLayouts,
+  type WebsiteLayoutRef,
+} from '@/resources/websiteThemes'
 import { fetchWebsiteWidgets } from '@/resources/websiteWidgets'
 import {
   createWebsitePage,
@@ -43,6 +49,20 @@ const listRoute = computed(() => ({ name: 'website-pages', query: route.query })
 
 const canDelete = computed(() => can('totem.websitepage.delete'))
 
+/*
+ * The layout picker is shown only to a user holding the theme scope.
+ *
+ * HIDDEN, not degraded to read-only the way `options.permission` would do it:
+ * the layout travels as a bare id with no label of its own, so there is nothing
+ * readable to fall back to, and the vocabulary is exactly what the scope gates.
+ * The field then registers no key at all, and both payloads simply omit it --
+ * which is what lets such a user still create a page, on the backend's default.
+ *
+ * A computed and not a bare `can()` in the template: `can()` instantiates the
+ * store on every evaluation.
+ */
+const canReadLayouts = computed(() => can('totem.websitetheme.read'))
+
 /** `FieldValue` is wider than the payload accepts. */
 function text(value: FieldValue): string | null {
   return typeof value === 'string' && value !== '' ? value : null
@@ -61,6 +81,29 @@ function bool(value: FieldValue): boolean {
  */
 const user = ref<UserRef | null>(null)
 
+/**
+ * The layout vocabulary, loaded ONCE for the lifetime of the screen.
+ *
+ * Loaded here and not left to the dropdown, which fetches when it is opened,
+ * because the page detail carries `layout` as a bare id: without a record to
+ * describe it <Select> finds no matching option and shows its PLACEHOLDER, so a
+ * page with a layout would read as having none until someone opened the panel.
+ *
+ * A failure is swallowed: `layout` below falls back to labelling the
+ * value with its own id, and opening the dropdown retries the load anyway.
+ */
+const layouts = shallowRef<WebsiteLayoutRef[]>([])
+
+if (canReadLayouts.value) {
+  const controller = new AbortController()
+  onScopeDispose(() => controller.abort())
+  void listWebsiteLayouts(controller.signal)
+    .then((rows) => {
+      layouts.value = rows
+    })
+    .catch(() => {})
+}
+
 const form = useResourceForm<WebsitePageDetail>({
   id: () => (route.params.id ? String(route.params.id) : null),
   defaults: {
@@ -72,6 +115,7 @@ const form = useResourceForm<WebsitePageDetail>({
     is_published: false,
     content: null,
     date_published: null,
+    layout: null,
   },
   toForm: (page) => ({
     title: page.title,
@@ -84,6 +128,7 @@ const form = useResourceForm<WebsitePageDetail>({
     // baseline is built from this same object, so it creates no dirt.
     content: htmlOrNull(page.content),
     date_published: page.date_published,
+    layout: page.layout,
   }),
   fetchOne: fetchWebsitePage,
   onLoaded: (page) => {
@@ -105,19 +150,42 @@ const form = useResourceForm<WebsitePageDetail>({
 
 const { isNew, data, loading, loadError, saving, error, fieldErrors } = form
 
+/**
+ * The record behind the current layout, for `options.record`.
+ *
+ * Read off the loaded values rather than off the draft: it only has to label
+ * the value the form STARTED on -- once the user picks another, the widget has
+ * the record it picked. The `{ id }` fallback is what keeps the field labelled
+ * when the vocabulary could not be loaded, `displayLayout` showing the id
+ * itself; returning null there would show the placeholder instead, i.e. an
+ * empty-looking field over a value.
+ */
+const layout = computed<WebsiteLayoutRef | { id: string } | null>(() => {
+  const id = text(data.value?.layout ?? null)
+  if (!id) return null
+  return layouts.value.find((entry) => entry.id === id) ?? { id }
+})
+
 /*
  * Both payloads are built key by key, never by copying the draft -- which is
  * also what keeps `date_published` out of them: it is registered as a field, so
  * it IS in the draft, but the write schemas do not accept it.
  */
 function createPayload(values: FormData): WebsitePageCreatePayload {
-  return {
+  const payload: WebsitePageCreatePayload = {
     title: text(values.title) ?? '',
     slug: text(values.slug) ?? '',
     content: text(values.content) ?? '',
     is_published: bool(values.is_published),
     user: text(values.user),
   }
+  // Only when there is one to send. The key is absent from the draft for a user
+  // without the theme scope, and null on a create nobody touched it on -- and
+  // an OMITTED layout is what makes the backend apply its own default, where a
+  // `null` would be written to a NOT NULL column.
+  const layoutId = text(values.layout)
+  if (layoutId) payload.layout = layoutId
+  return payload
 }
 
 /**
@@ -136,6 +204,13 @@ function updatePayload(changed: FormData): WebsitePageUpdatePayload {
   if ('content' in changed) body.content = text(changed.content) ?? ''
   if ('is_published' in changed) body.is_published = bool(changed.is_published)
   if ('user' in changed) body.user = text(changed.user)
+  // `text()` and not a plain read: the column is NOT NULL, so an empty layout
+  // is never sent. The field is `required`, which leaves the dropdown no clear
+  // button, so this cannot silently drop an edit the user made.
+  if ('layout' in changed) {
+    const layoutId = text(changed.layout)
+    if (layoutId) body.layout = layoutId
+  }
   return body
 }
 
@@ -305,6 +380,29 @@ function askDelete(): void {
               label="Publication date"
               readonly
               help="Set by the backend when the publication state changes."
+            />
+
+            <!-- A relation over a vocabulary rather than over a table: the
+                 value is a layout id, which is all this needs to be an ordinary
+                 many2one. `filter: false` because the route takes no search
+                 parameter and the whole vocabulary is a handful of entries, so
+                 a filter box would refetch the same list on every keystroke.
+                 `required`: the column is NOT NULL, so there is no empty state
+                 to offer -- and that also removes the clear button. -->
+            <Field
+              v-if="canReadLayouts"
+              name="layout"
+              widget="many2one"
+              label="Layout"
+              required
+              :options="{
+                fetch: searchWebsiteLayouts,
+                record: layout,
+                relationDisplay: displayLayout,
+                filter: false,
+              }"
+              help="Structure of the page body. A theme that does not implement it falls back
+                    when the page renders, so switching theme cannot invalidate a page."
             />
           </template>
 

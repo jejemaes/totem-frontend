@@ -151,6 +151,14 @@ export type WebsitePageDetail = WebsitePageRow & {
   date_published: string | null
   update_date: string
   user: PageUserRef | null
+  /**
+   * The layout id, BARE -- `full-width`, `sidebar-left`, … The backend does not
+   * nest a `{id, title}` here the way it does for `user`: this is a CharField
+   * with `choices`, not a relation, and the labels live on their own route
+   * (`/website/themes/layouts/`, see resources/websiteThemes). Non-null, and
+   * defaulted server-side.
+   */
+  layout: string
 }
 
 /** No `?fields=` is sent on a detail: retrieve does not honour it anyway. */
@@ -175,6 +183,16 @@ export interface WebsitePageCreatePayload {
   is_published?: boolean
   /** The author's id, or `null`. Relations are written as ids. */
   user?: string | null
+  /**
+   * The layout id. Typed `string` and NOT `string | null` on purpose: the
+   * column is NOT NULL, so a `null` is not a state it can store -- the update
+   * schema does accept the key as optional, and writing null through it would
+   * fail at the database, not at validation. Omitting the key is how "leave it
+   * alone" is expressed: on a create the backend then applies its own default,
+   * which is also what happens for a user without `totem.websitetheme.read`,
+   * since the form does not show the field to them at all.
+   */
+  layout?: string
 }
 
 export function createWebsitePage(
