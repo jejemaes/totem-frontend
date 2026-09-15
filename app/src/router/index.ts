@@ -17,6 +17,7 @@ import NotFoundView from '@/views/NotFoundView.vue'
 import PublicView from '@/views/PublicView.vue'
 import UserFormView from '@/views/settings/UserFormView.vue'
 import UsersView from '@/views/settings/UsersView.vue'
+import WebsiteConfigurationView from '@/views/website/WebsiteConfigurationView.vue'
 import WebsiteMenuFormView from '@/views/website/WebsiteMenuFormView.vue'
 import WebsiteMenusView from '@/views/website/WebsiteMenusView.vue'
 import WebsitePageFormView from '@/views/website/WebsitePageFormView.vue'
@@ -98,6 +99,21 @@ export const router = createRouter({
             title: 'Edit tag',
             permissions: ['totem.contacttag.read', 'totem.contacttag.update'],
           },
+        },
+        // The site's own settings: ONE route, not the list / new / :id shape
+        // of the resources below. The row is a singleton addressed as
+        // `/website/websites/current/`, so there is nothing to list and nothing
+        // to create -- and the path is named after the screen rather than
+        // mirroring that endpoint, which would read as `/website/websites`.
+        //
+        // `totem.website.read` alone: the screen degrades to a read-only form
+        // without `totem.website.update`, which is what lets the menu entry
+        // carry the same single permission and stay honest.
+        {
+          path: 'website/configuration',
+          name: 'website-configuration',
+          component: WebsiteConfigurationView,
+          meta: { title: 'Website configuration', permissions: ['totem.website.read'] },
         },
         // The website menu tree and the pages it points at. Paths mirror the
         // API's own two-segment prefix (/website/menus/, /website/pages/), and

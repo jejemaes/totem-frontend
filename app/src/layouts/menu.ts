@@ -40,6 +40,12 @@ export const menu: MenuSection[] = [
     icon: 'pi pi-globe',
     items: [
       {
+        label: 'Configuration',
+        icon: 'pi pi-cog',
+        to: '/website/configuration',
+        permission: 'totem.website.read',
+      },
+      {
         label: 'Menus',
         icon: 'pi pi-sitemap',
         to: '/website/menus',
