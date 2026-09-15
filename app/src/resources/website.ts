@@ -86,7 +86,8 @@ export function fetchCurrentWebsite(signal?: AbortSignal): Promise<WebsiteDetail
  * reason as `WebsitePageCreatePayload.layout`: the column is NOT NULL, so a
  * null would fail at the database rather than at validation.
  *
- * `theme_options` is absent on purpose -- see below.
+ * `theme_options` is a whole bag of values whose shape is the selected theme's
+ * `option_schema` -- see below for the rule that ties the two keys together.
  */
 export interface WebsiteUpdatePayload {
   name?: string
@@ -100,6 +101,16 @@ export interface WebsiteUpdatePayload {
   footer?: string | null
   side_bar_content?: string | null
   theme?: string
+  /**
+   * The theme's options, as a whole. `Record<string, unknown>`: the keys come
+   * from the theme's own pydantic model, published as JSON Schema, so this app
+   * never knows them -- see components/form/widget/websiteThemeOptions.ts.
+   *
+   * Always sent WHOLE, never merged: the backend replaces the column, and the
+   * model is `extra="forbid"`, so a key the current theme does not declare is a
+   * 422 rather than a leftover.
+   */
+  theme_options?: Record<string, unknown>
 }
 
 /**
@@ -114,9 +125,11 @@ export interface WebsiteUpdatePayload {
  * switched away from. Send `changed`, never the draft -- which is what
  * <Form> emits for exactly this reason.
  *
- * The flip side is why this module exposes no way to send `theme_options`: a
- * screen that edited both would have to send them in the SAME request, since
- * the reset only defers to options present in it.
+ * The flip side, and the reason `theme_options` is a key of its own here: the
+ * reset is a `setdefault`, so options present IN THE SAME REQUEST win over it.
+ * That is the only way to switch theme and set its options at once -- and it is
+ * also why a caller that sends `theme` must send `theme_options` along, even
+ * empty, rather than assume the two can be written one after the other.
  */
 export function updateCurrentWebsite(payload: WebsiteUpdatePayload): Promise<WebsiteDetail> {
   return patchJson<WebsiteDetail>('/website/websites/current/', payload)

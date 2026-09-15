@@ -16,9 +16,11 @@
  * Both routes live behind the same scope, `totem.websitetheme.read`.
  *
  * `ThemeSchema.option_schema` -- the JSON Schema of the options a theme
- * declares -- is deliberately NOT typed further here, for the same reason
+ * declares -- is carried but not typed further here, for the same reason
  * `HtmlWidgetSchema.attribute_schema` is not: the shapes it can take are an
- * editor's problem, and nothing in this app builds that settings form yet.
+ * editor's problem, and they are mapped and tested in
+ * components/form/widget/websiteThemeOptions.ts, which builds the website
+ * configuration screen's option sub-form from it.
  */
 
 import { apiFetch } from '@/api/client'
@@ -43,13 +45,24 @@ export type WebsiteLayoutRef = {
  * to show for it.
  *
  * A `type`, like every other `XxxRef` here, so it stays assignable to
- * `RelationRecord`. `layouts` and `option_schema` come back too and are simply
- * carried: only the picker uses this endpoint today.
+ * `RelationRecord`. `layouts` comes back too and is simply carried: nothing
+ * reads it yet.
  */
 export type WebsiteThemeRef = {
   /** What `Website.theme` holds -- `default`, … */
   id: string
   title: string
+  /**
+   * JSON Schema of the options this theme accepts, verbatim from pydantic's
+   * `model_json_schema()`.
+   *
+   * Deliberately `unknown` rather than typed further -- the same call
+   * `HtmlWidgetSchema.attribute_schema` gets: the shapes it can take are the
+   * editor's problem, and they are mapped and tested in
+   * components/form/widget/websiteThemeOptions.ts. Optional, because a theme
+   * list read through `RelationFetch` is only ever asked for id and title.
+   */
+  option_schema?: unknown
 }
 
 /**
