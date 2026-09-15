@@ -9,6 +9,7 @@
  * `required` or mark an untouched form as edited.
  */
 
+import type { ColumnSplit } from './columns'
 import type { FieldValue } from './types'
 
 /**
@@ -263,6 +264,12 @@ export interface HtmlActiveState {
   codeBlock: boolean
   link: boolean
   table: boolean
+  /** The caret sits inside a two-column block. */
+  columns: boolean
+  /** That block's width split, so the menu can show which one is current.
+      Null when the caret is not in one -- NOT the default split, which would
+      have the menu tick a ratio no block is using. */
+  columnsSplit: ColumnSplit | null
   /** A widget marker is the current node selection, so the button edits it
       instead of inserting a new one. */
   widget: boolean
@@ -277,6 +284,7 @@ export type HtmlToolbarGroup =
   | 'block'
   | 'link'
   | 'table'
+  | 'columns'
   | 'image'
   | 'widget'
   | 'history'
@@ -291,6 +299,7 @@ export const HTML_TOOLBAR_GROUPS: HtmlToolbarGroup[] = [
   'block',
   'link',
   'table',
+  'columns',
   'image',
   'widget',
   'history',

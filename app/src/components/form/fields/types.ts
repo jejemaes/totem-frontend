@@ -179,6 +179,23 @@ export interface FieldOptions {
       the widget button is hidden, exactly as `uploadPermission` hides the image
       upload -- and the markers already in the content are still shown. */
   widgetPermission?: string
+  /**
+   * HtmlField: offer the two-column block -- two side-by-side columns, each
+   * holding ordinary rich text. OFF by default, like `allowWidget`.
+   *
+   * Unlike `allowWidget` it mirrors NO backend flag, and that is the one thing
+   * worth knowing about it: a `<div class="t-row">` is plain HTML that every
+   * HtmlField accepts, so nothing server-side would refuse one in a footer. The
+   * gate is editorial -- a footer and a sidebar are not places for a
+   * two-column layout -- not a server contract.
+   *
+   * Read once, at construction, for the same reason as `allowWidget`: it selects
+   * members of the extension list.
+   *
+   * Leaving it off is SAFE, not lossy -- content that does carry a block opens in
+   * source mode with a notice rather than having it silently unwrapped.
+   */
+  allowColumns?: boolean
   /** HtmlField: which groups of buttons to show, in this order. Defaults to all
       of them. */
   toolbar?: HtmlToolbarGroup[]

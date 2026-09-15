@@ -20,7 +20,7 @@
  * same treatment, check it the same way before shipping the button.
  */
 
-import { mergeAttributes, Node, type Extensions } from '@tiptap/core'
+import { mergeAttributes, Node, type Extensions, type JSONContent } from '@tiptap/core'
 import { Image } from '@tiptap/extension-image'
 import { Strike } from '@tiptap/extension-strike'
 import { TextAlign } from '@tiptap/extension-text-align'
@@ -29,8 +29,19 @@ import { TableHeader } from '@tiptap/extension-table/header'
 import { TableKit } from '@tiptap/extension-table/kit'
 import { Underline } from '@tiptap/extension-underline'
 import { Placeholder } from '@tiptap/extensions'
+import type { ResolvedPos } from '@tiptap/pm/model'
+import { Selection } from '@tiptap/pm/state'
 import { StarterKit } from '@tiptap/starter-kit'
 
+import {
+  COL_CLASS,
+  DEFAULT_SPLIT,
+  ROW_CLASS,
+  rowClass,
+  splitFromClass,
+  toSplit,
+  type ColumnSplit,
+} from './columns'
 import {
   parseWidgetAttrs,
   summariseWidgetAttrs,
@@ -260,6 +271,181 @@ const ResizableImage = Image.extend({
   },
 })
 
+/* ------------------------------------------------------- the two-column block */
+
+/*
+ * A block of two side-by-side columns, each holding ordinary rich text.
+ *
+ * The motivating case is an image beside a heading and some prose, but nothing
+ * here knows about images: a column is `block+`, so text beside text and image
+ * beside image come free, and the existing image button inserts into whichever
+ * column the caret sits in.
+ *
+ * It serialises to `<div class="t-row t-row--1-2"><div class="t-col">...`, and
+ * every part of that is forced by the backend rather than chosen. `HTMLValidator`
+ * (totem-backend src/core/orm/validators.py) NEVER strips -- a save either stores
+ * the HTML byte-identically or fails with a 422 -- and its allowlist is lxml's
+ * `defs.safe_attrs`, which holds `class` but NOT `data-*`. So the split cannot
+ * ride on a `data-split` attribute. Its CSS property whitelist has `display` and
+ * `width` but no `gap`, `flex` or `grid-template-columns`, so it cannot ride on
+ * an inline style either. A class, plus a stylesheet on the public site, is the
+ * only shape that survives -- see columns.ts, which owns that vocabulary and is
+ * where it is tested.
+ *
+ * The layout itself therefore lives in TWO stylesheets that cannot import the
+ * class names: totem-backend's `website/static/website/content.css` for the
+ * public site, and HtmlField.vue's scoped block for the editing surface. A
+ * rename has to go through columns.ts and its spec.
+ */
+
+/** An empty column: `block+` needs at least one child, and a paragraph is it. */
+function emptyColumn(): JSONContent {
+  return { type: 'column', content: [{ type: 'paragraph' }] }
+}
+
+/** The depth at which `$pos` sits inside a columns block, or null. */
+function columnsDepth($pos: ResolvedPos): number | null {
+  for (let depth = $pos.depth; depth > 0; depth -= 1) {
+    if ($pos.node(depth).type.name === 'columns') return depth
+  }
+  return null
+}
+
+/*
+ * The commands, declared onto TipTap's own interface so `chain().setColumns()`
+ * typechecks. Without this augmentation the calls compile to `any` at the call
+ * site and a renamed command fails at runtime instead of in `make typecheck`.
+ */
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    columns: {
+      /** Inserts an empty two-column block and puts the caret in the left one. */
+      setColumns: (split?: ColumnSplit) => ReturnType
+      /** Re-splits the block the caret is in. */
+      setColumnsSplit: (split: ColumnSplit) => ReturnType
+      /** Unwraps the block, KEEPING both columns' content. */
+      unsetColumns: () => ReturnType
+    }
+  }
+}
+
+/**
+ * One column.
+ *
+ * `isolating` is the load-bearing option: without it, Backspace at the start of
+ * the right column merges its first paragraph into the left one, silently
+ * destroying the two-column structure with no visible cause.
+ *
+ * In no `group`, so it cannot be placed at the top level of a document -- the
+ * only thing that may hold one is the block below, by name.
+ */
+const Column = Node.create({
+  name: 'column',
+  content: 'block+',
+  isolating: true,
+  parseHTML: () => [{ tag: `div.${COL_CLASS}` }],
+  renderHTML: () => ['div', { class: COL_CLASS }, 0],
+})
+
+const Columns = Node.create({
+  name: 'columns',
+  group: 'block',
+  /*
+   * Exactly two, never `column+`. The vocabulary is two columns with three
+   * width splits, and every one of those splits has to be a rule in a
+   * stylesheet -- a third column would render at a width nobody defined.
+   * Fixing the count here also lets ProseMirror REPAIR a hand-written
+   * `<div class="t-row">` that holds only one `t-col`, rather than dropping it.
+   */
+  content: 'column column',
+  addAttributes: () => ({
+    split: {
+      default: DEFAULT_SPLIT,
+      parseHTML: (element) => splitFromClass(element.getAttribute('class')),
+      /* Rendered as part of the class by renderHTML below, so the attribute
+         itself must contribute nothing -- otherwise the element also carries a
+         bare `split="1-2"`, which is not in safe_attrs and 422s on save. */
+      renderHTML: () => ({}),
+    },
+  }),
+  parseHTML: () => [{ tag: `div.${ROW_CLASS}` }],
+  renderHTML: ({ node, HTMLAttributes }) => [
+    'div',
+    mergeAttributes(HTMLAttributes, { class: rowClass(node.attrs.split) }),
+    0,
+  ],
+
+  addCommands() {
+    return {
+      setColumns:
+        (split = DEFAULT_SPLIT) =>
+        ({ chain }) =>
+          chain()
+            .insertContent({
+              type: 'columns',
+              attrs: { split: toSplit(split) },
+              content: [emptyColumn(), emptyColumn()],
+            })
+            /*
+             * insertContent leaves the caret at the END of what it inserted --
+             * past the block, or in the right column -- which reads as the
+             * button having done nothing. Nothing in the chain reports where
+             * the node landed, so it is found by scanning: the LAST `columns`
+             * at or before the selection is necessarily the one just added.
+             */
+            .command(({ tr, dispatch }) => {
+              if (!dispatch) return true
+              let pos: number | null = null
+              tr.doc.nodesBetween(0, tr.selection.to, (node, at) => {
+                if (node.type.name === 'columns') pos = at
+              })
+              if (pos === null) return true
+              // +2 steps into the block and then into its first column;
+              // `Selection.near` snaps from there to the first text position.
+              tr.setSelection(Selection.near(tr.doc.resolve(pos + 2), 1))
+              return true
+            })
+            .run(),
+
+      setColumnsSplit:
+        (split) =>
+        ({ commands }) =>
+          commands.updateAttributes('columns', { split: toSplit(split) }),
+
+      unsetColumns:
+        () =>
+        ({ state, chain }) => {
+          const $from = state.selection.$from
+          const depth = columnsDepth($from)
+          if (depth === null) return false
+
+          /*
+           * The children of both columns, spliced in where the block was.
+           *
+           * Unwrapping and not deleting: this is the only command that can lose
+           * an author's text, so it is the variant that cannot. Removing the
+           * block outright is already possible by selecting it and pressing
+           * Delete.
+           */
+          const content: JSONContent[] = []
+          $from.node(depth).forEach((column) => {
+            column.forEach((child) => content.push(child.toJSON() as JSONContent))
+          })
+
+          return chain()
+            .insertContentAt(
+              { from: $from.before(depth), to: $from.after(depth) },
+              // A block whose every column was empty would otherwise splice in
+              // nothing, and `insertContentAt` with empty content is a no-op --
+              // leaving the block exactly where the user asked to remove it.
+              content.length > 0 ? content : [{ type: 'paragraph' }],
+            )
+            .run()
+        },
+    }
+  },
+})
+
 export interface HtmlExtensionOptions {
   /** Shown in an empty editor. */
   placeholder?: string
@@ -272,15 +458,24 @@ export interface HtmlExtensionOptions {
   allowWidget?: boolean
   /** Passed to the marker's node view, which needs it for the widget title. */
   widgetCatalogue?: WidgetCatalogue
+  /**
+   * Offer the two-column block. OFF by default, like `allowWidget`.
+   *
+   * Unlike `allowWidget` it mirrors NO backend flag, and that is worth stating:
+   * `<div class="t-row">` is plain HTML that every HtmlField accepts, so nothing
+   * server-side would refuse one here. The gate is editorial -- a footer and a
+   * sidebar are not places for a two-column layout -- not a server contract.
+   */
+  allowColumns?: boolean
 }
 
 /**
  * The extension list, built once per editor.
  *
- * A function rather than a constant because `allowWidget` selects a member of
- * it -- and therefore because the list is fixed at construction: flipping the
- * option later would mean rebuilding the editor, which is why HtmlField reads it
- * once.
+ * A function rather than a constant because `allowWidget` and `allowColumns`
+ * each select members of it -- and therefore because the list is fixed at
+ * construction: flipping either option later would mean rebuilding the editor,
+ * which is why HtmlField reads both once.
  */
 export function htmlExtensions(options: HtmlExtensionOptions = {}): Extensions {
   const extensions: Extensions = [
@@ -349,6 +544,17 @@ export function htmlExtensions(options: HtmlExtensionOptions = {}): Extensions {
     SafeTableHeader,
     ResizableImage,
   ]
+
+  /*
+   * Appended rather than declared in the literal above, for the same structural
+   * reason as the widget marker: the list is fixed when the editor is built, so
+   * these two nodes are in the schema or they are not. A document carrying a
+   * `t-row` in a field that did not opt in is NOT quietly unwrapped -- the div
+   * is unknown, tagsDroppedBy reports it, and HtmlField opens in source mode.
+   */
+  if (options.allowColumns) {
+    extensions.push(Columns, Column)
+  }
 
   if (options.allowWidget) {
     extensions.push(WidgetMarker.configure({ catalogue: options.widgetCatalogue }))

@@ -385,6 +385,7 @@ function discard(): void {
                 rows: 8,
                 allowWidget: true,
                 fetchWidgets: fetchWebsiteWidgets,
+                allowColumns: true,
                 widgetPermission: 'totem.websitewidget.read',
                 uploadImage: uploadWebsiteMedia,
                 uploadPermission: 'totem.websitemedia.create',

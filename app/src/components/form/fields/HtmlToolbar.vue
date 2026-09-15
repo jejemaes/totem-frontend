@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/core'
 import Menu from 'primevue/menu'
 import { computed, ref } from 'vue'
 
+import { COLUMN_SPLITS, type ColumnSplit } from './columns'
 import type { HtmlActiveState, HtmlToolbarGroup } from './html'
 
 /*
@@ -44,6 +45,9 @@ const props = defineProps<{
   /** False hides the widget button: not a field that accepts markers, no
       catalogue loader, or no permission on the catalogue. */
   canWidget?: boolean
+  /** False hides the columns button: the field did not opt into `allowColumns`,
+      so the two nodes are not even in the editor's schema. */
+  canColumns?: boolean
   /** The id of the surface these buttons drive, for aria-controls. */
   surfaceId?: string
   /** Locked by a save in flight -- unlike `disabled`, this also stops the
@@ -59,6 +63,7 @@ const emit = defineEmits<{
 }>()
 
 const tableMenu = ref<InstanceType<typeof Menu> | null>(null)
+const columnsMenu = ref<InstanceType<typeof Menu> | null>(null)
 
 function shows(group: HtmlToolbarGroup): boolean {
   return props.groups.includes(group)
@@ -128,6 +133,40 @@ const TABLE_ITEMS = computed(() => [
     icon: 'pi pi-trash',
     command: () => run((chain) => chain.deleteTable().run()),
     disabled: !props.active.table,
+  },
+])
+
+/*
+ * The two-column block: insert, re-split, unwrap.
+ *
+ * A menu rather than a row of buttons, for the same reason as the table above:
+ * five commands that only ever apply one at a time, four of which are
+ * meaningless until the caret is inside a block.
+ *
+ * The split entries carry a check mark instead of `aria-pressed`, because a
+ * PrimeVue Menu item is not a button this template owns.
+ */
+const COLUMNS_ITEMS = computed(() => [
+  {
+    label: 'Insert two columns',
+    icon: 'pi pi-plus',
+    command: () => run((chain) => chain.setColumns().run()),
+  },
+  { separator: true },
+  ...COLUMN_SPLITS.map((split) => ({
+    label: split.label,
+    icon: props.active.columnsSplit === split.value ? 'pi pi-check' : undefined,
+    command: () => run((chain) => chain.setColumnsSplit(split.value as ColumnSplit).run()),
+    disabled: !props.active.columns,
+  })),
+  { separator: true },
+  {
+    /* Says what it keeps, because the other reading -- "delete this block and
+       everything in it" -- is the one that would lose work. */
+    label: 'Remove columns (keep the content)',
+    icon: 'pi pi-trash',
+    command: () => run((chain) => chain.unsetColumns().run()),
+    disabled: !props.active.columns,
   },
 ])
 </script>
@@ -334,6 +373,25 @@ const TABLE_ITEMS = computed(() => [
         <i class="pi pi-table" aria-hidden="true" />
       </button>
       <Menu ref="tableMenu" :model="TABLE_ITEMS" popup />
+    </div>
+
+    <!-- Hidden, not disabled, when the field did not opt into `allowColumns`:
+         the nodes are not in the schema, so every command here would fail
+         silently. Same treatment as the image and widget buttons. -->
+    <div v-if="shows('columns') && canColumns" class="html-tb__group">
+      <button
+        type="button"
+        class="html-tb__btn"
+        :class="{ 'html-tb__btn--on': active.columns }"
+        title="Two columns"
+        aria-label="Two columns"
+        aria-haspopup="menu"
+        :disabled="disabled"
+        @click="columnsMenu?.toggle($event)"
+      >
+        <i class="pi pi-objects-column" aria-hidden="true" />
+      </button>
+      <Menu ref="columnsMenu" :model="COLUMNS_ITEMS" popup />
     </div>
 
     <!-- Hidden, not disabled, when neither source of images is reachable: an
