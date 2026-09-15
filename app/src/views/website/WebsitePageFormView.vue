@@ -346,11 +346,17 @@ function askDelete(): void {
 
             <Field name="is_published" widget="boolean" label="Published" required />
 
-            <!-- A rich text editor, not a textarea. `allowWidget` here and
-                 nowhere else, matching HtmlField(allow_widget=True) on
-                 Page.content: this is the only column in the app that accepts a
-                 <t-widget> marker, so it is the only <Field> that should offer
-                 to keep one. -->
+            <!-- A rich text editor, not a textarea.
+
+                 `allowWidget` matches HtmlField(allow_widget=True) on
+                 Page.content -- the website's own footer and sidebar carry the
+                 same flag, and the configuration screen sets it for the same
+                 reason.
+
+                 `allowColumns` mirrors no backend flag: a two-column block is
+                 plain <div class="t-row"> HTML that every HtmlField accepts.
+                 It is on HERE and not on the footer or the sidebar because a
+                 page body is the only one of the three wide enough for it. -->
             <Field
               name="content"
               widget="html"
@@ -360,6 +366,7 @@ function askDelete(): void {
                 rows: 14,
                 placeholder: 'Tell them about us…',
                 allowWidget: true,
+                allowColumns: true,
                 fetchWidgets: fetchWebsiteWidgets,
                 widgetPermission: 'totem.websitewidget.read',
                 uploadImage: uploadWebsiteMedia,

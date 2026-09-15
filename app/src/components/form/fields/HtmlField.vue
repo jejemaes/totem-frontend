@@ -11,6 +11,7 @@ import { computed, onMounted, onScopeDispose, ref, shallowRef, useId, watch, wat
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
 
+import type { ColumnSplit } from './columns'
 import FieldWrapper from './FieldWrapper.vue'
 import {
   HTML_TOOLBAR_GROUPS,
@@ -69,6 +70,9 @@ const declaredReadonly = props.readonly ?? false
  * every render while its values never do -- reading once is right, not lucky.
  */
 const allowWidget = props.options?.allowWidget === true
+
+/* Same reasoning, same read-once treatment: it puts two nodes in the schema. */
+const allowColumns = props.options?.allowColumns === true
 
 const mode = ref<'wysiwyg' | 'source'>('wysiwyg')
 /** The source textarea's own buffer. */
@@ -277,6 +281,7 @@ const editor = useEditor({
   extensions: htmlExtensions({
     placeholder: typeof props.options?.placeholder === 'string' ? props.options.placeholder : '',
     allowWidget,
+    allowColumns,
     widgetCatalogue,
   }),
   editable: !props.readonly,
@@ -382,6 +387,11 @@ const active = computed<HtmlActiveState>(() => {
     link: e?.isActive('link') ?? false,
     table: e?.isActive('table') ?? false,
     widget: e?.isActive('widgetMarker') ?? false,
+    columns: e?.isActive('columns') ?? false,
+    // Read from the node rather than from `isActive({ split })`: the menu needs
+    // to KNOW the current value to tick it, and asking `isActive` once per
+    // candidate would be three transactions built and thrown away per render.
+    columnsSplit: (e?.getAttributes('columns').split as ColumnSplit | undefined) ?? null,
   }
 })
 
@@ -743,6 +753,7 @@ function report(_file: File, message: string): void {
           @toggle-source="onToggleSource"
           @insert-link="onInsertLink"
           :can-widget="canWidget"
+          :can-columns="allowColumns"
           @insert-image="onInsertImage"
           @insert-widget="onInsertWidget"
         />
@@ -1086,6 +1097,67 @@ function report(_file: File, message: string): void {
 .html-prose :deep(.ProseMirror-selectednode) {
   outline: 2px solid var(--p-primary-color);
   outline-offset: 1px;
+}
+
+/* --------------------------------------------------------- two columns */
+
+/*
+ * The two-column block, mirroring totem-backend's
+ * `website/static/website/content.css` -- the editor has to show the layout the
+ * public site will render, or the split buttons are guesswork.
+ *
+ * NOTE THE SELECTOR SHAPE: the whole thing goes INSIDE :deep(). Scoped CSS
+ * compiles `:deep(.t-row) > .t-col` to `.t-row[data-v-hash] > .t-col`, and the
+ * div is built by ProseMirror, which stamps no scope attribute -- so the rule
+ * silently stops matching and every block renders stacked. Same trap as the
+ * `html-prose` note at the top of this block.
+ *
+ * Deliberately NOT stacked at a breakpoint the way content.css does it: this is
+ * an admin form, and a two-column block that collapsed in a narrow browser
+ * window would hide the very thing the author is arranging.
+ */
+.html-prose :deep(.t-row) {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin: 0.75rem 0;
+}
+
+/* `min-width: 0` is load-bearing: a flex item defaults to `min-width: auto`,
+   which refuses to shrink below its content -- so one long word, or an image
+   at its natural size, pushes the other column off the surface. */
+.html-prose :deep(.t-col) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.html-prose :deep(.t-row--1-2 > .t-col:first-child),
+.html-prose :deep(.t-row--2-1 > .t-col:last-child) {
+  flex-grow: 1;
+}
+
+.html-prose :deep(.t-row--1-2 > .t-col:last-child),
+.html-prose :deep(.t-row--2-1 > .t-col:first-child) {
+  flex-grow: 2;
+}
+
+.html-prose :deep(.t-col > :first-child) {
+  margin-top: 0;
+}
+
+.html-prose :deep(.t-col > :last-child) {
+  margin-bottom: 0;
+}
+
+/* EDITOR ONLY -- content.css ships nothing like it. A column is an invisible
+   box, so an empty one is a region the author cannot see, cannot aim at, and
+   cannot tell from the paragraph above. The dashed outline and the minimum
+   height are what make it a target. */
+.html-field__surface :deep(.t-col) {
+  min-height: 3rem;
+  padding: 0.25rem;
+  border: 1px dashed var(--p-content-border-color, var(--app-border));
+  border-radius: var(--p-content-border-radius, 6px);
 }
 
 /* ------------------------------------------------- resizing an image */

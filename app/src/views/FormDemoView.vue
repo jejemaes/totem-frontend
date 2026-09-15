@@ -247,7 +247,7 @@ const DEFINITION = `<Form :data="data" @save="onSave">
          ] }" />
   <Field name="reference"   widget="string"    label="Reference" readonly />
   <Field name="body"        widget="html"      label="Body" required
-         :options="{ rows: 8, allowWidget: true,
+         :options="{ rows: 8, allowWidget: true, allowColumns: true,
                      fetchWidgets: demoWidgets,
                      uploadImage: demoUpload, browseImages: demoBrowse }" />
   <Field name="legacy_body" widget="html"      label="Legacy body" />
@@ -317,13 +317,15 @@ const DEFINITION = `<Form :data="data" @save="onSave">
                    help="Locked, but still present in the payload." />
 
             <Field name="body" widget="html" label="Body" required
-                   :options="{ rows: 8, allowWidget: true,
+                   :options="{ rows: 8, allowWidget: true, allowColumns: true,
                                fetchWidgets: demoWidgets,
                                uploadImage: demoUpload, browseImages: demoBrowse }"
                    help="Rich text. Empty out the document and save: the value is null, not
                          '<p></p>', so `required` still catches it. The image button opens a
                          picker over a fake in-memory library, and the widget button a
-                         stand-in catalogue." />
+                         stand-in catalogue. The columns button inserts a two-column block --
+                         put an image in one side and text in the other, then check the
+                         source view." />
 
             <!-- The same widget WITHOUT allowWidget, on content carrying a
                  marker and a <section>. It must open in source mode with a
