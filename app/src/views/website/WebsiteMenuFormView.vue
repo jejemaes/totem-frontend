@@ -4,8 +4,7 @@ import Card from 'primevue/card'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import { useConfirm } from 'primevue/useconfirm'
-import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
@@ -37,19 +36,31 @@ import {
 } from '@/resources/websitePages'
 
 /*
- * One screen for both routes: /website/menus/new and /website/menus/:id.
+ * The menu form, for both creating and editing, and with NO router: the record
+ * comes in as the `id` prop and every way out is an event -- the routed page
+ * turns those into navigation, a Dialog into closing itself.
  *
  * What is specific to a menu item is the target: the backend stores NO
  * discriminator, so "page or link" is deduced from which of the two fields is
  * filled. <FieldSwitch> is the generic UI for that, and menuTargetPayload is
  * what makes the abandoned side go out as an explicit null.
  */
-const router = useRouter()
-const route = useRoute()
-const confirm = useConfirm()
+const props = defineProps<{
+  /** `null` creates. A prop rather than the route param, so a modal can drive it. */
+  id: string | null
+}>()
 
-/** The list's own query rides along, so Cancel lands where the user left. */
-const listRoute = computed(() => ({ name: 'website-menus', query: route.query }))
+const emit = defineEmits<{
+  saved: [menu: WebsiteMenuDetail, mode: 'create' | 'edit']
+  /** Cancel, or "Back" after a failed load: the caller decides where that goes. */
+  cancel: []
+  /** The record is gone: the caller decides where that leaves the user. */
+  deleted: []
+  /** The heading for whoever frames this form -- a page's <h1>, a Dialog's header. */
+  title: [title: string]
+}>()
+
+const confirm = useConfirm()
 
 const canDelete = computed(() => can('totem.websitemenu.delete'))
 
@@ -90,9 +101,9 @@ const parent = ref<WebsiteMenuRef | null>(null)
 const page = ref<WebsitePageRef | null>(null)
 
 const form = useResourceForm<WebsiteMenuDetail>({
-  // A getter, not a plain value: vue-router reuses this component when only
-  // the param changes. `null` on the create route.
-  id: () => (route.params.id ? String(route.params.id) : null),
+  // A getter: the routed page reuses this component when only the param
+  // changes, and the prop follows it.
+  id: () => props.id,
   defaults: {
     name: null,
     // The column is not nullable and the backend defaults it to 20: the form
@@ -127,14 +138,7 @@ const form = useResourceForm<WebsiteMenuDetail>({
   // No `hasExternalChanges`: the switch is not data. Flipping it without
   // filling the new target changes nothing about the record, so the form is
   // rightly not dirty.
-  onSaved: (menu, mode) =>
-    router.push(
-      mode === 'create'
-        ? // The backend's `search` matches the name, so the list opens on the
-          // row just created instead of wherever the sequence sort puts it.
-          { name: 'website-menus', query: { search: menu.name } }
-        : listRoute.value,
-    ),
+  onSaved: (menu, mode) => emit('saved', menu, mode),
 })
 
 const { isNew, data, loading, loadError, saving, error, fieldErrors } = form
@@ -163,7 +167,7 @@ async function searchParents(
   signal?: AbortSignal,
 ): Promise<WebsiteMenuRef[]> {
   const candidates = await searchWebsiteMenus(search, signal)
-  const id = route.params.id ? String(route.params.id) : ''
+  const id = props.id ?? ''
   return candidates.filter((candidate) => !isMenuDescendant(candidate, id))
 }
 
@@ -225,6 +229,8 @@ const title = computed(() => {
 })
 const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
 
+watch(title, (value) => emit('title', value), { immediate: true })
+
 const deleting = ref(false)
 const deleteError = ref<string | null>(null)
 
@@ -234,14 +240,14 @@ const deleteError = ref<string | null>(null)
  * reason better than a generic message would.
  */
 async function remove(): Promise<void> {
-  const id = route.params.id ? String(route.params.id) : ''
+  const id = props.id ?? ''
   if (!id) return
 
   deleting.value = true
   deleteError.value = null
   try {
     await deleteWebsiteMenu(id)
-    await router.push(listRoute.value)
+    emit('deleted')
   } catch (caught) {
     deleteError.value =
       caught instanceof ApiError ? caught.message : 'This menu item could not be deleted.'
@@ -265,147 +271,143 @@ function askDelete(): void {
 </script>
 
 <template>
-  <section class="page">
-    <header class="page__header">
-      <div class="page__heading">
-        <h1>{{ title }}</h1>
-        <Button
-          v-if="!isNew && canDelete"
-          label="Delete"
-          icon="pi pi-trash"
-          severity="danger"
-          outlined
-          size="small"
-          :loading="deleting"
-          :disabled="saving"
-          @click="askDelete"
-        />
+  <Message v-if="loadError" severity="error" :closable="false" class="page__message">
+    <div class="form__error">
+      <span>{{ loadError }}</span>
+      <Button label="Back" size="small" severity="danger" outlined @click="emit('cancel')" />
+    </div>
+  </Message>
+
+  <Message v-if="deleteError" severity="error" :closable="false" class="page__message">
+    {{ deleteError }}
+  </Message>
+
+  <Message v-if="error" severity="error" :closable="false" class="page__message">
+    {{ error }}
+  </Message>
+
+  <Card v-if="!loadError" class="menu-form">
+    <template #content>
+      <div v-if="loading" class="menu-form__skeleton">
+        <Skeleton v-for="n in 6" :key="n" height="3.2rem" />
       </div>
-    </header>
 
-    <Message v-if="loadError" severity="error" :closable="false" class="page__message">
-      <div class="page__error">
-        <span>{{ loadError }}</span>
-        <RouterLink :to="listRoute">
-          <Button label="Back to the list" size="small" severity="danger" outlined />
-        </RouterLink>
-      </div>
-    </Message>
+      <Form
+        v-else-if="data"
+        :data="data"
+        :save-label="saveLabel"
+        :saving="saving"
+        :errors="fieldErrors"
+        @save="form.save"
+      >
+        <template #default="{ draft }">
+          <Field
+            name="name"
+            widget="string"
+            label="Name"
+            required
+            :options="{ maxLength: 256, placeholder: 'About us' }"
+          />
 
-    <Message v-if="deleteError" severity="error" :closable="false" class="page__message">
-      {{ deleteError }}
-    </Message>
+          <Field
+            name="sequence"
+            widget="integer"
+            label="Sequence"
+            required
+            :options="{ min: 0 }"
+            help="Ordering among the items sharing the same parent."
+          />
 
-    <Message v-if="error" severity="error" :closable="false" class="page__message">
-      {{ error }}
-    </Message>
+          <!-- A relation: the draft holds the id, `record` is the nested
+               parent the GET already returned. The candidates exclude this
+               item and its own descendants. -->
+          <Field
+            name="parent"
+            widget="many2one"
+            label="Parent"
+            :options="{
+              fetch: searchParents,
+              record: parent,
+              permission: 'totem.websitemenu.read',
+            }"
+            help="Leave empty for a top-level item."
+          />
 
-    <Card v-if="!loadError" class="menu-form">
-      <template #content>
-        <div v-if="loading" class="menu-form__skeleton">
-          <Skeleton v-for="n in 6" :key="n" height="3.2rem" />
-        </div>
+          <Field name="new_window" widget="boolean" label="Open in a new window" required />
 
-        <Form
-          v-else-if="data"
-          :data="data"
-          :save-label="saveLabel"
-          :saving="saving"
-          :errors="fieldErrors"
-          @save="form.save"
-        >
-          <template #default="{ draft }">
-            <Field
-              name="name"
-              widget="string"
-              label="Name"
-              required
-              :options="{ maxLength: 256, placeholder: 'About us' }"
-            />
+          <!-- Purely visual: the backend has no field for this. Which target
+               is active is deduced from the two fields below, and this only
+               lets the user override that deduction. -->
+          <FieldSwitch
+            v-model="targetChoice"
+            :choices="TARGET_CHOICES"
+            :values="data"
+            label="Target"
+            :readonly="saving"
+          />
 
-            <Field
-              name="sequence"
-              widget="integer"
-              label="Sequence"
-              required
-              :options="{ min: 0 }"
-              help="Ordering among the items sharing the same parent."
-            />
+          <!-- `required` follows the parent, which is the check constraint
+               rendered client-side: a CHILD item needs a page or a link, a
+               top-level one needs neither. <Field> evaluates `required` in a
+               watchEffect, so a reactive expression works as-is. -->
+          <Field
+            v-if="activeTarget === 'page'"
+            name="page"
+            widget="many2one"
+            label="Target page"
+            :required="!!draft.parent"
+            :options="{
+              fetch: searchWebsitePages,
+              record: page,
+              relationDisplay: displayPage,
+              permission: 'totem.websitepage.read',
+            }"
+            help="A child item needs a page or a link."
+          />
 
-            <!-- A relation: the draft holds the id, `record` is the nested
-                 parent the GET already returned. The candidates exclude this
-                 item and its own descendants. -->
-            <Field
-              name="parent"
-              widget="many2one"
-              label="Parent"
-              :options="{
-                fetch: searchParents,
-                record: parent,
-                permission: 'totem.websitemenu.read',
-              }"
-              help="Leave empty for a top-level item."
-            />
+          <Field
+            v-else
+            name="link"
+            widget="string"
+            label="Target link"
+            :required="!!draft.parent"
+            :options="{ maxLength: 256, placeholder: 'https://example.com' }"
+            help="A child item needs a page or a link."
+          />
+        </template>
 
-            <Field name="new_window" widget="boolean" label="Open in a new window" required />
-
-            <!-- Purely visual: the backend has no field for this. Which target
-                 is active is deduced from the two fields below, and this only
-                 lets the user override that deduction. -->
-            <FieldSwitch
-              v-model="targetChoice"
-              :choices="TARGET_CHOICES"
-              :values="data"
-              label="Target"
-              :readonly="saving"
-            />
-
-            <!-- `required` follows the parent, which is the check constraint
-                 rendered client-side: a CHILD item needs a page or a link, a
-                 top-level one needs neither. <Field> evaluates `required` in a
-                 watchEffect, so a reactive expression works as-is. -->
-            <Field
-              v-if="activeTarget === 'page'"
-              name="page"
-              widget="many2one"
-              label="Target page"
-              :required="!!draft.parent"
-              :options="{
-                fetch: searchWebsitePages,
-                record: page,
-                relationDisplay: displayPage,
-                permission: 'totem.websitepage.read',
-              }"
-              help="A child item needs a page or a link."
-            />
-
-            <Field
-              v-else
-              name="link"
-              widget="string"
-              label="Target link"
-              :required="!!draft.parent"
-              :options="{ maxLength: 256, placeholder: 'https://example.com' }"
-              help="A child item needs a page or a link."
-            />
-          </template>
-
-          <template #actions="{ dirty }">
-            <RouterLink :to="listRoute">
-              <Button label="Cancel" severity="secondary" text :disabled="saving" />
-            </RouterLink>
-            <Button
-              type="submit"
-              :label="saveLabel"
-              icon="pi pi-check"
-              :loading="saving"
-              :disabled="!isNew && !dirty"
-            />
-          </template>
-        </Form>
-      </template>
-    </Card>
-  </section>
+        <template #actions="{ dirty }">
+          <!-- Left-aligned, away from Save: a destructive action does not
+               sit next to the button the user reaches for. -->
+          <Button
+            v-if="!isNew && canDelete"
+            label="Delete"
+            icon="pi pi-trash"
+            severity="danger"
+            text
+            class="form__delete"
+            :loading="deleting"
+            :disabled="saving"
+            @click="askDelete"
+          />
+          <Button
+            label="Cancel"
+            severity="secondary"
+            text
+            :disabled="saving"
+            @click="emit('cancel')"
+          />
+          <Button
+            type="submit"
+            :label="saveLabel"
+            icon="pi pi-check"
+            :loading="saving"
+            :disabled="!isNew && !dirty"
+          />
+        </template>
+      </Form>
+    </template>
+  </Card>
 </template>
 
 <style scoped>
@@ -419,14 +421,11 @@ function askDelete(): void {
   gap: 1rem;
 }
 
-.page__heading {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
+.form__delete {
+  margin-right: auto;
 }
 
-.page__error {
+.form__error {
   display: flex;
   align-items: center;
   gap: 1rem;

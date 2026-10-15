@@ -9,7 +9,7 @@
  * the blast radius for the sake of one screen, so this follows the other route
  * the house rules describe: a detached widget under form/widget/, with the
  * caller re-implementing what <Form> would have done. See
- * WebsiteConfigurationView for the four things that means -- owning the value,
+ * WebsiteConfigurationPage for the four things that means -- owning the value,
  * telling an edit from an untouched bag, re-seeding it when the record
  * reloads, and putting it in the payload.
  *

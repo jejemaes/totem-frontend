@@ -58,7 +58,7 @@ const labelId = useId()
 
 /*
  * A computed rather than a bare call in the template: `can()` instantiates the
- * store on every evaluation -- same reason as UsersView.
+ * store on every evaluation -- same reason as UserListView.
  *
  * This is a UX affordance, not a security boundary: the backend refuses the
  * request anyway. It is also why nothing here needs a fallback for a user who

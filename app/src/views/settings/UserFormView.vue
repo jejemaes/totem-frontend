@@ -3,8 +3,7 @@ import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
-import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
 
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
@@ -24,20 +23,25 @@ import {
 } from '@/resources/users'
 
 /*
- * One screen for both routes: /settings/users/new and /settings/users/:id.
+ * The user form, for both creating and editing, and with NO router: the record
+ * comes in as the `id` prop and every way out is an event -- the routed page
+ * turns those into navigation, a Dialog into closing itself.
  * `useResourceForm` owns everything that differs -- loading the record, POST
  * versus PATCH, the error mapping -- so what is left here is the field list
  * and the two labels that change.
  */
-const router = useRouter()
-const route = useRoute()
+const props = defineProps<{
+  /** `null` creates. A prop rather than the route param, so a modal can drive it. */
+  id: string | null
+}>()
 
-/**
- * The list's own query (page, ordering, search) rides along on this screen's
- * URL, so Cancel and the post-save redirect land on the list the user actually
- * left -- and so a reload, or a shared link, still knows where "back" leads.
- */
-const listRoute = computed(() => ({ name: 'settings-users', query: route.query }))
+const emit = defineEmits<{
+  saved: [user: UserDetail, mode: 'create' | 'edit']
+  /** Cancel, or "Back" after a failed load: the caller decides where that goes. */
+  cancel: []
+  /** The heading for whoever frames this form -- a page's <h1>, a Dialog's header. */
+  title: [title: string]
+}>()
 
 /*
  * The roles live here rather than in the <Form> draft.
@@ -117,9 +121,9 @@ function updatePayload(changed: FormData): UserUpdatePayload {
 }
 
 const form = useResourceForm<UserDetail>({
-  // A getter, not a plain value: vue-router reuses this component when only
-  // the param changes. `undefined` on the create route.
-  id: () => (route.params.id ? String(route.params.id) : null),
+  // A getter: the routed page reuses this component when only the param
+  // changes, and the prop follows it.
+  id: () => props.id,
   defaults: {
     login: null,
     email: null,
@@ -150,16 +154,7 @@ const form = useResourceForm<UserDetail>({
   create: (values) => createUser(createPayload(values)),
   update: (id, changed) => updateUser(id, updatePayload(changed)),
   notFoundMessage: 'This user no longer exists.',
-  onSaved: (user, mode) =>
-    router.push(
-      mode === 'create'
-        ? // The backend's `search` matches login OR email, so the list opens on
-          // the row just created. Without it, with the default login-ascending
-          // sort and ten rows per page, a new account can land on page 3 and
-          // the redirect looks like nothing happened.
-          { name: 'settings-users', query: { search: user.login } }
-        : listRoute.value,
-    ),
+  onSaved: (user, mode) => emit('saved', user, mode),
 })
 
 const { isNew, data, loading, loadError, saving, error, fieldErrors } = form
@@ -167,124 +162,114 @@ const { isNew, data, loading, loadError, saving, error, fieldErrors } = form
 /** The login is the account's identity, so it titles the page once loaded. */
 const title = computed(() => (isNew.value ? 'New user' : (text(data.value?.login ?? null) ?? 'User')))
 const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
+
+watch(title, (value) => emit('title', value), { immediate: true })
 </script>
 
 <template>
-  <section class="page">
-    <header class="page__header">
-      <div>
-        <h1>{{ title }}</h1>
-        <p class="page__subtitle">
-          <template v-if="isNew">
-            Roles can be granted right away: permissions are the union of them.
-          </template>
-          <template v-else>The account status is not editable here.</template>
-        </p>
+  <Message v-if="loadError" severity="error" :closable="false" class="page__message">
+    <div class="form__error">
+      <span>{{ loadError }}</span>
+      <Button label="Back" size="small" severity="danger" outlined @click="emit('cancel')" />
+    </div>
+  </Message>
+
+  <Message v-if="error" severity="error" :closable="false" class="page__message">
+    {{ error }}
+  </Message>
+
+  <Card v-if="!loadError" class="user-form">
+    <template #content>
+      <!-- Placeholders with the form's real shape, so the card does not jump
+           when the record lands. -->
+      <div v-if="loading" class="user-form__skeleton">
+        <Skeleton v-for="n in 6" :key="n" height="3.2rem" />
       </div>
-    </header>
 
-    <Message v-if="loadError" severity="error" :closable="false" class="page__message">
-      <div class="page__error">
-        <span>{{ loadError }}</span>
-        <RouterLink :to="listRoute">
-          <Button label="Back to the list" size="small" severity="danger" outlined />
-        </RouterLink>
-      </div>
-    </Message>
+      <Form
+        v-else-if="data"
+        :data="data"
+        :save-label="saveLabel"
+        :saving="saving"
+        :errors="fieldErrors"
+        @save="form.save"
+      >
+        <template #default="{ draft }">
+          <Field
+            name="login"
+            widget="string"
+            label="Login"
+            required
+            :options="{ maxLength: 255, placeholder: 'jdoe' }"
+            help="Used to sign in. It must be unique."
+          />
 
-    <Message v-if="error" severity="error" :closable="false" class="page__message">
-      {{ error }}
-    </Message>
+          <Field
+            name="email"
+            widget="string"
+            label="Email"
+            required
+            :options="{ maxLength: 255, placeholder: 'jane.doe@example.com' }"
+          />
 
-    <Card v-if="!loadError" class="user-form">
-      <template #content>
-        <!-- Placeholders with the form's real shape, so the card does not jump
-             when the record lands. -->
-        <div v-if="loading" class="user-form__skeleton">
-          <Skeleton v-for="n in 6" :key="n" height="3.2rem" />
-        </div>
+          <Field name="first_name" widget="string" label="First name" :options="{ maxLength: 255 }" />
 
-        <Form
-          v-else-if="data"
-          :data="data"
-          :save-label="saveLabel"
-          :saving="saving"
-          :errors="fieldErrors"
-          @save="form.save"
-        >
-          <template #default="{ draft }">
-            <Field
-              name="login"
-              widget="string"
-              label="Login"
-              required
-              :options="{ maxLength: 255, placeholder: 'jdoe' }"
-              help="Used to sign in. It must be unique."
-            />
+          <Field name="last_name" widget="string" label="Last name" :options="{ maxLength: 255 }" />
 
-            <Field
-              name="email"
-              widget="string"
-              label="Email"
-              required
-              :options="{ maxLength: 255, placeholder: 'jane.doe@example.com' }"
-            />
+          <Field
+            name="language"
+            widget="selection"
+            label="Language"
+            required
+            :options="{
+              choices: [
+                { value: 'fr', label: 'French' },
+                { value: 'en-us', label: 'English' },
+              ],
+            }"
+            help="Interface language for this account."
+          />
 
-            <Field name="first_name" widget="string" label="First name" :options="{ maxLength: 255 }" />
+          <!-- Not a <Field>: its value is a list of role ids, which the
+               <Field> system cannot carry. It is passed `draft` for the same
+               reason a widget receives `values` -- so a rule can depend on a
+               sibling -- and everything <Field> would have forwarded is
+               explicit here: the lock during a save, and the server error,
+               which <Form> can only route to a registered field. -->
+          <UserRolesSelectionWidget
+            v-model="roleIds"
+            :values="draft"
+            label="Roles"
+            help="One role per category. Permissions are the union of the roles granted."
+            :readonly="saving"
+            :invalid="Boolean(fieldErrors.roles)"
+            :error="fieldErrors.roles"
+          />
+        </template>
 
-            <Field name="last_name" widget="string" label="Last name" :options="{ maxLength: 255 }" />
-
-            <Field
-              name="language"
-              widget="selection"
-              label="Language"
-              required
-              :options="{
-                choices: [
-                  { value: 'fr', label: 'French' },
-                  { value: 'en-us', label: 'English' },
-                ],
-              }"
-              help="Interface language for this account."
-            />
-
-            <!-- Not a <Field>: its value is a list of role ids, which the
-                 <Field> system cannot carry. It is passed `draft` for the same
-                 reason a widget receives `values` -- so a rule can depend on a
-                 sibling -- and everything <Field> would have forwarded is
-                 explicit here: the lock during a save, and the server error,
-                 which <Form> can only route to a registered field. -->
-            <UserRolesSelectionWidget
-              v-model="roleIds"
-              :values="draft"
-              label="Roles"
-              help="One role per category. Permissions are the union of the roles granted."
-              :readonly="saving"
-              :invalid="Boolean(fieldErrors.roles)"
-              :error="fieldErrors.roles"
-            />
-          </template>
-
-          <template #actions="{ dirty }">
-            <RouterLink :to="listRoute">
-              <Button label="Cancel" severity="secondary" text :disabled="saving" />
-            </RouterLink>
-            <!-- Nothing edited means nothing to PATCH, so on an existing
-                 record Save has no work to do. A create always has.
-                 `rolesDirty` is OR-ed in because the roles widget lives outside
-                 the draft, so <Form>'s own `dirty` cannot see it. -->
-            <Button
-              type="submit"
-              :label="saveLabel"
-              icon="pi pi-check"
-              :loading="saving"
-              :disabled="!isNew && !dirty && !rolesDirty"
-            />
-          </template>
-        </Form>
-      </template>
-    </Card>
-  </section>
+        <template #actions="{ dirty }">
+          <Button
+            label="Cancel"
+            severity="secondary"
+            text
+            :disabled="saving"
+            @click="emit('cancel')"
+          />
+          <!-- Nothing edited means nothing to PATCH, so on an existing
+               record Save has no work to do. A create always has.
+               `rolesDirty` is OR-ed in because the roles widget lives outside
+               the draft, so <Form>'s own `dirty` cannot see it. -->
+          <Button
+            type="submit"
+            :label="saveLabel"
+            icon="pi pi-check"
+            :loading="saving"
+            :disabled="!isNew && !dirty && !rolesDirty"
+          />
+        </template>
+      </Form>
+    </template>
+  </Card>
 </template>
 
 <style scoped>
@@ -298,7 +283,7 @@ const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
   gap: 1rem;
 }
 
-.page__error {
+.form__error {
   display: flex;
   align-items: center;
   gap: 1rem;

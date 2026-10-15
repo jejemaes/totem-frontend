@@ -163,7 +163,7 @@ function onSubmit(): void {
 
 <template>
   <!-- novalidate: the browser's native bubbles must not compete with our own
-       messages. The <form> is kept so that Enter submits, as in LoginView. -->
+       messages. The <form> is kept so that Enter submits, as in LoginPage. -->
   <form class="form" novalidate @submit.prevent="onSubmit">
     <div class="form__fields">
       <slot :draft="draft" :dirty="dirty" />

@@ -1,0 +1,293 @@
+<script setup lang="ts">
+/*
+ * The user account table, with its filter bar -- and NOTHING that ties it to a route:
+ * no useRoute, no RouterLink, no page header. The routed page decides what
+ * opening a row means; a Dialog can decide something else. See
+ * ContactTagListView for the contract in full.
+ */
+import Avatar from 'primevue/avatar'
+import Button from 'primevue/button'
+import Column from 'primevue/column'
+import DataTable from 'primevue/datatable'
+import Message from 'primevue/message'
+import Skeleton from 'primevue/skeleton'
+import Tag from 'primevue/tag'
+import { computed, watch } from 'vue'
+
+import { can } from '@/auth/permissions'
+import MultiRecordFilters from '@/components/list/MultiRecordFilters.vue'
+import type { FilterFields } from '@/components/list/filters'
+import { useFilter } from '@/composables/useFilter'
+import { useResourceList } from '@/composables/useResourceList'
+import {
+  fullName,
+  initials,
+  listUsers,
+  USER_SORTABLE,
+  type UserFilters,
+  type UserRow,
+} from '@/resources/users'
+
+const props = withDefaults(
+  defineProps<{
+    /** Mirror page, sort and filters in the query string. ONLY the routed page sets it. */
+    syncUrl?: boolean
+    pageSize?: number
+  }>(),
+  { syncUrl: false, pageSize: 10 },
+)
+
+const emit = defineEmits<{
+  /** The edit button of a row: what that means is up to the caller. */
+  open: [id: string]
+  /** Every settled response, so the caller can show the count in its header. */
+  loaded: [total: number]
+}>()
+
+
+/**
+ * The actions are hidden without their scope, like the menu entries: hiding
+ * what would answer 403 is a convenience, the actual barrier is the route
+ * guard.
+ *
+ * Computeds rather than direct calls from the template: `can()` instantiates
+ * the store on every evaluation, and the pencil is evaluated once per row.
+ */
+const canUpdate = computed(() => can('totem.user.update'))
+
+/**
+ * The filters this screen offers. The key of each entry is the query parameter
+ * the API takes and the one that ends up in the URL -- one name, so a link is
+ * always a faithful description of the request behind it.
+ */
+const FILTER_FIELDS: FilterFields = {
+  search: {
+    type: 'string',
+    label: 'Search',
+    help_text: 'Matches the login or the email.',
+  },
+  login: {
+    type: 'string',
+    label: 'Login',
+    help_text: 'Filter on the login.',
+  },
+  email: {
+    type: 'string',
+    label: 'Email',
+    help_text: 'Filter on the email address.',
+  },
+  is_active: {
+    type: 'boolean',
+    label: 'Active',
+    help_text: 'Keep the active accounts, or the deactivated ones.',
+  },
+}
+
+const { filters, setFilters, updateFilters, activeFilters } = useFilter<UserFilters>(
+  FILTER_FIELDS,
+  // EXPLICIT: useFilter reads the URL by default.
+  { syncUrl: props.syncUrl },
+)
+
+const {
+  rows,
+  total,
+  loading,
+  error,
+  first,
+  pageSize,
+  sortField,
+  sortOrder,
+  isInitialLoad,
+  onPage,
+  onSort,
+  reload,
+} = useResourceList({
+  fetchPage: listUsers,
+  filters,
+  pageSize: props.pageSize,
+  sortField: 'login',
+  syncUrl: props.syncUrl,
+  sortable: USER_SORTABLE,
+})
+
+/** Placeholder rows so the first paint has the table's real height. */
+const skeletonRows = Array.from({ length: 5 }, (_, i) => ({ id: `skeleton-${i}` }) as UserRow)
+
+// On `loading` going false rather than on `total`: a reload landing on the same
+// count must still be reported.
+watch(loading, (busy) => {
+  if (!busy && !error.value) emit('loaded', total.value)
+})
+
+defineExpose({ reload })
+</script>
+
+<template>
+  <Message v-if="error" severity="error" :closable="false" class="page__message">
+    <div class="list__error">
+      <span>{{ error }}</span>
+      <Button label="Réessayer" size="small" severity="danger" outlined @click="reload" />
+    </div>
+  </Message>
+
+  <DataTable
+    lazy
+    paginator
+    row-hover
+    data-key="id"
+    removable-sort
+    :value="isInitialLoad ? skeletonRows : rows"
+    :total-records="total"
+    :first="first"
+    :rows="pageSize"
+    :rows-per-page-options="[10, 20, 50, 100]"
+    :sort-field="sortField ?? undefined"
+    :sort-order="sortOrder"
+    paginator-template="FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink RowsPerPageDropdown"
+    current-page-report-template="{first}–{last} sur {totalRecords}"
+    @page="onPage"
+    @sort="onSort"
+  >
+    <template #header>
+      <MultiRecordFilters
+        :fields="FILTER_FIELDS"
+        :filters="filters"
+        :active-filters="activeFilters"
+        :loading="loading"
+        search-placeholder="Rechercher un identifiant ou un courriel…"
+        @apply="setFilters"
+        @patch="updateFilters"
+        @refresh="reload"
+      />
+    </template>
+
+    <template #empty>
+      <div class="table-empty">
+        <i class="pi pi-users" />
+        <p v-if="filters.search">Aucun utilisateur ne correspond à « {{ filters.search }} ».</p>
+        <p v-else>Aucun utilisateur.</p>
+      </div>
+    </template>
+
+    <Column field="login" header="Utilisateur" sortable style="min-width: 16rem">
+      <template #body="{ data }">
+        <Skeleton v-if="isInitialLoad" height="2rem" />
+        <div v-else class="user-cell">
+          <Avatar :label="initials(data)" shape="circle" />
+          <div class="user-cell__text">
+            <span class="user-cell__login">{{ data.login }}</span>
+            <span v-if="fullName(data)" class="user-cell__name">{{ fullName(data) }}</span>
+          </div>
+        </div>
+      </template>
+    </Column>
+
+    <Column field="email" header="Courriel" sortable style="min-width: 14rem">
+      <template #body="{ data }">
+        <Skeleton v-if="isInitialLoad" height="1rem" />
+        <a v-else-if="data.email" :href="`mailto:${data.email}`" class="link">{{ data.email }}</a>
+        <span v-else class="muted">—</span>
+      </template>
+    </Column>
+
+    <!-- `roles` is not in the backend's ordering whitelist, so no `sortable`. -->
+    <Column header="Rôles" style="min-width: 12rem">
+      <template #body="{ data }">
+        <Skeleton v-if="isInitialLoad" height="1rem" />
+        <div v-else-if="data.roles?.length" class="tags">
+          <Tag v-for="role in data.roles" :key="role.id" :value="role.name" severity="info" />
+        </div>
+        <span v-else class="muted">Aucun</span>
+      </template>
+    </Column>
+
+    <Column field="is_active" header="Statut" sortable style="width: 9rem">
+      <template #body="{ data }">
+        <Skeleton v-if="isInitialLoad" height="1rem" />
+        <Tag
+          v-else
+          :severity="data.is_active ? 'success' : 'danger'"
+          :value="data.is_active ? 'Actif' : 'Inactif'"
+        />
+      </template>
+    </Column>
+
+    <!-- Row actions: no header, the icons speak for themselves. -->
+    <Column style="width: 4rem" body-class="row-actions">
+      <template #body="{ data }">
+        <Skeleton v-if="isInitialLoad" height="2rem" width="2rem" shape="circle" />
+        <Button
+          v-else-if="canUpdate"
+          icon="pi pi-pencil"
+          text
+          rounded
+          severity="secondary"
+          aria-label="Edit"
+          @click="emit('open', data.id)"
+        />
+      </template>
+    </Column>
+  </DataTable>
+</template>
+
+<style scoped>
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-cell__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.user-cell__login {
+  font-weight: 600;
+}
+
+.user-cell__name {
+  font-size: 0.85rem;
+  color: var(--app-muted);
+}
+
+.table-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1rem;
+  color: var(--app-muted);
+}
+
+.table-empty i {
+  font-size: 2rem;
+  opacity: 0.5;
+}
+
+.table-empty p {
+  margin: 0;
+}
+
+.link {
+  color: var(--p-primary-color);
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.row-actions {
+  text-align: right;
+}
+
+.list__error {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+</style>
+
