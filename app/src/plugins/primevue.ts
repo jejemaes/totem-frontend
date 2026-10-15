@@ -1,4 +1,3 @@
-import Aura from '@primeuix/themes/aura'
 import type { App } from 'vue'
 
 import PrimeVue from 'primevue/config'
@@ -6,6 +5,8 @@ import ConfirmationService from 'primevue/confirmationservice'
 import ToastService from 'primevue/toastservice'
 
 import 'primeicons/primeicons.css'
+
+import { TotemPreset } from './theme'
 
 /**
  * PrimeVue 4 theming is CSS-variable based: the preset generates the variables
@@ -16,7 +17,7 @@ import 'primeicons/primeicons.css'
 export function installPrimeVue(app: App): void {
   app.use(PrimeVue, {
     theme: {
-      preset: Aura,
+      preset: TotemPreset,
       options: {
         darkModeSelector: '.app-dark',
         // Keep PrimeVue's own utilities out of the way of our stylesheet.

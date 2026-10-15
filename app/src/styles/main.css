@@ -12,7 +12,7 @@
   --sidebar-width: 16rem;
 
   --app-bg: var(--p-surface-50);
-  --app-panel: #ffffff;
+  --app-panel: var(--p-surface-0);
   --app-border: var(--p-surface-200);
   --app-text: var(--p-surface-800);
   --app-muted: var(--p-surface-500);
@@ -22,6 +22,12 @@
      scoped `:global(html.app-dark) .x` does not compile to what it reads like --
      Vue drops the descendant and sets the variable on <html> instead. */
   --app-inset: var(--p-surface-100);
+
+  /* The three modules of the Totem mark (components/TotemMark.vue). Global for
+     the same reason as --app-inset: they must flip with `.app-dark`. */
+  --app-mark-bar: var(--p-primary-800);
+  --app-mark-middle: var(--p-primary-600);
+  --app-mark-bottom: var(--p-primary-400);
 }
 
 :root.app-dark {
@@ -31,6 +37,9 @@
   --app-text: var(--p-surface-0);
   --app-muted: var(--p-surface-400);
   --app-inset: var(--p-surface-800);
+  --app-mark-bar: var(--p-primary-100);
+  --app-mark-middle: var(--p-primary-400);
+  --app-mark-bottom: var(--p-primary-600);
 }
 
 * {
@@ -70,14 +79,10 @@ a {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.topbar__brand i {
-  color: var(--p-primary-color);
-  font-size: 1.4rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  /* The identity sets the wordmark tight and lowercase. */
+  letter-spacing: -0.03em;
 }
 
 .topbar__actions {

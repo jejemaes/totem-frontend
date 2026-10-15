@@ -8,6 +8,7 @@ import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/auth/authStore'
+import TotemMark from '@/components/TotemMark.vue'
 import { HOME_ROUTE } from '@/router/constants'
 
 const auth = useAuthStore()
@@ -40,7 +41,7 @@ async function onSubmit() {
 <template>
   <Card class="login">
     <template #title>
-      <div class="login__brand"><i class="pi pi-box" /> Totem Admin</div>
+      <div class="login__brand"><TotemMark size="2rem" /> Totem Admin</div>
     </template>
 
     <template #content>
@@ -81,10 +82,6 @@ async function onSubmit() {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-}
-
-.login__brand i {
-  color: var(--p-primary-color);
 }
 
 .login__form {

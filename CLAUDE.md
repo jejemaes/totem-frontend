@@ -512,10 +512,15 @@ the SFC; `HtmlField.vue` is the only unscoped one, because it styles ProseMirror
 Class names are BEM-ish with a double underscore: `.page__header`, `.form__fields`,
 `.field__required`, `.colors__swatch--selected`.
 
-**Never a raw hex value.** Colours come from PrimeVue variables (`--p-surface-*`,
-`--p-primary-color`, `--p-red-500`, `--p-content-border-color`) plus app-level aliases defined once
+**Never a raw hex value.** The palette is written once, in `plugins/theme.ts`: a `TotemPreset`
+derived from Aura whose `primary` scale pins the identity's greens (Menthe 100, Pousse 400, Totem
+600 = the light-mode action colour, Forêt 800, Humus 950) and whose light surfaces are warm Papier
+tones; dark mode keeps Aura's neutral zinc. Everything else reads it: colours come from
+PrimeVue variables (`--p-surface-*`, `--p-primary-color`, `--p-red-500`, `--p-content-border-color`)
+plus app-level aliases defined once
 in `main.css` (`--app-bg`, `--app-panel`, `--app-border`, `--app-text`, `--app-muted`,
-`--app-inset`, `--topbar-height`, `--sidebar-width`) and redefined under `:root.app-dark`.
+`--app-inset`, `--app-mark-*` for the three modules of `components/TotemMark.vue`,
+`--topbar-height`, `--sidebar-width`) and redefined under `:root.app-dark`.
 `useTheme.ts` toggles `.app-dark` on `<html>` and persists to `localStorage`. Note that
 `--app-inset` is global on purpose: a scoped `:global(html.app-dark) .x` does not compile to what
 it reads like. `:deep()` is how PrimeVue internals are reached.
