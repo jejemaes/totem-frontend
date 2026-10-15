@@ -7,6 +7,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/auth/authStore'
+import TotemMark from '@/components/TotemMark.vue'
 import { useTheme } from '@/composables/useTheme'
 
 import AppMenu from './AppMenu.vue'
@@ -42,8 +43,8 @@ const userMenuItems: PrimeMenuItem[] = [
         @click="sidebarOpen = !sidebarOpen"
       />
       <RouterLink to="/dashboard" class="topbar__brand">
-        <i class="pi pi-box" />
-        <span>TOTEM</span>
+        <TotemMark />
+        <span>totem</span>
       </RouterLink>
 
       <div class="topbar__actions">
