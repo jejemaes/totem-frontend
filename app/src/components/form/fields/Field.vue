@@ -13,6 +13,7 @@ import FloatField from './FloatField.vue'
 import IntegerField from './IntegerField.vue'
 import ManyToManyTagsField from './ManyToManyTagsField.vue'
 import ManyToOneField from './ManyToOneField.vue'
+import MediaImageField from './MediaImageField.vue'
 import SelectionField from './SelectionField.vue'
 import TextField from './TextField.vue'
 import type { FieldProps, FieldValue, Widget } from './types'
@@ -45,6 +46,19 @@ const WIDGETS: Record<Widget, Component> = {
   color: ColorIntegerField,
   many2one: ManyToOneField,
   many2many_tags: ManyToManyTagsField,
+  /*
+   * A relation like many2one -- its value is the related row's id -- but with a
+   * picker instead of a dropdown: a list of filenames is not a way to choose a
+   * picture.
+   *
+   * Statically imported, unlike `html` below, and that was MEASURED rather than
+   * assumed: it puts HtmlImagePicker -- with PrimeVue's Dialog and Paginator,
+   * until now reachable only through the lazy editor chunk -- into the entry
+   * chunk, for 4.4 kB gzipped on 305. The `html` exception buys 130 kB; this
+   * one would buy a rounding error, and a second exception to a one-exception
+   * rule costs more than it saves.
+   */
+  media_image: MediaImageField,
   /*
    * The only lazily-loaded widget. TipTap and prosemirror are ~130 kB gzipped,
    * router/index.ts imports every view statically, and one screen uses this --

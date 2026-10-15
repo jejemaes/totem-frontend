@@ -322,6 +322,20 @@ export interface HtmlImageUploadResult {
   url: string
   /** Seeds the `alt`. Optional: the picked file's own name is the fallback. */
   name?: string
+  /**
+   * The id of the stored row.
+   *
+   * Optional for HtmlField, which writes the URL into a `src` and never needs
+   * the row's identity. REQUIRED by MediaImageField, whose VALUE is that id: an
+   * upload that answers without one cannot become the field's value, and
+   * storing the URL instead would put a path in a foreign key column.
+   *
+   * Optional rather than required because `options.uploadImage` is free-form --
+   * any caller may satisfy this contract from a store that has no ids. The
+   * field that needs it says so out loud instead of guessing; see
+   * mediaImage.ts.
+   */
+  id?: string
 }
 
 /**

@@ -22,6 +22,7 @@
 
 import { apiFetch, patchJson } from '@/api/client'
 
+import type { WebsiteMediaRef } from './websiteMedias'
 import type { WebsitePageRef } from './websitePages'
 
 /**
@@ -54,6 +55,15 @@ export type WebsiteDetail = {
   meta_description: string | null
   menu: WebsiteMenuNameRef | null
   homepage: WebsitePageRef | null
+  /**
+   * The image a theme may draw on the homepage, NESTED like the two relations
+   * above -- but unlike them it carries its file (`content`) as well as a
+   * label, because a media's label is only a filename.
+   *
+   * `on_delete=SET_NULL` server-side: a media deleted elsewhere blanks this
+   * silently, and the payload then simply reads null.
+   */
+  cover_media: WebsiteMediaRef | null
   /** HTML, validated server-side; it accepts `<t-widget>` markers. */
   footer: string | null
   side_bar_content: string | null
@@ -98,6 +108,14 @@ export interface WebsiteUpdatePayload {
   menu?: string | null
   /** The homepage's id, or null. */
   homepage?: string | null
+  /**
+   * The cover image's id, or null to clear it.
+   *
+   * An ordinary relation write, unlike `theme` below: no service validation and
+   * no queryset hook react to this key, and `SET_NULL` means there is nothing
+   * to cascade.
+   */
+  cover_media?: string | null
   footer?: string | null
   side_bar_content?: string | null
   theme?: string

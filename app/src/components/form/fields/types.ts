@@ -29,6 +29,7 @@ export type Widget =
   | 'color'
   | 'many2one'
   | 'many2many_tags'
+  | 'media_image'
   | 'html'
 
 /**
@@ -93,9 +94,14 @@ export interface FieldOptions {
    */
   fetch?: RelationFetch
   /**
-   * ManyToOneField: the related record as the resource returned it, nested. It
-   * is what read-only displays -- with it, that mode needs no request at all --
-   * and what keeps the selected entry labelled while a search excludes it.
+   * ManyToOneField / MediaImageField: the related record as the resource
+   * returned it, nested. It is what read-only displays -- with it, that mode
+   * needs no request at all -- and what keeps the selected entry labelled while
+   * a search excludes it.
+   *
+   * On MediaImageField it is also what carries the thumbnail, and its URL may
+   * arrive under `content` (how the API names a media's file) or under `url`
+   * (how the picker names it) -- see mediaImage.ts, which reads both.
    */
   record?: RelationRecord | null
   /**
@@ -120,35 +126,40 @@ export interface FieldOptions {
   filterDelay?: number
   filterPlaceholder?: string
   /**
-   * HtmlField: uploads an image and answers where it now lives. REQUIRED for
-   * the image button, which is simply not rendered without it -- the same
-   * refusal to guess an endpoint as `fetch` for the relation fields. It is what
-   * carries POST /website/medias/ and its multipart field name, both of which
-   * belong to a resource module.
+   * HtmlField / MediaImageField: uploads an image and answers where it now
+   * lives. REQUIRED for the image button, which is simply not rendered without
+   * it -- the same refusal to guess an endpoint as `fetch` for the relation
+   * fields. It is what carries POST /website/medias/ and its multipart field
+   * name, both of which belong to a resource module.
+   *
+   * MediaImageField additionally needs the `id` of the stored row in the
+   * result: its value IS that id. An uploader that answers without one gets a
+   * message saying so rather than a URL written into a relation.
    */
   uploadImage?: HtmlImageUpload
   /**
-   * HtmlField: loads one page of the media library, for the image picker's
-   * grid of existing files. Optional -- without it the picker offers the upload
-   * alone. Same refusal to guess an endpoint as `uploadImage` above: it is what
-   * carries GET /website/medias/ and the name of its search parameter.
+   * HtmlField / MediaImageField: loads one page of the media library, for the
+   * image picker's grid of existing files. Optional -- without it the picker
+   * offers the upload alone. Same refusal to guess an endpoint as `uploadImage`
+   * above: it is what carries GET /website/medias/ and the name of its search
+   * parameter.
    */
   browseImages?: HtmlImageBrowse
-  /** HtmlField: permission required to browse the library. Without the scope
-      the picker drops its grid and keeps its upload -- the two are separate
-      routes behind separate scopes, so one being refused says nothing about the
-      other. */
+  /** HtmlField / MediaImageField: permission required to browse the library.
+      Without the scope the picker drops its grid and keeps its upload -- the two
+      are separate routes behind separate scopes, so one being refused says
+      nothing about the other. */
   browsePermission?: string
-  /** HtmlField: permission required to upload. Without the scope the image
-      button is hidden and the rest of the toolbar is untouched -- one button
-      rather than a whole field, unlike `permission` above. Kept separate from
-      it on purpose: that key means "may read the related endpoint", and one
-      option answering two questions is how a widget ends up unable to express
-      "may edit, may not upload". */
+  /** HtmlField / MediaImageField: permission required to upload. Without the
+      scope the image button is hidden and the rest of the toolbar is untouched
+      -- one button rather than a whole field, unlike `permission` above. Kept
+      separate from it on purpose: that key means "may read the related
+      endpoint", and one option answering two questions is how a widget ends up
+      unable to express "may edit, may not upload". */
   uploadPermission?: string
-  /** HtmlField: largest image accepted, in bytes. Refused in the browser,
-      because nothing in the stack answers an oversized upload with a JSON 413
-      the user could read. */
+  /** HtmlField / MediaImageField: largest image accepted, in bytes. Refused in
+      the browser, because nothing in the stack answers an oversized upload with
+      a JSON 413 the user could read. */
   maxUploadBytes?: number
   /** HtmlField: hides the source/WYSIWYG toggle, for a form where raw HTML has
       no business being reachable. On by default. */

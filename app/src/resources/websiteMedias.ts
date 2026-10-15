@@ -49,6 +49,11 @@ export interface WebsiteMedia {
  * `<Field widget="html" :options="{ uploadImage: uploadWebsiteMedia }">`. That
  * indirection is the point: the widget never names an endpoint, exactly as it
  * never names one for a relation's `fetch`.
+ *
+ * The `id` is returned as well as the URL, and the two serve different widgets:
+ * the editor writes the URL into a `src`, while MediaImageField STORES the id
+ * -- its field is a foreign key. The response has always carried it; it used to
+ * be dropped here.
  */
 export const uploadWebsiteMedia: HtmlImageUpload = async (file, signal) => {
   const body = new FormData()
@@ -61,7 +66,33 @@ export const uploadWebsiteMedia: HtmlImageUpload = async (file, signal) => {
     body,
     signal,
   })
-  return { url: media.content, name: media.name } satisfies HtmlImageUploadResult
+  return { id: media.id, url: media.content, name: media.name } satisfies HtmlImageUploadResult
+}
+
+/**
+ * A media as another payload NESTS it -- `MediaDisplayNameSchema`, which is
+ * what `Website.cover_media` carries.
+ *
+ * A `type` and not an `interface`, like every other `XxxRef` here: only type
+ * aliases get the implicit index signature that makes them assignable to
+ * `RelationRecord`, which is what a relation field's `options.record` takes.
+ *
+ * Everything but the id is OPTIONAL, mirroring the schema's own
+ * `optional_fields = "__all__"`. Typing them as required would promise keys the
+ * backend does not, and push the tolerance into a cast at the call site instead
+ * of into the tested normaliser -- see components/form/fields/mediaImage.ts.
+ *
+ * Deliberately NOT an alias of `WebsiteMediaRow` below: they are two different
+ * backend schemas (`MediaDisplayNameSchema` and `MediaListSchema`) that happen
+ * to agree today, and aliasing would let a change to one silently retype the
+ * other.
+ */
+export type WebsiteMediaRef = {
+  id: string
+  name?: string
+  /** The public URL -- named `content`, as the wire does. */
+  content?: string | null
+  mimetype?: string | null
 }
 
 /**

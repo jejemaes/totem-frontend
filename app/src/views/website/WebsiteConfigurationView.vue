@@ -86,6 +86,20 @@ const canUpdate = computed(() => can('totem.website.update'))
  */
 const canReadThemes = computed(() => can('totem.websitetheme.read'))
 
+/**
+ * The cover image picker is shown only to a user holding the media scope.
+ *
+ * HIDDEN, and in the VIEW rather than inside the widget: <Field> registers its
+ * key synchronously at setup, so a widget that hid itself would leave
+ * `cover_media` in the draft and reachable by `changed`. The whole field being
+ * absent is what keeps the key out of a payload this user may not build.
+ *
+ * (`UserRolesSelectionWidget` hides itself instead, and the asymmetry is the
+ * rule: a registry widget is gated at its <Field>, a detached one owns no draft
+ * key and gates itself.)
+ */
+const canReadMedias = computed(() => can('totem.websitemedia.read'))
+
 /** `FieldValue` is wider than the payload accepts. */
 function text(value: FieldValue): string | null {
   return typeof value === 'string' && value !== '' ? value : null
@@ -123,6 +137,8 @@ if (canReadThemes.value) {
  */
 const menu = ref<WebsiteDetail['menu']>(null)
 const homepage = ref<WebsiteDetail['homepage']>(null)
+/** The cover, nested: the draft carries its id, the thumbnail needs its file. */
+const coverMedia = ref<WebsiteDetail['cover_media']>(null)
 
 /**
  * The theme's options, and what the record carried, to tell an edit from an
@@ -157,6 +173,7 @@ function toForm(website: WebsiteDetail): FormData {
     theme: website.theme,
     homepage: website.homepage?.id ?? null,
     menu: website.menu?.id ?? null,
+    cover_media: website.cover_media?.id ?? null,
     meta_authors: website.meta_authors,
     meta_description: website.meta_description,
     // htmlOrNull, not the raw string: a footer stored as "<p></p>" by another
@@ -180,6 +197,7 @@ const form: ResourceForm = useResourceForm<WebsiteDetail>({
     theme: null,
     homepage: null,
     menu: null,
+    cover_media: null,
     meta_authors: null,
     meta_description: null,
     footer: null,
@@ -190,6 +208,7 @@ const form: ResourceForm = useResourceForm<WebsiteDetail>({
   onLoaded: (website) => {
     menu.value = website?.menu ?? null
     homepage.value = website?.homepage ?? null
+    coverMedia.value = website?.cover_media ?? null
     // Both, and from a fresh object each time: the baseline is what `dirty`
     // compares against, so sharing one reference with the live bag would make
     // every edit invisible.
@@ -215,6 +234,7 @@ const form: ResourceForm = useResourceForm<WebsiteDetail>({
     form.data.value = toForm(website)
     menu.value = website.menu
     homepage.value = website.homepage
+    coverMedia.value = website.cover_media
     // The options live outside that object, so they need re-seeding of their
     // own -- and from the RESPONSE, which is the only thing that says what the
     // backend actually stored: it resets the bag whenever the theme moved.
@@ -274,6 +294,7 @@ function updatePayload(changed: FormData): WebsiteUpdatePayload {
   if ('meta_description' in changed) body.meta_description = text(changed.meta_description)
   if ('menu' in changed) body.menu = text(changed.menu)
   if ('homepage' in changed) body.homepage = text(changed.homepage)
+  if ('cover_media' in changed) body.cover_media = text(changed.cover_media)
   if ('footer' in changed) body.footer = text(changed.footer)
   if ('side_bar_content' in changed) body.side_bar_content = text(changed.side_bar_content)
   // `text()` and not a plain read: the column is NOT NULL, so an empty theme is
@@ -342,7 +363,7 @@ function discard(): void {
     <Card v-if="!loadError" class="website-form">
       <template #content>
         <div v-if="loading" class="website-form__skeleton">
-          <Skeleton v-for="n in 7" :key="n" height="3.2rem" />
+          <Skeleton v-for="n in 8" :key="n" height="3.2rem" />
         </div>
 
         <Form
@@ -423,6 +444,28 @@ function discard(): void {
                 permission: 'totem.websitepage.read',
               }"
               help="Page rendered at the root of the website."
+            />
+
+            <!-- A relation to the media store, picked from the same modal the
+                 rich text editor opens: a dropdown of filenames is not a way to
+                 choose a picture. The value is the media's id, so this stays an
+                 ordinary <Field>. Hidden without the media scope -- see
+                 canReadMedias. -->
+            <Field
+              v-if="canReadMedias"
+              name="cover_media"
+              widget="media_image"
+              label="Cover Image"
+              :options="{
+                record: coverMedia,
+                browseImages: browseWebsiteMedias,
+                browsePermission: 'totem.websitemedia.read',
+                uploadImage: uploadWebsiteMedia,
+                uploadPermission: 'totem.websitemedia.create',
+                maxUploadBytes: 5 * 1024 * 1024,
+              }"
+              help="Image a theme may show on the homepage. Only themes declaring the
+                    cover-media feature use it; the others ignore it."
             />
 
             <!-- `name` is label enough for the generic display, so no

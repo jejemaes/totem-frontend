@@ -38,8 +38,24 @@ const props = withDefaults(
     error?: string | null
     /** Tiles per page. A 4x3 grid at the dialog's default width. */
     pageSize?: number
+    /**
+     * The dialog's title.
+     *
+     * Defaulted to the editor's wording, which is what it was hardcoded to:
+     * "insert" is the right verb only when the image lands in a document. A
+     * field whose value IS the image -- MediaImageField -- says "choose"
+     * instead.
+     */
+    header?: string
   }>(),
-  { browse: undefined, canUpload: false, uploading: false, error: null, pageSize: 12 },
+  {
+    browse: undefined,
+    canUpload: false,
+    uploading: false,
+    error: null,
+    pageSize: 12,
+    header: 'Insert an image',
+  },
 )
 
 const emit = defineEmits<{
@@ -168,7 +184,7 @@ onScopeDispose(() => {
     :visible="visible"
     modal
     dismissable-mask
-    header="Insert an image"
+    :header="header"
     class="html-picker"
     :style="{ width: '46rem' }"
     :breakpoints="{ '960px': '92vw' }"
