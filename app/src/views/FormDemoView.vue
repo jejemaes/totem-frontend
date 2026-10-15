@@ -26,6 +26,9 @@ import Form from '@/components/form/Form.vue'
  */
 const data = ref<FormData>({
   name: 'Totem',
+  // An id from LIBRARY, labelled by `demoCover` above -- the arrangement a real
+  // screen has, where the payload nests the record the draft only points at.
+  cover: '4',
   description: 'Reception kiosk in the main hall.',
   colour: null,
   quantity: 12,
@@ -79,6 +82,14 @@ const LIBRARY: HtmlImageItem[] = Array.from({ length: 27 }, (_, index) => {
     mimetype: 'image/png',
   }
 })
+
+/**
+ * What `options.record` looks like on a real screen: the shape the API NESTS,
+ * whose URL key is `content` -- not the `url` the picker emits. Written that way
+ * here on purpose, so the demo exercises the tolerant branch of `toImageItem`
+ * rather than the easy one.
+ */
+const demoCover = { id: '4', name: LIBRARY[4]?.name, content: LIBRARY[4]?.url }
 
 /** Paged and searched in memory, the same shape the backend answers. */
 const demoBrowse: HtmlImageBrowse = async (query) => {
@@ -189,10 +200,17 @@ const demoWidgets: HtmlWidgetFetch = async () => [
 ]
 
 /** Reads the picked file into a data URI: no request, no endpoint. */
+/*
+ * `id` as well as `url`, because the two widgets need different halves: the
+ * editor writes the URL into a `src`, while MediaImageField STORES the id --
+ * an upload answering without one is refused there, on purpose.
+ */
+let uploaded = 0
 const demoUpload: HtmlImageUpload = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onload = () => resolve({ url: String(reader.result), name: file.name })
+    reader.onload = () =>
+      resolve({ id: `uploaded-${(uploaded += 1)}`, url: String(reader.result), name: file.name })
     reader.onerror = () => reject(new Error('This file could not be read.'))
     reader.readAsDataURL(file)
   })
@@ -238,6 +256,9 @@ const DEFINITION = `<Form :data="data" @save="onSave">
   <Field name="due_date"    widget="date"      label="Due date" />
   <Field name="seen_at"     widget="datetime"  label="Seen at" />
   <Field name="swatch"      widget="color"     label="Swatch" :options="{ max: 15 }" />
+  <Field name="cover"       widget="media_image" label="Cover image"
+         :options="{ record: demoCover, browseImages: demoBrowse,
+                     uploadImage: demoUpload, maxUploadBytes: 1024 }" />
   <Field name="active"      widget="boolean"   label="Active" required />
   <Field name="published"   widget="boolean"   label="Published" />
   <Field name="status"      widget="selection" label="Status"
@@ -300,6 +321,23 @@ const DEFINITION = `<Form :data="data" @save="onSave">
 
             <Field name="swatch" widget="color" label="Swatch" :options="{ max: 15 }"
                    help="The value is a palette index; click the selected one again to clear it." />
+
+            <!-- A relation whose value is the media's id, picked from the
+                 editor's own modal. `maxUploadBytes` is deliberately tiny here:
+                 it makes the size refusal reachable with any file at hand,
+                 offline. -->
+            <Field
+              name="cover"
+              widget="media_image"
+              label="Cover image"
+              :options="{
+                record: demoCover,
+                browseImages: demoBrowse,
+                uploadImage: demoUpload,
+                maxUploadBytes: 1024,
+              }"
+              help="Chosen from the library, or uploaded. The value is the media's id, not
+                    its URL -- save and read it in the payload." />
 
             <Field name="active" widget="boolean" label="Active" required
                    help="Required, hence radio buttons." />
