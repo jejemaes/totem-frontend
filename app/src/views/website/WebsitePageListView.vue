@@ -232,7 +232,10 @@ defineExpose({ reload })
     <Column style="width: 6rem" body-class="row-actions">
       <template #body="{ data }">
         <Skeleton v-if="isInitialLoad" height="2rem" width="2rem" shape="circle" />
-        <template v-else>
+        <!-- A <div> of our own rather than styling the cell: `body-class` lands on
+             a <td> PrimeVue renders, which a scoped rule never reaches -- that is
+             how the two buttons ended up stacked in a 6rem column. -->
+        <div v-else class="row-actions__buttons">
           <Button
             v-if="canUpdate"
             icon="pi pi-pencil"
@@ -251,7 +254,7 @@ defineExpose({ reload })
             aria-label="Delete"
             @click="askDelete(data)"
           />
-        </template>
+        </div>
       </template>
     </Column>
   </DataTable>
@@ -277,9 +280,10 @@ defineExpose({ reload })
   word-break: break-all;
 }
 
-.row-actions {
-  text-align: right;
-  white-space: nowrap;
+.row-actions__buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.25rem;
 }
 
 .list__error {
