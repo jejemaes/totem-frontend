@@ -186,6 +186,13 @@ a {
   max-width: 72rem;
 }
 
+/* The list pages: a table has columns to give the extra width to, a form does
+   not -- a text input stretched across a wide screen is just harder to read.
+   So the cap is lifted per page, not on `.page` itself. */
+.page--wide {
+  max-width: none;
+}
+
 .page__header {
   display: flex;
   align-items: center;
