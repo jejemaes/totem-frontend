@@ -4,24 +4,24 @@ import { useAuthStore } from '@/auth/authStore'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import BlankLayout from '@/layouts/BlankLayout.vue'
 
-import ContactFormView from '@/views/contacts/ContactFormView.vue'
-import ContactsView from '@/views/contacts/ContactsView.vue'
-import ContactTagFormView from '@/views/contacts/ContactTagFormView.vue'
-import ContactTagsView from '@/views/contacts/ContactTagsView.vue'
-import DashboardView from '@/views/DashboardView.vue'
-import DiagnosticView from '@/views/DiagnosticView.vue'
-import ForbiddenView from '@/views/ForbiddenView.vue'
-import FormDemoView from '@/views/FormDemoView.vue'
-import LoginView from '@/views/LoginView.vue'
-import NotFoundView from '@/views/NotFoundView.vue'
-import PublicView from '@/views/PublicView.vue'
-import UserFormView from '@/views/settings/UserFormView.vue'
-import UsersView from '@/views/settings/UsersView.vue'
-import WebsiteConfigurationView from '@/views/website/WebsiteConfigurationView.vue'
-import WebsiteMenuFormView from '@/views/website/WebsiteMenuFormView.vue'
-import WebsiteMenusView from '@/views/website/WebsiteMenusView.vue'
-import WebsitePageFormView from '@/views/website/WebsitePageFormView.vue'
-import WebsitePagesView from '@/views/website/WebsitePagesView.vue'
+import ContactPage from '@/pages/contacts/ContactPage.vue'
+import ContactsPage from '@/pages/contacts/ContactsPage.vue'
+import ContactTagPage from '@/pages/contacts/ContactTagPage.vue'
+import ContactTagsPage from '@/pages/contacts/ContactTagsPage.vue'
+import DashboardPage from '@/pages/DashboardPage.vue'
+import DiagnosticPage from '@/pages/DiagnosticPage.vue'
+import ForbiddenPage from '@/pages/ForbiddenPage.vue'
+import FormDemoPage from '@/pages/FormDemoPage.vue'
+import LoginPage from '@/pages/LoginPage.vue'
+import NotFoundPage from '@/pages/NotFoundPage.vue'
+import PublicPage from '@/pages/PublicPage.vue'
+import UserPage from '@/pages/settings/UserPage.vue'
+import UsersPage from '@/pages/settings/UsersPage.vue'
+import WebsiteConfigurationPage from '@/pages/website/WebsiteConfigurationPage.vue'
+import WebsiteMenuPage from '@/pages/website/WebsiteMenuPage.vue'
+import WebsiteMenusPage from '@/pages/website/WebsiteMenusPage.vue'
+import WebsitePagePage from '@/pages/website/WebsitePagePage.vue'
+import WebsitePagesPage from '@/pages/website/WebsitePagesPage.vue'
 
 import { HOME_ROUTE } from './constants'
 
@@ -52,7 +52,7 @@ export const router = createRouter({
       path: '/',
       component: AdminLayout,
       children: [
-        { path: 'dashboard', name: 'dashboard', component: DashboardView, meta: { title: 'Dashboard' } },
+        { path: 'dashboard', name: 'dashboard', component: DashboardPage, meta: { title: 'Dashboard' } },
 
         // Contacts. Same three-route shape as the users block below, and the
         // paths mirror the API's own (/contacts/, /contact-tags/). Tags get a
@@ -61,19 +61,19 @@ export const router = createRouter({
         {
           path: 'contacts',
           name: 'contacts',
-          component: ContactsView,
+          component: ContactsPage,
           meta: { title: 'Contacts', permissions: ['totem.contact.read'] },
         },
         {
           path: 'contacts/new',
           name: 'contact-create',
-          component: ContactFormView,
+          component: ContactPage,
           meta: { title: 'New contact', permissions: ['totem.contact.create'] },
         },
         {
           path: 'contacts/:id',
           name: 'contact-edit',
-          component: ContactFormView,
+          component: ContactPage,
           meta: {
             title: 'Edit contact',
             permissions: ['totem.contact.read', 'totem.contact.update'],
@@ -82,19 +82,19 @@ export const router = createRouter({
         {
           path: 'contact-tags',
           name: 'contact-tags',
-          component: ContactTagsView,
+          component: ContactTagsPage,
           meta: { title: 'Contact tags', permissions: ['totem.contacttag.read'] },
         },
         {
           path: 'contact-tags/new',
           name: 'contact-tag-create',
-          component: ContactTagFormView,
+          component: ContactTagPage,
           meta: { title: 'New tag', permissions: ['totem.contacttag.create'] },
         },
         {
           path: 'contact-tags/:id',
           name: 'contact-tag-edit',
-          component: ContactTagFormView,
+          component: ContactTagPage,
           meta: {
             title: 'Edit tag',
             permissions: ['totem.contacttag.read', 'totem.contacttag.update'],
@@ -112,7 +112,7 @@ export const router = createRouter({
         {
           path: 'website/configuration',
           name: 'website-configuration',
-          component: WebsiteConfigurationView,
+          component: WebsiteConfigurationPage,
           meta: { title: 'Website configuration', permissions: ['totem.website.read'] },
         },
         // The website menu tree and the pages it points at. Paths mirror the
@@ -121,19 +121,19 @@ export const router = createRouter({
         {
           path: 'website/menus',
           name: 'website-menus',
-          component: WebsiteMenusView,
+          component: WebsiteMenusPage,
           meta: { title: 'Website menus', permissions: ['totem.websitemenu.read'] },
         },
         {
           path: 'website/menus/new',
           name: 'website-menu-create',
-          component: WebsiteMenuFormView,
+          component: WebsiteMenuPage,
           meta: { title: 'New menu item', permissions: ['totem.websitemenu.create'] },
         },
         {
           path: 'website/menus/:id',
           name: 'website-menu-edit',
-          component: WebsiteMenuFormView,
+          component: WebsiteMenuPage,
           meta: {
             title: 'Edit menu item',
             permissions: ['totem.websitemenu.read', 'totem.websitemenu.update'],
@@ -142,19 +142,19 @@ export const router = createRouter({
         {
           path: 'website/pages',
           name: 'website-pages',
-          component: WebsitePagesView,
+          component: WebsitePagesPage,
           meta: { title: 'Website pages', permissions: ['totem.websitepage.read'] },
         },
         {
           path: 'website/pages/new',
           name: 'website-page-create',
-          component: WebsitePageFormView,
+          component: WebsitePagePage,
           meta: { title: 'New page', permissions: ['totem.websitepage.create'] },
         },
         {
           path: 'website/pages/:id',
           name: 'website-page-edit',
-          component: WebsitePageFormView,
+          component: WebsitePagePage,
           meta: {
             title: 'Edit page',
             permissions: ['totem.websitepage.read', 'totem.websitepage.update'],
@@ -163,23 +163,23 @@ export const router = createRouter({
         {
           path: 'settings/users',
           name: 'settings-users',
-          component: UsersView,
+          component: UsersPage,
           meta: { title: 'Users', permissions: ['totem.user.read'] },
         },
-        // One component, two routes: UserFormView is a create form with no id
+        // One component, two routes: UserPage is a create form with no id
         // and an edit form with one. They stay separate routes because their
         // scopes differ -- editing has to GET the record before it can PATCH
         // it, creating reads nothing.
         //
         // Both are siblings of the list rather than children: a child route
-        // would keep UsersView mounted, and it drives useResourceList with
+        // would keep UsersPage mounted, and it drives useResourceList with
         // syncUrl, whose watcher rewrites route.query -- it would fight the
         // form over the query string while holding a list request open behind
         // it.
         {
           path: 'settings/users/new',
           name: 'settings-user-create',
-          component: UserFormView,
+          component: UserPage,
           meta: { title: 'New user', permissions: ['totem.user.create'] },
         },
         // Declared after 'new' for readability only: vue-router ranks a static
@@ -188,7 +188,7 @@ export const router = createRouter({
         {
           path: 'settings/users/:id',
           name: 'settings-user-edit',
-          component: UserFormView,
+          component: UserPage,
           meta: { title: 'Edit user', permissions: ['totem.user.read', 'totem.user.update'] },
         },
       ],
@@ -199,19 +199,19 @@ export const router = createRouter({
       path: '/',
       component: BlankLayout,
       children: [
-        { path: '', name: 'public', component: PublicView, meta: { auth: 'none' } },
-        { path: 'diagnostic', name: 'diagnostic', component: DiagnosticView, meta: { auth: 'none' } },
+        { path: '', name: 'public', component: PublicPage, meta: { auth: 'none' } },
+        { path: 'diagnostic', name: 'diagnostic', component: DiagnosticPage, meta: { auth: 'none' } },
         // Development page: it exists to look at the Form/Field components
         // with no backend and no session. Deliberately absent from the menu.
         {
           path: 'form-demo',
           name: 'form-demo',
-          component: FormDemoView,
+          component: FormDemoPage,
           meta: { auth: 'none', title: 'Form demo' },
         },
-        { path: 'login', name: 'login', component: LoginView, meta: { auth: 'guest-only' } },
-        { path: '403', name: 'forbidden', component: ForbiddenView, meta: { auth: 'none' } },
-        { path: ':pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { auth: 'none' } },
+        { path: 'login', name: 'login', component: LoginPage, meta: { auth: 'guest-only' } },
+        { path: '403', name: 'forbidden', component: ForbiddenPage, meta: { auth: 'none' } },
+        { path: ':pathMatch(.*)*', name: 'not-found', component: NotFoundPage, meta: { auth: 'none' } },
       ],
     },
   ],

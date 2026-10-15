@@ -3,8 +3,7 @@ import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
-import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
 
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
@@ -24,7 +23,9 @@ import {
 } from '@/resources/contacts'
 
 /*
- * One screen for both routes: /contacts/new and /contacts/:id.
+ * The contact form, for both creating and editing, and with NO router: the record
+ * comes in as the `id` prop and every way out is an event -- the routed page
+ * turns those into navigation, a Dialog into closing itself.
  * `useResourceForm` owns everything that differs -- loading the record, POST
  * versus PATCH, the error mapping -- so what is left here is the field list and
  * the two labels that change.
@@ -34,15 +35,18 @@ import {
  * the country holds the id of its row, the tags hold a list of ids, and <Form>
  * diffs the list for us.
  */
-const router = useRouter()
-const route = useRoute()
+const props = defineProps<{
+  /** `null` creates. A prop rather than the route param, so a modal can drive it. */
+  id: string | null
+}>()
 
-/**
- * The list's own query (page, ordering, search) rides along on this screen's
- * URL, so Cancel and the post-save redirect land on the list the user actually
- * left.
- */
-const listRoute = computed(() => ({ name: 'contacts', query: route.query }))
+const emit = defineEmits<{
+  saved: [contact: ContactDetail, mode: 'create' | 'edit']
+  /** Cancel, or "Back" after a failed load: the caller decides where that goes. */
+  cancel: []
+  /** The heading for whoever frames this form -- a page's <h1>, a Dialog's header. */
+  title: [title: string]
+}>()
 
 /** `FieldValue` is wider than the payload accepts: these fields only ever
     produce strings, but the type does not say so. */
@@ -136,9 +140,9 @@ const country = ref<CountryRef | null>(null)
 const tags = ref<ContactTagRef[]>([])
 
 const form = useResourceForm<ContactDetail>({
-  // A getter, not a plain value: vue-router reuses this component when only the
-  // param changes. `null` on the create route.
-  id: () => (route.params.id ? String(route.params.id) : null),
+  // A getter: the routed page reuses this component when only the param
+  // changes, and the prop follows it.
+  id: () => props.id,
   defaults: {
     last_name: null,
     first_name: null,
@@ -177,17 +181,7 @@ const form = useResourceForm<ContactDetail>({
   create: (values) => createContact(createPayload(values)),
   update: (id, changed) => updateContact(id, updatePayload(changed)),
   notFoundMessage: 'This contact no longer exists.',
-  onSaved: (contact, mode) =>
-    router.push(
-      mode === 'create'
-        ? // The backend's `search` matches the first name, the last name or the
-          // email, so the list opens on the row just created. Without it, with
-          // the default last-name-ascending sort and ten rows per page, a new
-          // contact can land on page 3 and the redirect looks like nothing
-          // happened.
-          { name: 'contacts', query: { search: contact.last_name } }
-        : listRoute.value,
-    ),
+  onSaved: (contact, mode) => emit('saved', contact, mode),
 })
 
 const { isNew, data, loading, loadError, saving, error, fieldErrors } = form
@@ -201,139 +195,135 @@ const title = computed(() => {
   return first ? `${first} ${last}` : last
 })
 const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
+
+watch(title, (value) => emit('title', value), { immediate: true })
 </script>
 
 <template>
-  <section class="page">
-    <header class="page__header">
-      <div>
-        <h1>{{ title }}</h1>
+  <Message v-if="loadError" severity="error" :closable="false" class="page__message">
+    <div class="form__error">
+      <span>{{ loadError }}</span>
+      <Button label="Back" size="small" severity="danger" outlined @click="emit('cancel')" />
+    </div>
+  </Message>
+
+  <Message v-if="error" severity="error" :closable="false" class="page__message">
+    {{ error }}
+  </Message>
+
+  <Card v-if="!loadError" class="contact-form">
+    <template #content>
+      <!-- Placeholders with the form's real shape, so the card does not jump
+           when the record lands. -->
+      <div v-if="loading" class="contact-form__skeleton">
+        <Skeleton v-for="n in 11" :key="n" height="3.2rem" />
       </div>
-    </header>
 
-    <Message v-if="loadError" severity="error" :closable="false" class="page__message">
-      <div class="page__error">
-        <span>{{ loadError }}</span>
-        <RouterLink :to="listRoute">
-          <Button label="Back to the list" size="small" severity="danger" outlined />
-        </RouterLink>
-      </div>
-    </Message>
+      <Form
+        v-else-if="data"
+        :data="data"
+        :save-label="saveLabel"
+        :saving="saving"
+        :errors="fieldErrors"
+        @save="form.save"
+      >
+        <template #default>
+          <!-- The last name is the only field the model requires. -->
+          <Field
+            name="last_name"
+            widget="string"
+            label="Last name"
+            required
+            :options="{ maxLength: 255, placeholder: 'Doe' }"
+          />
 
-    <Message v-if="error" severity="error" :closable="false" class="page__message">
-      {{ error }}
-    </Message>
+          <Field
+            name="first_name"
+            widget="string"
+            label="First name"
+            :options="{ maxLength: 255, placeholder: 'Jane' }"
+          />
 
-    <Card v-if="!loadError" class="contact-form">
-      <template #content>
-        <!-- Placeholders with the form's real shape, so the card does not jump
-             when the record lands. -->
-        <div v-if="loading" class="contact-form__skeleton">
-          <Skeleton v-for="n in 11" :key="n" height="3.2rem" />
-        </div>
+          <Field
+            name="email"
+            widget="string"
+            label="Email"
+            :options="{ maxLength: 255, placeholder: 'jane.doe@example.com' }"
+          />
 
-        <Form
-          v-else-if="data"
-          :data="data"
-          :save-label="saveLabel"
-          :saving="saving"
-          :errors="fieldErrors"
-          @save="form.save"
-        >
-          <template #default>
-            <!-- The last name is the only field the model requires. -->
-            <Field
-              name="last_name"
-              widget="string"
-              label="Last name"
-              required
-              :options="{ maxLength: 255, placeholder: 'Doe' }"
-            />
+          <Field name="mobile" widget="string" label="Mobile" :options="{ maxLength: 32 }" />
 
-            <Field
-              name="first_name"
-              widget="string"
-              label="First name"
-              :options="{ maxLength: 255, placeholder: 'Jane' }"
-            />
+          <!-- Stored as a calendar day: no time, no timezone. -->
+          <Field name="birth_date" widget="date" label="Birth date" />
 
-            <Field
-              name="email"
-              widget="string"
-              label="Email"
-              :options="{ maxLength: 255, placeholder: 'jane.doe@example.com' }"
-            />
+          <Field
+            name="number"
+            widget="string"
+            label="Number"
+            :options="{ maxLength: 32, placeholder: '12A' }"
+            help="Street number, not necessarily numeric (12A, 3 bis, …)."
+          />
 
-            <Field name="mobile" widget="string" label="Mobile" :options="{ maxLength: 32 }" />
+          <Field name="street" widget="string" label="Street" :options="{ maxLength: 255 }" />
 
-            <!-- Stored as a calendar day: no time, no timezone. -->
-            <Field name="birth_date" widget="date" label="Birth date" />
+          <Field name="zip" widget="string" label="Zip" :options="{ maxLength: 32 }" />
 
-            <Field
-              name="number"
-              widget="string"
-              label="Number"
-              :options="{ maxLength: 32, placeholder: '12A' }"
-              help="Street number, not necessarily numeric (12A, 3 bis, …)."
-            />
+          <Field name="city" widget="string" label="City" :options="{ maxLength: 255 }" />
 
-            <Field name="street" widget="string" label="Street" :options="{ maxLength: 255 }" />
+          <!-- A relation: the draft holds the ISO code, the dropdown is filled
+               by the countries endpoint and its filter box searches there.
+               `record` is what the field shows when it is read-only -- the
+               nested country the GET already returned, so that mode costs no
+               request. -->
+          <Field
+            name="country"
+            widget="many2one"
+            label="Country"
+            :options="{
+              fetch: searchCountries,
+              record: country,
+              permission: 'totem.country.read',
+            }"
+          />
 
-            <Field name="zip" widget="string" label="Zip" :options="{ maxLength: 32 }" />
+          <!-- The other relation, and the only list-valued field of the form:
+               the draft holds the tag ids, the chips are painted from the
+               tags the GET already nested, and /contact-tags/ is not called
+               until the dropdown is opened. -->
+          <Field
+            name="tags"
+            widget="many2many_tags"
+            label="Tags"
+            :options="{
+              fetch: searchContactTags,
+              records: tags,
+              permission: 'totem.contacttag.read',
+              placeholder: 'Add a tag…',
+            }"
+          />
+        </template>
 
-            <Field name="city" widget="string" label="City" :options="{ maxLength: 255 }" />
-
-            <!-- A relation: the draft holds the ISO code, the dropdown is filled
-                 by the countries endpoint and its filter box searches there.
-                 `record` is what the field shows when it is read-only -- the
-                 nested country the GET already returned, so that mode costs no
-                 request. -->
-            <Field
-              name="country"
-              widget="many2one"
-              label="Country"
-              :options="{
-                fetch: searchCountries,
-                record: country,
-                permission: 'totem.country.read',
-              }"
-            />
-
-            <!-- The other relation, and the only list-valued field of the form:
-                 the draft holds the tag ids, the chips are painted from the
-                 tags the GET already nested, and /contact-tags/ is not called
-                 until the dropdown is opened. -->
-            <Field
-              name="tags"
-              widget="many2many_tags"
-              label="Tags"
-              :options="{
-                fetch: searchContactTags,
-                records: tags,
-                permission: 'totem.contacttag.read',
-                placeholder: 'Add a tag…',
-              }"
-            />
-          </template>
-
-          <template #actions="{ dirty }">
-            <RouterLink :to="listRoute">
-              <Button label="Cancel" severity="secondary" text :disabled="saving" />
-            </RouterLink>
-            <!-- Nothing edited means nothing to PATCH, so on an existing record
-                 Save has no work to do. A create always has. -->
-            <Button
-              type="submit"
-              :label="saveLabel"
-              icon="pi pi-check"
-              :loading="saving"
-              :disabled="!isNew && !dirty"
-            />
-          </template>
-        </Form>
-      </template>
-    </Card>
-  </section>
+        <template #actions="{ dirty }">
+          <Button
+            label="Cancel"
+            severity="secondary"
+            text
+            :disabled="saving"
+            @click="emit('cancel')"
+          />
+          <!-- Nothing edited means nothing to PATCH, so on an existing record
+               Save has no work to do. A create always has. -->
+          <Button
+            type="submit"
+            :label="saveLabel"
+            icon="pi pi-check"
+            :loading="saving"
+            :disabled="!isNew && !dirty"
+          />
+        </template>
+      </Form>
+    </template>
+  </Card>
 </template>
 
 <style scoped>
@@ -347,7 +337,7 @@ const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
   gap: 1rem;
 }
 
-.page__error {
+.form__error {
   display: flex;
   align-items: center;
   gap: 1rem;

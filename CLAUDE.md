@@ -42,7 +42,8 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
     plugins/      primevue.ts
     resources/    one module per backend endpoint
     router/       index.ts (all routes + the single guard), constants.ts
-    views/        one folder per feature: contacts/, settings/, website/
+    pages/        routed screens: chrome + navigation; contacts/, settings/, website/
+    views/        reusable list/form views, router-free; same feature folders
 ```
 
 `app/` holds the application, the root holds the infrastructure — the same split as
@@ -88,7 +89,7 @@ toolchain is kept deliberately small.
 
 1. **English in all code.** Comments, identifiers, UI labels, placeholders, help text, error
    messages, `meta.title`, and commit messages. Several older screens still hold French strings —
-   `views/settings/UsersView.vue` is French while `UserFormView.vue` next to it is English — so
+   `views/settings/UserListView.vue` is French while `UserFormView.vue` next to it is English — so
    do **not** match a neighbouring French file. Retranslating them is a separate, explicitly
    requested job. `README.md` and `docs/` stay in French.
 
@@ -139,15 +140,27 @@ app.mount('#app')
 ### The layering rule
 
 ```
-api/  ──▶  resources/  ──▶  views/  ◀──  composables/
-(wire)     (per model)      (screen)     (display state)
+api/  ──▶  resources/  ──▶  views/  ──▶  pages/  ──▶  router/
+(wire)     (per model)      (content)    (route)
+                              ▲
+                         composables/ (display state)
 ```
 
 - `api/` is the wire contract: pure TypeScript, no Vue, no knowledge of any model.
 - `resources/` owns one endpoint each: its path, its `?fields=` list, its row/detail types, its
   accepted filters, its CRUD functions.
 - `composables/` own display state (paging, sorting, debouncing, dirtiness, errors).
-- `views/` wire the three together, declare the fields and columns, and build payloads.
+- `views/` wire the three together, declare the fields and columns, and build payloads. A view
+  is reusable — the same `ContactTagListView` serves `/contact-tags` and could sit in a `Dialog` —
+  so it **never imports `vue-router` or `@/router`, never renders `RouterLink`, `.page` or an
+  `<h1>`**. Props in (`id`, `syncUrl`, `pageSize`), events out (`open`, `loaded`, `saved`,
+  `cancel`, `deleted`, `title`). `can()` and `useConfirm()` are fine: neither needs a route.
+- `pages/` are what the router mounts: the page header (title, count, the **New** button) around
+  one or more views, and the translation of their events into navigation — carrying
+  `route.query` so Back lands on the same page/sort/filters, and the create redirect with
+  `?search=` so the new row is on screen. A page holds no `DataTable` and no `<Field>`.
+- Several views of one model on one page (a list or cards toggle) mount one at a time with
+  `v-if`: only the mounted one has `sync-url`, so the query string still has a single writer.
 
 **The load-bearing invariant: a composable never imports a `resources/` module.** It receives
 `fetchPage`, or `fetchOne` / `create` / `update`, as callbacks. That is what makes
@@ -207,9 +220,9 @@ Each resource declares **three sibling routes**, never nested under the list —
 keep the list mounted and its `syncUrl` watcher would fight the form over the query string:
 
 ```
-contacts        → ContactsView      [totem.contact.read]
-contacts/new    → ContactFormView   [totem.contact.create]
-contacts/:id    → ContactFormView   [totem.contact.read, totem.contact.update]
+contacts        → ContactsPage   (ContactListView)   [totem.contact.read]
+contacts/new    → ContactPage    (ContactFormView)   [totem.contact.create]
+contacts/:id    → ContactPage    (ContactFormView)   [totem.contact.read, totem.contact.update]
 ```
 
 Paths mirror the API's own (`/contacts`, `/contact-tags`, `/website/menus`, `/website/pages`).
@@ -224,16 +237,23 @@ serves create and edit; the difference is only the scopes.
    `<NAME>_LIST_FIELDS` array declared `as const satisfies readonly (keyof XxxRow)[]`, a
    `<NAME>_SORTABLE` list of what the backend accepts in `?ordering=`, a `Filters` type, and a
    three-line `listXxx()` calling `fetchList`.
-2. In `app/src/views/<feature>/XxxView.vue`: a `FILTER_FIELDS` dict, then
-   `useFilter<XxxFilters>(FILTER_FIELDS)` and `useResourceList({ fetchPage, filters, pageSize,
-   sortField, sortable, syncUrl: true })` behind a PrimeVue `DataTable lazy paginator row-hover
+2. In `app/src/views/<feature>/XxxListView.vue`: `syncUrl` / `pageSize` props (`syncUrl`
+   defaults to **false**), a `FILTER_FIELDS` dict, then
+   `useFilter<XxxFilters>(FILTER_FIELDS, { syncUrl: props.syncUrl })` — EXPLICITLY, because
+   `useFilter` reads the URL unless told not to, and a list in a modal would pick up the host
+   page's filters — and `useResourceList({ fetchPage, filters, pageSize, sortField, sortable,
+   syncUrl: props.syncUrl })` behind a PrimeVue `DataTable lazy paginator row-hover
    removable-sort data-key="id"`, with `<MultiRecordFilters>` as the `#header` toolbar, an
-   `#empty` block, and `Skeleton` rows while `isInitialLoad`.
-3. Three routes in `router/index.ts` with `meta.permissions`, and an entry in `layouts/menu.ts`.
+   `#empty` block, and `Skeleton` rows while `isInitialLoad`. The pencil emits `open`; every
+   settled response emits `loaded`.
+3. In `app/src/pages/<feature>/XxxsPage.vue`: the header, the **New** link, and
+   `<XxxListView sync-url @open="..." @loaded="...">`, `open` pushing the edit route with
+   `route.query`.
+4. Three routes in `router/index.ts` with `meta.permissions`, and an entry in `layouts/menu.ts`.
 
-Copy `views/contacts/ContactTagsView.vue` — it is the smallest complete example. Wrap permission
-checks in a `computed`, never a bare `can()` in the template: `can()` instantiates the store on
-every evaluation. `editRoute(id)` carries `route.query` along so Back returns to the same page.
+Copy `views/contacts/ContactTagListView.vue` + `pages/contacts/ContactTagsPage.vue` — the smallest
+complete example. Wrap permission checks in a `computed`, never a bare `can()` in the template:
+`can()` instantiates the store on every evaluation.
 
 ### The filter bar
 
@@ -277,8 +297,13 @@ The conversions live in `components/list/filters.ts`, Vue-free and with a spec, 
 
 `useResourceForm({ id, defaults, toForm, fetchOne, create, update, notFoundMessage, onSaved })`
 holds everything that differs between create and edit; the view only declares its `<Field>`s.
-Pass `id` as a **getter** (`() => route.params.id ? String(route.params.id) : null`): vue-router
-reuses the component when only the param changes.
+`XxxFormView` takes `id: string | null` as a **prop** and passes it as a getter
+(`id: () => props.id`): vue-router reuses the page when only the param changes, and the prop
+follows. `onSaved` only emits `saved(record, mode)` (mode is `'create' | 'edit'`); Cancel and
+"Back" after a failed load emit `cancel`, a delete emits `deleted`, and a `watch` on the computed
+title emits `title` so the page's `<h1>` — or a Dialog's header — can show it. `XxxPage` turns
+those into `router.push`. A Delete button lives in the form's `#actions` row, left-aligned
+(`.form__delete { margin-right: auto }`), not in the page header: it belongs to the view.
 
 Payloads are built **key by key** in local `createPayload(values)` / `updatePayload(changed)`
 helpers — never by copying the draft. See *the PATCH asymmetry* below for why that is not
@@ -318,7 +343,7 @@ keeps it usable standalone, outside a `<Form>`.
    `input-id` and use `v-slot="{ labelId }"` with `role="radiogroup"` + `aria-labelledby`.
    `CharField.vue` is the canonical minimal example.
 4. Register it in `Field.vue`'s `WIDGETS`.
-5. Exercise it on `/form-demo` (`views/FormDemoView.vue`, `auth: 'none'`, absent from the menu),
+5. Exercise it on `/form-demo` (`pages/FormDemoPage.vue`, `auth: 'none'`, absent from the menu),
    which runs the whole framework with no backend and no session.
 
 ### Invariants every widget must hold
@@ -465,8 +490,9 @@ a folder boundary uses `@/`; siblings inside `form/fields/` are relative. `verba
 and `isolatedModules` are on, so `import type` / inline `type` specifiers are **mandatory** for
 type-only imports.
 
-Naming: `PascalCase.vue` for components, `camelCase.ts` for modules, `XxxView.vue` for routed views
-and `XxxFormView.vue` for their create/edit sibling, `XxxField.vue` for a registry widget,
+Naming: `PascalCase.vue` for components, `camelCase.ts` for modules, `XxxPage.vue` for what the
+router mounts (plural for a list page, singular for its create/edit page, like the route names),
+`XxxListView.vue` / `XxxFormView.vue` for the reusable views, `XxxField.vue` for a registry widget,
 `XxxWidget.vue` for a detached one. `SCREAMING_SNAKE` for module-level constants. Template props
 are kebab-case (`:model-value`, `:save-label`, `data-key`) even though the TS side is camelCase.
 
@@ -524,14 +550,15 @@ have had. Read `git log -1` for the standard before writing one.
 
 ## Known open items
 
-From `README.md`'s "Prochaines étapes", plus one deferred refactor:
+From `README.md`'s "Prochaines étapes", plus the follow-up of the pages/views split:
 
 1. Map 422 responses onto the user form's fields.
 2. Replace the hand-written API client with one generated from `/api/v1/openapi.json`.
 3. Automatic token refresh — **blocked on the backend**, which sets `REFRESH_TOKEN_EXPIRE_SECONDS`
    (5 h) shorter than `ACCESS_TOKEN_EXPIRE_SECONDS` (10 h), so the refresh token always dies before
    the token it should renew. Fix that first.
-4. A `src/modules/<feature>/` split (`api/`, `components/`, `views/`, `routes.ts`, `menu.ts`) so a
-   resource's table or form can open in a modal from anywhere, with `views/` owning the router and
-   `components/` receiving props only. Designed and agreed, then **deliberately postponed** — do
-   not start it as a side effect of another task.
+4. Open a view in a modal for real: the first consumer (e.g. "+ new tag" from the contact form
+   opening `ContactTagFormView` in a `Dialog`), then row selection on the list views
+   (`selection: 'single' | 'multiple'`), which needs its own `Map` because a lazy `DataTable`
+   forgets checked rows across pages. The `pages/` / `views/` split made it possible; nothing
+   has used it yet.
