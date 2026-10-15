@@ -28,7 +28,7 @@ function openRecord(id: string): void {
 </script>
 
 <template>
-  <section class="page">
+  <section class="page page--wide">
     <header class="page__header">
       <div>
         <h1>Website pages</h1>
