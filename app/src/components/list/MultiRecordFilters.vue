@@ -13,6 +13,7 @@ import Form from '@/components/form/Form.vue'
 import {
   activeFilterEntries,
   DEFAULT_SEARCH_KEY,
+  dialogFilterEntries,
   filterFormData,
   type ActiveFilter,
   type FilterFields,
@@ -20,7 +21,9 @@ import {
 } from './filters'
 
 /*
- * The filter bar above a list: a search box, and a button opening the rest.
+ * The filter bar above a list: a search box, and a button opening the rest --
+ * when there IS a rest: a list declaring nothing but its search shows no
+ * Filters button and mounts no dialog (see dialogFilterEntries).
  *
  * Props in, events out, and no state of its own beyond the dialog -- the values
  * belong to the screen's `useFilter`, which is also what keeps them in the URL.
@@ -80,11 +83,8 @@ function onSearch(next: string | undefined): void {
   emit('patch', { [props.searchKey]: next ?? '' })
 }
 
-/** Everything the dialog offers -- the search box's own field excluded, since
-    it is already on screen and two controls over one value can only disagree. */
-const dialogFields = computed(() =>
-  Object.entries(props.fields).filter(([name]) => name !== props.searchKey),
-)
+/** Everything the dialog offers: the search box's own field excluded. */
+const dialogFields = computed(() => dialogFilterEntries(props.fields, props.searchKey))
 
 const visible = ref(false)
 
@@ -146,6 +146,7 @@ function apply(values: FormData): void {
          filters are hidden behind this button, so it belongs on the button
          itself, and PrimeVue already renders one there. -->
     <Button
+      v-if="dialogFields.length"
       type="button"
       label="Filters"
       icon="pi pi-filter"
@@ -168,6 +169,7 @@ function apply(values: FormData): void {
     />
 
     <Dialog
+      v-if="dialogFields.length"
       v-model:visible="visible"
       modal
       dismissable-mask
@@ -185,12 +187,6 @@ function apply(values: FormData): void {
             :help="field.help_text"
             :options="field.options"
           />
-
-          <!-- A screen may declare nothing but its search: say so rather than
-               open an empty box the user has to interpret. -->
-          <p v-if="!dialogFields.length" class="filters__none">
-            This list has no other filter.
-          </p>
         </template>
 
         <template #actions>
@@ -229,10 +225,5 @@ function apply(values: FormData): void {
 
 .filters__spacer {
   flex: 1;
-}
-
-.filters__none {
-  margin: 0;
-  color: var(--app-muted);
 }
 </style>

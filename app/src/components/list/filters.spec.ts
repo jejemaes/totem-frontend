@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   activeFilterEntries,
   blankFilters,
+  dialogFilterEntries,
   filterDisplay,
   filterFormData,
   filtersFromQuery,
@@ -173,5 +174,24 @@ describe('activeFilterEntries', () => {
 
   it('drops a filter whose value its field cannot express', () => {
     expect(activeFilterEntries(FIELDS, { level: 'nope' }, 'search')).toEqual([])
+  })
+})
+
+describe('dialogFilterEntries', () => {
+  it('offers every declared filter but the search one, in declaration order', () => {
+    expect(dialogFilterEntries(FIELDS, 'search').map(([name]) => name)).toEqual([
+      'login',
+      'is_active',
+      'seats',
+      'level',
+    ])
+  })
+
+  it('follows the search key a screen chose', () => {
+    expect(dialogFilterEntries(FIELDS, 'login').map(([name]) => name)).toContain('search')
+  })
+
+  it('is empty when the search is all a list declares, which hides the button', () => {
+    expect(dialogFilterEntries({ search: FIELDS.search! }, 'search')).toEqual([])
   })
 })

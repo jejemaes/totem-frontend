@@ -255,3 +255,19 @@ export function activeFilterEntries(
   }
   return active
 }
+
+/**
+ * The filters the dialog offers: every declared one but the search field,
+ * which already has its box in the toolbar -- two controls over one value can
+ * only disagree.
+ *
+ * An EMPTY result is what hides the Filters button altogether: a list that
+ * declares nothing but its search has nothing behind that button, and a
+ * dialog saying so is a click spent learning nothing.
+ */
+export function dialogFilterEntries(
+  fields: FilterFields,
+  searchKey: string,
+): [name: string, field: FilterField][] {
+  return Object.entries(fields).filter(([name]) => name !== searchKey)
+}
