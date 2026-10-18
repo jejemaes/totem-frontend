@@ -4,6 +4,12 @@ import { useAuthStore } from '@/auth/authStore'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import BlankLayout from '@/layouts/BlankLayout.vue'
 
+import AccountCategoriesPage from '@/pages/accounting/AccountCategoriesPage.vue'
+import AccountCategoryPage from '@/pages/accounting/AccountCategoryPage.vue'
+import AccountMovementPage from '@/pages/accounting/AccountMovementPage.vue'
+import AccountMovementsPage from '@/pages/accounting/AccountMovementsPage.vue'
+import AccountPage from '@/pages/accounting/AccountPage.vue'
+import AccountsPage from '@/pages/accounting/AccountsPage.vue'
 import ContactPage from '@/pages/contacts/ContactPage.vue'
 import ContactsPage from '@/pages/contacts/ContactsPage.vue'
 import ContactTagPage from '@/pages/contacts/ContactTagPage.vue'
@@ -98,6 +104,92 @@ export const router = createRouter({
           meta: {
             title: 'Edit tag',
             permissions: ['totem.contacttag.read', 'totem.contacttag.update'],
+          },
+        },
+        // Accounting. Paths mirror the API's own two-segment prefix
+        // (/accounting/accounts/, /accounting/categories/), with the usual
+        // list / new / :id shape for each.
+        {
+          path: 'accounting/accounts',
+          name: 'accounting-accounts',
+          component: AccountsPage,
+          meta: { title: 'Accounts', permissions: ['totem.account.read'] },
+        },
+        {
+          path: 'accounting/accounts/new',
+          name: 'accounting-account-create',
+          component: AccountPage,
+          meta: { title: 'New account', permissions: ['totem.account.create'] },
+        },
+        {
+          path: 'accounting/accounts/:id',
+          name: 'accounting-account-edit',
+          component: AccountPage,
+          meta: {
+            title: 'Edit account',
+            permissions: ['totem.account.read', 'totem.account.update'],
+          },
+        },
+        // Movements are only ever reached THROUGH an account: a movement
+        // belongs to its account for good, so the account is part of the path
+        // rather than a filter the user could clear. Still siblings, not
+        // children of the account routes, for the same reason as every other
+        // form: a mounted parent list would fight the form over the query
+        // string. More segments than 'accounts/:id', so neither can swallow
+        // the other.
+        //
+        // `totem.account.read` on all three: the list page reads the account
+        // for its heading.
+        {
+          path: 'accounting/accounts/:accountId/movements',
+          name: 'accounting-account-movements',
+          component: AccountMovementsPage,
+          meta: {
+            title: 'Movements',
+            permissions: ['totem.account.read', 'totem.accountmovement.read'],
+          },
+        },
+        {
+          path: 'accounting/accounts/:accountId/movements/new',
+          name: 'accounting-account-movement-create',
+          component: AccountMovementPage,
+          meta: {
+            title: 'New movement',
+            permissions: ['totem.account.read', 'totem.accountmovement.create'],
+          },
+        },
+        {
+          path: 'accounting/accounts/:accountId/movements/:id',
+          name: 'accounting-account-movement-edit',
+          component: AccountMovementPage,
+          meta: {
+            title: 'Edit movement',
+            permissions: [
+              'totem.account.read',
+              'totem.accountmovement.read',
+              'totem.accountmovement.update',
+            ],
+          },
+        },
+        {
+          path: 'accounting/categories',
+          name: 'accounting-categories',
+          component: AccountCategoriesPage,
+          meta: { title: 'Accounting categories', permissions: ['totem.accountcategory.read'] },
+        },
+        {
+          path: 'accounting/categories/new',
+          name: 'accounting-category-create',
+          component: AccountCategoryPage,
+          meta: { title: 'New category', permissions: ['totem.accountcategory.create'] },
+        },
+        {
+          path: 'accounting/categories/:id',
+          name: 'accounting-category-edit',
+          component: AccountCategoryPage,
+          meta: {
+            title: 'Edit category',
+            permissions: ['totem.accountcategory.read', 'totem.accountcategory.update'],
           },
         },
         // The site's own settings: ONE route, not the list / new / :id shape
