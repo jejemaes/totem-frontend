@@ -36,6 +36,25 @@ export const menu: MenuSection[] = [
     ],
   },
   {
+    label: 'Accounting',
+    icon: 'pi pi-wallet',
+    // No Movements entry: movements are always reached through their account.
+    items: [
+      {
+        label: 'Accounts',
+        icon: 'pi pi-book',
+        to: '/accounting/accounts',
+        permission: 'totem.account.read',
+      },
+      {
+        label: 'Categories',
+        icon: 'pi pi-tags',
+        to: '/accounting/categories',
+        permission: 'totem.accountcategory.read',
+      },
+    ],
+  },
+  {
     label: 'Website',
     icon: 'pi pi-globe',
     items: [
