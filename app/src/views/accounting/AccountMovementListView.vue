@@ -30,7 +30,10 @@ import MultiRecordFilters from '@/components/list/MultiRecordFilters.vue'
 import type { FilterFields } from '@/components/list/filters'
 import { useFilter } from '@/composables/useFilter'
 import { useResourceList } from '@/composables/useResourceList'
-import { searchApplicableCategories } from '@/resources/accountCategories'
+import {
+  accountCategoryDisplayNames,
+  searchApplicableCategories,
+} from '@/resources/accountCategories'
 import {
   ACCOUNT_MOVEMENT_SORTABLE,
   deleteAccountMovement,
@@ -85,6 +88,7 @@ const FILTER_FIELDS: FilterFields = {
     help_text: 'Keep the movements filed under this category.',
     options: {
       fetch: searchApplicableCategories(props.accountId),
+      resolve: accountCategoryDisplayNames,
       permission: 'totem.accountcategory.read',
     },
   },

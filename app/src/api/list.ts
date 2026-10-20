@@ -139,6 +139,43 @@ export async function fetchAllPages<T>(
   return rows
 }
 
+// -------------------------------------------------------------- display names
+
+/**
+ * The ids an endpoint's `display-name/` route is asked for, deduplicated and
+ * with the blanks dropped -- or null when nothing is left to ask.
+ *
+ * Null rather than an empty string because the backend answers a missing or
+ * empty `id` with a 422, not with `[]`: an empty list is the caller's business
+ * to short-circuit, never a request to send.
+ */
+export function displayNameIds(ids: readonly string[]): string | null {
+  const kept = [...new Set(ids.map((id) => id.trim()).filter((id) => id !== ''))]
+  return kept.length ? kept.join(',') : null
+}
+
+/**
+ * `GET <path>display-name/?id=a,b,c`: the label of a few known records.
+ *
+ * What a relation widget needs when it holds an id and nothing to label it with
+ * -- a filter restored from a URL. One request for exactly those rows, where
+ * `fetchAllPages` would load the whole table and still miss them past its cap.
+ *
+ * One comma-separated `id`, not a repeated one: the form the backend reads.
+ * An id that is unknown or out of the user's reach is simply ABSENT from the
+ * answer -- the backend does not tell the two apart, and neither does this.
+ */
+export async function fetchDisplayNames<T>(
+  path: string,
+  ids: readonly string[],
+  signal?: AbortSignal,
+): Promise<T[]> {
+  const joined = displayNameIds(ids)
+  if (joined === null) return []
+  const params = new URLSearchParams({ id: joined })
+  return apiFetch<T[]>(`${path}display-name/?${params.toString()}`, { signal })
+}
+
 // ----------------------------------------------------------------- URL state
 
 /** Structural stand-in for vue-router's LocationQuery, so this stays router-free. */

@@ -27,8 +27,8 @@ import {
   type ContactFilters,
   type ContactRow,
 } from '@/resources/contacts'
-import { searchContactTags } from '@/resources/contactTags'
-import { searchCountries } from '@/resources/countries'
+import { contactTagDisplayNames, searchContactTags } from '@/resources/contactTags'
+import { countryDisplayNames, searchCountries } from '@/resources/countries'
 
 const props = withDefaults(
   defineProps<{
@@ -81,14 +81,23 @@ const FILTER_FIELDS: FilterFields = {
     help_text: 'Keep the contacts of one country.',
     // The same loader the contact form's own country field uses: the endpoint,
     // its `?fields=` list and the name of its search parameter all belong to
-    // the resource module, not here.
-    options: { fetch: searchCountries, permission: 'totem.country.read' },
+    // the resource module, not here. `resolve` labels a country restored from
+    // the URL, which arrives as a bare code.
+    options: {
+      fetch: searchCountries,
+      resolve: countryDisplayNames,
+      permission: 'totem.country.read',
+    },
   },
   tag: {
     type: 'many2one',
     label: 'Tag',
     help_text: 'Keep the contacts carrying this tag.',
-    options: { fetch: searchContactTags, permission: 'totem.contacttag.read' },
+    options: {
+      fetch: searchContactTags,
+      resolve: contactTagDisplayNames,
+      permission: 'totem.contacttag.read',
+    },
   },
 }
 

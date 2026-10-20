@@ -1,5 +1,11 @@
 import { apiFetch, patchJson, postJson } from '@/api/client'
-import { fetchAllPages, fetchList, type ListQuery, type Page } from '@/api/list'
+import {
+  fetchAllPages,
+  fetchDisplayNames,
+  fetchList,
+  type ListQuery,
+  type Page,
+} from '@/api/list'
 import type { RelationRecord } from '@/components/form/fields/many2one'
 
 /**
@@ -203,6 +209,20 @@ export function searchUsers(
     { filters: { search } },
     signal,
   )
+}
+
+/**
+ * The labels of a few known users: `RelationResolve` shaped, for a filter
+ * that holds an id and nothing to label it with.
+ *
+ * `id` and `login`, the same two keys as the dropdown, so both are labelled
+ * alike.
+ */
+export function userDisplayNames(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<UserRef[]> {
+  return fetchDisplayNames<UserRef>('/users/', ids, signal)
 }
 
 /**

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  displayNameIds,
   listParams,
   MAX_PAGE_SIZE,
   normaliseFilters,
@@ -132,5 +133,20 @@ describe('readListQuery', () => {
 
   it('takes the first value when a key is repeated', () => {
     expect(readListQuery({ search: ['a', 'b'] }).filters.search).toBe('a')
+  })
+})
+
+describe('displayNameIds', () => {
+  it('joins the ids with commas, the form the backend reads', () => {
+    expect(displayNameIds(['01JA', '01JB'])).toBe('01JA,01JB')
+  })
+
+  it('drops the blanks and the duplicates', () => {
+    expect(displayNameIds([' 01JA ', '', '01JA', '  '])).toBe('01JA')
+  })
+
+  it('answers null when nothing is left: an empty id is a 422, not []', () => {
+    expect(displayNameIds([])).toBeNull()
+    expect(displayNameIds(['', ' '])).toBeNull()
   })
 })

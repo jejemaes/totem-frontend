@@ -12,7 +12,13 @@
  */
 
 import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
-import { fetchAllPages, fetchList, type ListQuery, type Page } from '@/api/list'
+import {
+  fetchAllPages,
+  fetchDisplayNames,
+  fetchList,
+  type ListQuery,
+  type Page,
+} from '@/api/list'
 import type { RelationFetch } from '@/components/form/fields/many2one'
 
 import type { AccountRef } from './accounts'
@@ -103,6 +109,19 @@ export function searchApplicableCategories(accountId: string): RelationFetch {
       { filters: { search, applicable_to: accountId } },
       signal,
     )
+}
+
+/**
+ * The labels of a few known account categories: `RelationResolve` shaped, for a filter
+ * that holds an id and nothing to label it with.
+ *
+ * `id`, `name` and `color`: the dot is painted too.
+ */
+export function accountCategoryDisplayNames(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<AccountCategoryRef[]> {
+  return fetchDisplayNames<AccountCategoryRef>('/accounting/categories/', ids, signal)
 }
 
 /** The model has nothing the list row does not show. */

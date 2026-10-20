@@ -60,13 +60,14 @@ export interface FilterField {
    */
   help_text?: string
   /**
-   * Forwarded to the widget: `choices` for a selection, `fetch` for a many2one.
+   * Forwarded to the widget: `choices` for a selection, `fetch` and `resolve`
+   * for a many2one.
    *
    * A many2one filter cannot carry `record`, unlike one on a form -- there is
-   * no fetched row behind a filter, only the id a URL carried -- so the control
-   * shows that bare id until its dropdown is first opened. That is
-   * ManyToOneField's documented behaviour, and it is why a filter is better
-   * declared as a `selection` whenever the candidates are a short fixed list.
+   * no fetched row behind a filter, only the id a URL carried. `resolve` (the
+   * resource's `xxxDisplayNames`) is what labels it: without it the control
+   * shows that bare id until its dropdown is first opened, and the dialog is
+   * remounted on every open, so that is EVERY time a link or Back restored it.
    */
   options?: FieldOptions
 }

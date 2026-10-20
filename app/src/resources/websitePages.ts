@@ -9,7 +9,13 @@
  */
 
 import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
-import { fetchAllPages, fetchList, type ListQuery, type Page } from '@/api/list'
+import {
+  fetchAllPages,
+  fetchDisplayNames,
+  fetchList,
+  type ListQuery,
+  type Page,
+} from '@/api/list'
 import type { RelationRecord } from '@/components/form/fields/many2one'
 
 /**
@@ -121,6 +127,19 @@ export function searchWebsitePages(
     { filters: { search } },
     signal,
   )
+}
+
+/**
+ * The labels of a few known website pages: `RelationResolve` shaped, for a filter
+ * that holds an id and nothing to label it with.
+ *
+ * `id`, `title` and `slug`, as WEBSITE_PAGE_RELATION_FIELDS asks of the list.
+ */
+export function websitePageDisplayNames(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<WebsitePageRef[]> {
+  return fetchDisplayNames<WebsitePageRef>('/website/pages/', ids, signal)
 }
 
 /**

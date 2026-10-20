@@ -10,7 +10,13 @@
  */
 
 import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
-import { fetchAllPages, fetchList, type ListQuery, type Page } from '@/api/list'
+import {
+  fetchAllPages,
+  fetchDisplayNames,
+  fetchList,
+  type ListQuery,
+  type Page,
+} from '@/api/list'
 
 import type { WebsitePageRef } from './websitePages'
 
@@ -124,6 +130,20 @@ export function searchWebsiteMenus(
     { filters: { search } },
     signal,
   )
+}
+
+/**
+ * The labels of a few known menu items: `RelationResolve` shaped, for a filter
+ * that holds an id and nothing to label it with.
+ *
+ * `id` and `name` only -- no `parent_path`, which the generic label does not
+ * read anyway.
+ */
+export function websiteMenuDisplayNames(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<WebsiteMenuRef[]> {
+  return fetchDisplayNames<WebsiteMenuRef>('/website/menus/', ids, signal)
 }
 
 /** What GET /website/menus/{id}/ returns: the full MenuSchema. */
