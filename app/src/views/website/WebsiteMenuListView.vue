@@ -24,10 +24,15 @@ import {
   listWebsiteMenus,
   searchWebsiteMenus,
   WEBSITE_MENU_SORTABLE,
+  websiteMenuDisplayNames,
   type WebsiteMenuFilters,
   type WebsiteMenuRow,
 } from '@/resources/websiteMenus'
-import { searchWebsitePages } from '@/resources/websitePages'
+import {
+  displayPage,
+  searchWebsitePages,
+  websitePageDisplayNames,
+} from '@/resources/websitePages'
 
 const props = withDefaults(
   defineProps<{
@@ -72,14 +77,25 @@ const FILTER_FIELDS: FilterFields = {
     label: 'Parent',
     help_text: 'Keep the direct children of one menu item.',
     // The same loader the menu form's own parent field uses: the endpoint and
-    // its `?fields=` list belong to the resource module, not here.
-    options: { fetch: searchWebsiteMenus, permission: 'totem.websitemenu.read' },
+    // its `?fields=` list belong to the resource module, not here. `resolve`
+    // labels a parent restored from the URL, which arrives as a bare id.
+    options: {
+      fetch: searchWebsiteMenus,
+      resolve: websiteMenuDisplayNames,
+      permission: 'totem.websitemenu.read',
+    },
   },
   target_page: {
     type: 'many2one',
     label: 'Target page',
     help_text: 'Keep the items pointing at one page.',
-    options: { fetch: searchWebsitePages, permission: 'totem.websitepage.read' },
+    options: {
+      fetch: searchWebsitePages,
+      resolve: websitePageDisplayNames,
+      // A page has a `title`, not a `name`: the generic label would be its id.
+      relationDisplay: displayPage,
+      permission: 'totem.websitepage.read',
+    },
   },
 }
 

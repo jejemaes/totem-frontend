@@ -7,7 +7,13 @@
  */
 
 import { apiFetch, patchJson, postJson } from '@/api/client'
-import { fetchAllPages, fetchList, type ListQuery, type Page } from '@/api/list'
+import {
+  fetchAllPages,
+  fetchDisplayNames,
+  fetchList,
+  type ListQuery,
+  type Page,
+} from '@/api/list'
 
 /**
  * One row of the list.
@@ -82,6 +88,19 @@ export function searchContactTags(
     { filters: { search } },
     signal,
   )
+}
+
+/**
+ * The labels of a few known contact tags: `RelationResolve` shaped, for a filter
+ * that holds an id and nothing to label it with.
+ *
+ * `id`, `name` and `color`: the dot is painted too.
+ */
+export function contactTagDisplayNames(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<ContactTagRow[]> {
+  return fetchDisplayNames<ContactTagRow>('/contact-tags/', ids, signal)
 }
 
 /**

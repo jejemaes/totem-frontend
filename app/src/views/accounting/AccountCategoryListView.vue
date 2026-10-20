@@ -29,7 +29,7 @@ import {
   type AccountCategoryFilters,
   type AccountCategoryRow,
 } from '@/resources/accountCategories'
-import { displayAccount, searchAccounts } from '@/resources/accounts'
+import { accountDisplayNames, displayAccount, searchAccounts } from '@/resources/accounts'
 
 const props = withDefaults(
   defineProps<{
@@ -69,6 +69,7 @@ const FILTER_FIELDS: FilterFields = {
     help_text: 'Keep the categories owned by this account. General ones are left out.',
     options: {
       fetch: searchAccounts,
+      resolve: accountDisplayNames,
       relationDisplay: displayAccount,
       permission: 'totem.account.read',
     },

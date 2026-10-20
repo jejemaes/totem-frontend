@@ -14,7 +14,12 @@ import type {
   HtmlToolbarGroup,
   HtmlWidgetFetch,
 } from './html'
-import type { RelationDisplay, RelationFetch, RelationRecord } from './many2one'
+import type {
+  RelationDisplay,
+  RelationFetch,
+  RelationRecord,
+  RelationResolve,
+} from './many2one'
 
 /** The widget names accepted by `<Field widget="...">`. */
 export type Widget =
@@ -93,6 +98,16 @@ export interface FieldOptions {
    * of its search parameter, all of which belong to a resource module.
    */
   fetch?: RelationFetch
+  /**
+   * ManyToOneField: labels a value that came with no `record` -- one request,
+   * fired on mount and on each new value, ONLY when nothing else labels it.
+   *
+   * Absent, the field shows the bare id until its dropdown is first opened.
+   * That is fine on a form, which passes `record`, and wrong on a filter, which
+   * cannot: all a filter restored from a URL holds is the id. A many2one filter
+   * should therefore always pass the resource's `xxxDisplayNames`.
+   */
+  resolve?: RelationResolve
   /**
    * ManyToOneField / MediaImageField: the related record as the resource
    * returned it, nested. It is what read-only displays -- with it, that mode

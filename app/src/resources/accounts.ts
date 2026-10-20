@@ -7,7 +7,13 @@
  */
 
 import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
-import { fetchAllPages, fetchList, type ListQuery, type Page } from '@/api/list'
+import {
+  fetchAllPages,
+  fetchDisplayNames,
+  fetchList,
+  type ListQuery,
+  type Page,
+} from '@/api/list'
 import type { RelationRecord } from '@/components/form/fields/many2one'
 import { toNumberOrNull } from '@/components/form/fields/values'
 
@@ -127,6 +133,19 @@ export function searchAccounts(
     { filters: { search } },
     signal,
   )
+}
+
+/**
+ * The labels of a few known accounts: `RelationResolve` shaped, for a filter
+ * that holds an id and nothing to label it with.
+ *
+ * `id`, `code` and `name`: what displayAccount reads.
+ */
+export function accountDisplayNames(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<AccountRef[]> {
+  return fetchDisplayNames<AccountRef>('/accounting/accounts/', ids, signal)
 }
 
 /**

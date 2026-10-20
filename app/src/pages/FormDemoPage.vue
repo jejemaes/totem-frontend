@@ -10,6 +10,7 @@ import type {
   HtmlImageUpload,
   HtmlWidgetFetch,
 } from '@/components/form/fields/html'
+import type { RelationFetch, RelationResolve } from '@/components/form/fields/many2one'
 import FieldSwitch from '@/components/form/FieldSwitch.vue'
 import Field from '@/components/form/fields/Field.vue'
 import Form from '@/components/form/Form.vue'
@@ -36,6 +37,9 @@ const data = ref<FormData>({
   due_date: '2024-03-31',
   seen_at: '2024-03-31T14:22:00+02:00',
   swatch: 12,
+  // A bare id and NO `record` -- what a many2one filter restored from a URL
+  // holds. Only `demoResolve` can label it before the dropdown is opened.
+  country: 'BE',
   target_page: 'about-us',
   target_link: null,
   active: true,
@@ -215,6 +219,28 @@ const demoUpload: HtmlImageUpload = (file) =>
     reader.readAsDataURL(file)
   })
 
+/*
+ * A fake country endpoint, for the many2one: `fetch` searches it, `resolve`
+ * labels a value by id, as the backend's `display-name/` route does. The delay
+ * is there so the bare id is visible for a moment before the label lands.
+ */
+const COUNTRIES = [
+  { id: 'BE', name: 'Belgium' },
+  { id: 'FR', name: 'France' },
+  { id: 'LU', name: 'Luxembourg' },
+  { id: 'NL', name: 'Netherlands' },
+]
+
+const demoCountries: RelationFetch = async (search) => {
+  const term = search?.toLowerCase() ?? ''
+  return COUNTRIES.filter((country) => country.name.toLowerCase().includes(term))
+}
+
+const demoResolve: RelationResolve = (ids) =>
+  new Promise((resolve) => {
+    setTimeout(() => resolve(COUNTRIES.filter((country) => ids.includes(country.id))), 600)
+  })
+
 const saved = ref<FormData | null>(null)
 const changed = ref<FormData | null>(null)
 
@@ -256,6 +282,8 @@ const DEFINITION = `<Form :data="data" @save="onSave">
   <Field name="due_date"    widget="date"      label="Due date" />
   <Field name="seen_at"     widget="datetime"  label="Seen at" />
   <Field name="swatch"      widget="color"     label="Swatch" :options="{ max: 15 }" />
+  <Field name="country"     widget="many2one"  label="Country"
+         :options="{ fetch: demoCountries, resolve: demoResolve }" />
   <Field name="cover"       widget="media_image" label="Cover image"
          :options="{ record: demoCover, browseImages: demoBrowse,
                      uploadImage: demoUpload, maxUploadBytes: 1024 }" />
@@ -321,6 +349,11 @@ const DEFINITION = `<Form :data="data" @save="onSave">
 
             <Field name="swatch" widget="color" label="Swatch" :options="{ max: 15 }"
                    help="The value is a palette index; click the selected one again to clear it." />
+
+            <Field name="country" widget="many2one" label="Country"
+                   :options="{ fetch: demoCountries, resolve: demoResolve }"
+                   help="Starts with a bare id and no record, like a filter restored from a
+                         URL: the id shows first, then the label `resolve` fetched." />
 
             <!-- A relation whose value is the media's id, picked from the
                  editor's own modal. `maxUploadBytes` is deliberately tiny here:

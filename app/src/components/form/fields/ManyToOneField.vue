@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Message from 'primevue/message'
 import Select from 'primevue/select'
-import { computed, onScopeDispose, ref, shallowRef, useId } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef, useId, watch } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
@@ -10,6 +10,7 @@ import ColorDot from '@/components/ColorDot.vue'
 import FieldWrapper from './FieldWrapper.vue'
 import {
   displayRelation,
+  needsResolve,
   relationRecordFor,
   toRelationOptions,
   toRelationValue,
@@ -39,6 +40,11 @@ import type { FieldValue, WidgetProps } from './types'
  * five requests to fill dropdowns the user may never open. The consequence is
  * that `options.record` is what labels the current value until the first open,
  * so an edit form that omits it shows a bare id.
+ *
+ * The one exception is `options.resolve`: a single request for the current
+ * value's label, fired ONLY when nothing else labels it. A form passes `record`
+ * and so never fires it; a filter restored from a URL has nothing but the id,
+ * and is what it exists for.
  */
 const props = defineProps<WidgetProps>()
 const emit = defineEmits<{ 'update:modelValue': [value: FieldValue] }>()
@@ -149,6 +155,21 @@ const placeholder = computed<string>(() =>
   typeof props.options?.placeholder === 'string' ? props.options.placeholder : 'Select…',
 )
 
+/**
+ * What the CLOSED dropdown shows: the selected entry, else the bare id, and the
+ * placeholder only when there is no value at all.
+ *
+ * The id is a poor label, but showing the placeholder over a value the form
+ * holds is a lie -- a filter restored from a URL read as unset while the list
+ * was filtered by it.
+ */
+const closedLabel = computed<string>(() => {
+  if (selectedOption.value) return selectedOption.value.label
+  return props.modelValue === null || props.modelValue === ''
+    ? placeholder.value
+    : String(props.modelValue)
+})
+
 const filterDelay = computed<number>(() =>
   typeof props.options?.filterDelay === 'number' ? props.options.filterDelay : DEFAULT_FILTER_DELAY,
 )
@@ -237,6 +258,45 @@ function onHide(): void {
   pending = undefined
 }
 
+// ---------------------------------------------------------------- resolving
+
+/*
+ * The label of a value nothing else describes, through `options.resolve`.
+ *
+ * Its own ticket and controller rather than `load`'s: the two are independent
+ * requests, and a search starting must not abort the label of the value.
+ * Re-run on every new value -- the parent may set one without a record (Clear,
+ * then a link) -- and skipped as soon as `selected` covers it.
+ */
+let resolveSeq = 0
+let resolving: AbortController | undefined
+
+async function resolveLabel(value: FieldValue): Promise<void> {
+  const resolver = props.options?.resolve
+  const ticket = ++resolveSeq
+  resolving?.abort()
+  resolving = undefined
+  // No permission means the read is a guaranteed 403, exactly as for `load`.
+  if (!resolver || !allowed.value || !needsResolve(value, selected.value)) return
+
+  const controller = (resolving = new AbortController())
+  try {
+    const rows = await resolver([String(value)], controller.signal)
+    if (ticket !== resolveSeq) return
+    seen.value = new Map([...seen.value, ...rows.map((row) => [String(row.id), row] as const)])
+  } catch {
+    // Silent on purpose: the field keeps showing the id, which is still the
+    // truth, and the value is untouched. An error under a control the user has
+    // not touched would be about a request they never asked for.
+  }
+}
+
+watch(
+  () => props.modelValue,
+  (value) => void resolveLabel(value),
+  { immediate: true },
+)
+
 function onSelect(next: unknown): void {
   // Nothing to remember here: the picked record is already in `seen` -- it can
   // only have come from a fetch, or from `options.record`, which is consulted
@@ -247,6 +307,7 @@ function onSelect(next: unknown): void {
 onScopeDispose(() => {
   if (pending) clearTimeout(pending)
   inFlight?.abort()
+  resolving?.abort()
 })
 </script>
 
@@ -299,11 +360,10 @@ onScopeDispose(() => {
         <!-- The two slots exist for the colour dot. Without them the label is
              right but a coloured relation (a tag) reads like a plain one. -->
         <template #value>
-          <span v-if="selectedOption" class="many2one__shown">
-            <ColorDot :color="selectedOption.color" />
-            {{ selectedOption.label }}
+          <span class="many2one__shown">
+            <ColorDot v-if="selectedOption" :color="selectedOption.color" />
+            {{ closedLabel }}
           </span>
-          <span v-else>{{ placeholder }}</span>
         </template>
 
         <template #option="{ option }">

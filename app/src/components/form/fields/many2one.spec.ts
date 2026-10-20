@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   displayRelation,
+  needsResolve,
   relationColor,
   relationRecordFor,
   toRelationOptions,
@@ -132,5 +133,31 @@ describe('toRelationValue', () => {
 
   it.each([null, undefined, '', Number.NaN, false, {}])('empties %p to null', (next) => {
     expect(toRelationValue(next)).toBeNull()
+  })
+})
+
+describe('needsResolve', () => {
+  it('asks for a value nothing labels', () => {
+    expect(needsResolve('BE', null)).toBe(true)
+  })
+
+  it('treats 0 as a value, not as empty', () => {
+    expect(needsResolve(0, null)).toBe(true)
+  })
+
+  it('does not ask for a value its record already labels', () => {
+    expect(needsResolve('BE', BE)).toBe(false)
+  })
+
+  it('compares on the string form, like relationRecordFor', () => {
+    expect(needsResolve('3', { id: 3, name: 'Urgent' })).toBe(false)
+  })
+
+  it('asks when the record is stale: it describes another id', () => {
+    expect(needsResolve('FR', BE)).toBe(true)
+  })
+
+  it.each([null, '', [], true])('never asks for the non-id %p', (value) => {
+    expect(needsResolve(value, null)).toBe(false)
   })
 })

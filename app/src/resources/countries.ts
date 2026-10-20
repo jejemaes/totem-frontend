@@ -7,7 +7,7 @@
  * relation dropdowns of the forms that point at one.
  */
 
-import { fetchAllPages } from '@/api/list'
+import { fetchAllPages, fetchDisplayNames } from '@/api/list'
 
 /**
  * One entry of the list.
@@ -55,4 +55,17 @@ export function searchCountries(
     { filters: { search } },
     signal,
   )
+}
+
+/**
+ * The labels of a few known countries: `RelationResolve` shaped, for a filter
+ * that holds an id and nothing to label it with.
+ *
+ * The ISO code as `id`, and the name.
+ */
+export function countryDisplayNames(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<CountryRef[]> {
+  return fetchDisplayNames<CountryRef>('/countries/', ids, signal)
 }

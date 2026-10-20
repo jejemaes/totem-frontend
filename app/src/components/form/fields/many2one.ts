@@ -37,6 +37,24 @@ export type RelationFetch = (
   signal?: AbortSignal,
 ) => Promise<RelationRecord[]>
 
+/**
+ * Labels values that arrived with no record to describe them -- a filter
+ * restored from a URL is the case it exists for: there is no fetched row behind
+ * it, only the id the link carried.
+ *
+ * Not `RelationFetch` called with no search: its pages are the whole table,
+ * sorted by the backend, and need not contain the one id being labelled. This
+ * asks for exactly those ids (the endpoint's `display-name/` route) and gets
+ * back only the ones the user may read -- the missing ones stay unlabelled.
+ *
+ * Takes a LIST although ManyToOneField only ever asks for one: the route is
+ * batched, and ManyToManyTagsField has the same problem with several chips.
+ */
+export type RelationResolve = (
+  ids: string[],
+  signal?: AbortSignal,
+) => Promise<RelationRecord[]>
+
 /** One entry of the dropdown. */
 export interface RelationOption {
   value: string | number
@@ -168,6 +186,22 @@ export function relationRecordFor(
   if (value === null || value === undefined || value === '') return null
   if (!record) return null
   return String(record.id) === String(value) ? record : null
+}
+
+/**
+ * Does this value need a request to be labelled?
+ *
+ * True when it is a real value and `known` -- whatever already labels it, see
+ * relationRecordFor -- does not describe it. A record for ANOTHER id counts as
+ * nothing: a stale one must not stop the right one from being fetched.
+ *
+ * `0` is a value, as everywhere in this folder: a truthiness test here would be
+ * the `required` bug again.
+ */
+export function needsResolve(value: FieldValue, known: RelationRecord | null): boolean {
+  if (value === null || value === undefined || value === '' || Array.isArray(value)) return false
+  if (typeof value === 'boolean') return false
+  return relationRecordFor(value, known) === null
 }
 
 /**
