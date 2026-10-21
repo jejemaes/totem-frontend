@@ -52,6 +52,12 @@ export const menu: MenuSection[] = [
         to: '/accounting/categories',
         permission: 'totem.accountcategory.read',
       },
+      {
+        label: 'Budgets',
+        icon: 'pi pi-chart-pie',
+        to: '/accounting/budgets',
+        permission: 'totem.budget.read',
+      },
     ],
   },
   {

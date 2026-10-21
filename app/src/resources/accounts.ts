@@ -67,6 +67,24 @@ export function amountDirection(value: Amount | null | undefined): 'debit' | 'cr
   return parsed < 0 ? 'debit' : 'credit'
 }
 
+/**
+ * The sum of a column of amounts, exact to the cent.
+ *
+ * Summed in integer CENTS rather than as floats: `0.1 + 0.2` is
+ * 0.30000000000000004, and a total that is off by a hair is a total that
+ * `formatAmount` happens to hide until it rounds the wrong way. Two decimals is
+ * what every amount of this API carries. An unparseable entry is skipped, not
+ * counted as zero -- it is the same thing here, and the honest name for it.
+ */
+export function sumAmounts(values: readonly (Amount | null | undefined)[]): number {
+  let cents = 0
+  for (const value of values) {
+    const parsed = toNumberOrNull(value)
+    if (parsed !== null) cents += Math.round(parsed * 100)
+  }
+  return cents / 100
+}
+
 /** One row of the list. */
 export type AccountRow = {
   id: string

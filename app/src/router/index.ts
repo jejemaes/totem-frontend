@@ -10,6 +10,8 @@ import AccountMovementPage from '@/pages/accounting/AccountMovementPage.vue'
 import AccountMovementsPage from '@/pages/accounting/AccountMovementsPage.vue'
 import AccountPage from '@/pages/accounting/AccountPage.vue'
 import AccountsPage from '@/pages/accounting/AccountsPage.vue'
+import BudgetPage from '@/pages/accounting/BudgetPage.vue'
+import BudgetsPage from '@/pages/accounting/BudgetsPage.vue'
 import ContactPage from '@/pages/contacts/ContactPage.vue'
 import ContactsPage from '@/pages/contacts/ContactsPage.vue'
 import ContactTagPage from '@/pages/contacts/ContactTagPage.vue'
@@ -190,6 +192,30 @@ export const router = createRouter({
           meta: {
             title: 'Edit category',
             permissions: ['totem.accountcategory.read', 'totem.accountcategory.update'],
+          },
+        },
+        // Budgets: plural here, although the API spells its collection
+        // `/accounting/budget/` -- the SPA's paths follow its own convention,
+        // and only resources/budgets.ts needs to know the API's.
+        {
+          path: 'accounting/budgets',
+          name: 'accounting-budgets',
+          component: BudgetsPage,
+          meta: { title: 'Budgets', permissions: ['totem.budget.read'] },
+        },
+        {
+          path: 'accounting/budgets/new',
+          name: 'accounting-budget-create',
+          component: BudgetPage,
+          meta: { title: 'New budget', permissions: ['totem.budget.create'] },
+        },
+        {
+          path: 'accounting/budgets/:id',
+          name: 'accounting-budget-edit',
+          component: BudgetPage,
+          meta: {
+            title: 'Edit budget',
+            permissions: ['totem.budget.read', 'totem.budget.update'],
           },
         },
         // The site's own settings: ONE route, not the list / new / :id shape

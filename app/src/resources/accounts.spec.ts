@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { amountDirection, displayAccount, formatAmount } from './accounts'
+import { amountDirection, displayAccount, formatAmount, sumAmounts } from './accounts'
 
 describe('formatAmount', () => {
   it('reads the decimal string the backend sends', () => {
@@ -40,5 +40,27 @@ describe('displayAccount', () => {
     expect(displayAccount({ id: '1', code: 'BANK' })).toBe('BANK')
     expect(displayAccount({ id: '1', name: ' Cash ' })).toBe('Cash')
     expect(displayAccount({ id: '01H' })).toBe('01H')
+  })
+})
+
+describe('sumAmounts', () => {
+  it('adds decimal strings and numbers alike', () => {
+    expect(sumAmounts(['12.50', 7.5, '-3.25'])).toBe(16.75)
+  })
+
+  it('is exact to the cent, where a float sum drifts', () => {
+    expect(sumAmounts(['0.10', '0.20'])).toBe(0.3)
+  })
+
+  it('goes negative when the debits win', () => {
+    expect(sumAmounts(['-100.00', '40.00'])).toBe(-60)
+  })
+
+  it('skips what is not an amount', () => {
+    expect(sumAmounts(['5.00', null, undefined, 'x'])).toBe(5)
+  })
+
+  it('answers 0 for an empty column', () => {
+    expect(sumAmounts([])).toBe(0)
   })
 })
