@@ -129,7 +129,12 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
 
   if (response.status === 204) return undefined as T
-  return (await response.json()) as T
+  // Read as text first: a 201 can carry NO body at all (POST .../resequence/
+  // answers exactly that), and `response.json()` on an empty body throws a
+  // SyntaxError -- a write that succeeded would then reach the caller as a
+  // failure. An empty body is `undefined`, like a 204.
+  const text = await response.text()
+  return (text === '' ? undefined : JSON.parse(text)) as T
 }
 
 /** POST a JSON body. The trailing-slash rule applies here too. */

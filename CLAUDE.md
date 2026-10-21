@@ -562,8 +562,7 @@ From `README.md`'s "Prochaines étapes", plus the follow-up of the pages/views s
 3. Automatic token refresh — **blocked on the backend**, which sets `REFRESH_TOKEN_EXPIRE_SECONDS`
    (5 h) shorter than `ACCESS_TOKEN_EXPIRE_SECONDS` (10 h), so the refresh token always dies before
    the token it should renew. Fix that first.
-4. Open a view in a modal for real: the first consumer (e.g. "+ new tag" from the contact form
-   opening `ContactTagFormView` in a `Dialog`), then row selection on the list views
-   (`selection: 'single' | 'multiple'`), which needs its own `Map` because a lazy `DataTable`
-   forgets checked rows across pages. The `pages/` / `views/` split made it possible; nothing
-   has used it yet.
+4. Views in a modal: the first consumers exist -- `BudgetBalanceView` opens
+   `BudgetLineListView` and `BudgetPositionFormView` in a `Dialog`, and `BudgetLineListView` opens
+   `BudgetLineFormView` in its own, each remounted per open through a `:key` (copy that). Still open: row selection on the list views (`selection: 'single' | 'multiple'`),
+   which needs its own `Map` because a lazy `DataTable` forgets checked rows across pages.
