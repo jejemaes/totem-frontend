@@ -16,8 +16,8 @@ import { computed, ref, watch } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
-import MultiRecordFilters from '@/components/list/MultiRecordFilters.vue'
-import type { FilterFields } from '@/components/list/filters'
+import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
+import type { FilterFields } from '@/components/filters/filters'
 import { useFilter } from '@/composables/useFilter'
 import { useResourceList } from '@/composables/useResourceList'
 import {

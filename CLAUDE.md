@@ -36,7 +36,7 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
     auth/         oauth.ts, tokenStorage.ts, authStore.ts (Pinia), permissions.ts
     components/   ColorDot.vue, ColorTag.vue, colors.ts
       form/       Form.vue, context.ts, FieldSwitch, fields/, widget/
-      list/       MultiRecordFilters.vue, filters.ts
+      filters/    MultiRecordFilters.vue, filters.ts
     composables/  useResourceList.ts, useResourceForm.ts, useFilter.ts, useTheme.ts
     layouts/      AdminLayout.vue, BlankLayout.vue, AppMenu.vue, menu.ts
     plugins/      primevue.ts
@@ -257,7 +257,7 @@ complete example. Wrap permission checks in a `computed`, never a bare `can()` i
 
 ### The filter bar
 
-`components/list/MultiRecordFilters.vue` is the `#header` of every list: a search box, a **Filters**
+`components/filters/MultiRecordFilters.vue` is the `#header` of every list: a search box, a **Filters**
 button badged with the number of active filters, and a refresh button. The button opens a dialog
 holding an ordinary `<Form>` with one `<Field>` per declared filter — which is the whole point of
 `FilterType` being a **subset of `Widget`**: a filter form needed nothing added to the form
@@ -290,7 +290,7 @@ Two rules worth not rediscovering:
   reads `Object.keys(filters)` once, at creation, to know which parameters it owns; a key added
   later would never reach the URL and never be cleared from it.
 
-The conversions live in `components/list/filters.ts`, Vue-free and with a spec, for the same reason
+The conversions live in `components/filters/filters.ts`, Vue-free and with a spec, for the same reason
 `fields/values.ts` does.
 
 ### Adding a form screen
@@ -464,7 +464,7 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | `HtmlField.vue`                | `html.ts`               |
 | `FieldSwitch.vue`              | `fieldSwitch.ts`        |
 | `UserRolesSelectionWidget.vue` | `userRolesSelection.ts` |
-| `MultiRecordFilters.vue`       | `list/filters.ts`       |
+| `MultiRecordFilters.vue`       | `filters/filters.ts`    |
 | `ColorTag.vue`                 | `colors.ts`             |
 | every field                    | `fields/values.ts`      |
 
