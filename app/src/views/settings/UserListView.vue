@@ -7,18 +7,16 @@
  */
 import Avatar from 'primevue/avatar'
 import Button from 'primevue/button'
-import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
-import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
-import { computed, watch } from 'vue'
+import { computed, useTemplateRef } from 'vue'
 
 import { can } from '@/auth/permissions'
 import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
 import type { FilterFields } from '@/components/filters/filters'
+import Field from '@/components/list/Field.vue'
+import type { ListRow } from '@/components/list/fields/types'
+import ListView from '@/components/list/ListView.vue'
 import { useFilter } from '@/composables/useFilter'
-import { useResourceList } from '@/composables/useResourceList'
 import {
   fullName,
   initials,
@@ -43,7 +41,6 @@ const emit = defineEmits<{
   /** Every settled response, so the caller can show the count in its header. */
   loaded: [total: number]
 }>()
-
 
 /**
  * The actions are hidden without their scope, like the menu entries: hiding
@@ -89,67 +86,29 @@ const { filters, setFilters, updateFilters, activeFilters } = useFilter<UserFilt
   { syncUrl: props.syncUrl },
 )
 
-const {
-  rows,
-  total,
-  loading,
-  error,
-  first,
-  pageSize,
-  sortField,
-  sortOrder,
-  isInitialLoad,
-  onPage,
-  onSort,
-  reload,
-} = useResourceList({
-  fetchPage: listUsers,
-  filters,
-  pageSize: props.pageSize,
-  sortField: 'login',
-  syncUrl: props.syncUrl,
-  sortable: USER_SORTABLE,
-})
+/** A <Field> slot is handed a generic row: the helpers below want a user. */
+function user(row: ListRow): UserRow {
+  return row as UserRow
+}
 
-/** Placeholder rows so the first paint has the table's real height. */
-const skeletonRows = Array.from({ length: 5 }, (_, i) => ({ id: `skeleton-${i}` }) as UserRow)
+const list = useTemplateRef<{ reload(): Promise<void> }>('list')
 
-// On `loading` going false rather than on `total`: a reload landing on the same
-// count must still be reported.
-watch(loading, (busy) => {
-  if (!busy && !error.value) emit('loaded', total.value)
-})
-
-defineExpose({ reload })
+defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.resolve() })
 </script>
 
 <template>
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    <div class="list__error">
-      <span>{{ error }}</span>
-      <Button label="Réessayer" size="small" severity="danger" outlined @click="reload" />
-    </div>
-  </Message>
-
-  <DataTable
-    lazy
-    paginator
-    row-hover
-    data-key="id"
-    removable-sort
-    :value="isInitialLoad ? skeletonRows : rows"
-    :total-records="total"
-    :first="first"
-    :rows="pageSize"
-    :rows-per-page-options="[10, 20, 50, 100]"
-    :sort-field="sortField ?? undefined"
-    :sort-order="sortOrder"
-    paginator-template="FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink RowsPerPageDropdown"
-    current-page-report-template="{first}–{last} sur {totalRecords}"
-    @page="onPage"
-    @sort="onSort"
+  <ListView
+    ref="list"
+    :fetch-page="listUsers"
+    :filters="filters"
+    sort-field="login"
+    :sortable="USER_SORTABLE"
+    :page-size="pageSize"
+    :sync-url="syncUrl"
+    storage-key="users"
+    @loaded="emit('loaded', $event)"
   >
-    <template #header>
+    <template #header="{ loading, reload }">
       <MultiRecordFilters
         :fields="FILTER_FIELDS"
         :filters="filters"
@@ -170,65 +129,53 @@ defineExpose({ reload })
       </div>
     </template>
 
-    <Column field="login" header="Utilisateur" sortable style="min-width: 16rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="2rem" />
-        <div v-else class="user-cell">
-          <Avatar :label="initials(data)" shape="circle" />
+    <Field name="login" label="Utilisateur" sortable :fields="['login', 'first_name', 'last_name']">
+      <template #default="{ row }">
+        <div class="user-cell">
+          <Avatar :label="initials(user(row))" shape="circle" />
           <div class="user-cell__text">
-            <span class="user-cell__login">{{ data.login }}</span>
-            <span v-if="fullName(data)" class="user-cell__name">{{ fullName(data) }}</span>
+            <span class="user-cell__login">{{ row.login }}</span>
+            <span v-if="fullName(user(row))" class="user-cell__name">{{ fullName(user(row)) }}</span>
           </div>
         </div>
       </template>
-    </Column>
+    </Field>
 
-    <Column field="email" header="Courriel" sortable style="min-width: 14rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <a v-else-if="data.email" :href="`mailto:${data.email}`" class="link">{{ data.email }}</a>
+    <Field name="email" label="Courriel" sortable>
+      <template #default="{ value }">
+        <a v-if="value" :href="`mailto:${value}`" class="link">{{ value }}</a>
         <span v-else class="muted">—</span>
       </template>
-    </Column>
+    </Field>
 
     <!-- `roles` is not in the backend's ordering whitelist, so no `sortable`. -->
-    <Column header="Rôles" style="min-width: 12rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <div v-else-if="data.roles?.length" class="tags">
-          <Tag v-for="role in data.roles" :key="role.id" :value="role.name" severity="info" />
+    <Field name="roles" label="Rôles">
+      <template #default="{ row }">
+        <div v-if="user(row).roles?.length" class="tags">
+          <Tag v-for="role in user(row).roles" :key="role.id" :value="role.name" severity="info" />
         </div>
         <span v-else class="muted">Aucun</span>
       </template>
-    </Column>
+    </Field>
 
-    <Column field="is_active" header="Statut" sortable style="width: 9rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <Tag
-          v-else
-          :severity="data.is_active ? 'success' : 'danger'"
-          :value="data.is_active ? 'Actif' : 'Inactif'"
-        />
+    <Field name="is_active" label="Statut" sortable :width="10">
+      <template #default="{ value }">
+        <Tag :severity="value ? 'success' : 'danger'" :value="value ? 'Actif' : 'Inactif'" />
       </template>
-    </Column>
+    </Field>
 
-    <!-- Row actions: no header, the icons speak for themselves. -->
-    <Column style="width: 4rem" body-class="row-actions">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="2rem" width="2rem" shape="circle" />
-        <Button
-          v-else-if="canUpdate"
-          icon="pi pi-pencil"
-          text
-          rounded
-          severity="secondary"
-          aria-label="Edit"
-          @click="emit('open', data.id)"
-        />
-      </template>
-    </Column>
-  </DataTable>
+    <template #actions="{ row }">
+      <Button
+        v-if="canUpdate"
+        icon="pi pi-pencil"
+        text
+        rounded
+        severity="secondary"
+        aria-label="Edit"
+        @click="emit('open', row.id)"
+      />
+    </template>
+  </ListView>
 </template>
 
 <style scoped>
@@ -278,16 +225,4 @@ defineExpose({ reload })
 .link:hover {
   text-decoration: underline;
 }
-
-.row-actions {
-  text-align: right;
-}
-
-.list__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
 </style>
-

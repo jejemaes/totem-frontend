@@ -6,19 +6,17 @@
  * ContactTagListView for the contract in full.
  */
 import Button from 'primevue/button'
-import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
 import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
 import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
 import type { FilterFields } from '@/components/filters/filters'
 import DeleteButton from '@/components/list/DeleteButton.vue'
+import Field from '@/components/list/Field.vue'
+import ListView from '@/components/list/ListView.vue'
 import { useFilter } from '@/composables/useFilter'
-import { useResourceList } from '@/composables/useResourceList'
 import {
   deleteWebsiteMenu,
   listWebsiteMenus,
@@ -103,33 +101,7 @@ const { filters, setFilters, updateFilters, activeFilters } = useFilter<WebsiteM
   { syncUrl: props.syncUrl },
 )
 
-const {
-  rows,
-  total,
-  loading,
-  error,
-  first,
-  pageSize,
-  sortField,
-  sortOrder,
-  isInitialLoad,
-  onPage,
-  onSort,
-  reload,
-} = useResourceList({
-  fetchPage: listWebsiteMenus,
-  filters,
-  pageSize: props.pageSize,
-  // The backend's own default ordering, and the only one a menu is read in.
-  sortField: 'sequence',
-  syncUrl: props.syncUrl,
-  sortable: WEBSITE_MENU_SORTABLE,
-})
-
-const skeletonRows = Array.from(
-  { length: 5 },
-  (_, i) => ({ id: `skeleton-${i}` }) as WebsiteMenuRow,
-)
+const list = useTemplateRef<{ reload(): Promise<void> }>('list')
 
 const deleteError = ref<string | null>(null)
 
@@ -144,53 +116,34 @@ async function remove(row: WebsiteMenuRow): Promise<void> {
     await deleteWebsiteMenu(row.id)
     // The 404 recovery in useResourceList covers the case where that row was
     // the last one of the last page.
-    reload()
+    void list.value?.reload()
   } catch (caught) {
     deleteError.value =
       caught instanceof ApiError ? caught.message : 'This menu item could not be deleted.'
   }
 }
 
-// On `loading` going false rather than on `total`: a reload landing on the same
-// count must still be reported.
-watch(loading, (busy) => {
-  if (!busy && !error.value) emit('loaded', total.value)
-})
-
-defineExpose({ reload })
+defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.resolve() })
 </script>
 
 <template>
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    <div class="list__error">
-      <span>{{ error }}</span>
-      <Button label="Retry" size="small" severity="danger" outlined @click="reload" />
-    </div>
-  </Message>
-
   <Message v-if="deleteError" severity="error" :closable="false" class="page__message">
     {{ deleteError }}
   </Message>
 
-  <DataTable
-    lazy
-    paginator
-    row-hover
-    data-key="id"
-    removable-sort
-    :value="isInitialLoad ? skeletonRows : rows"
-    :total-records="total"
-    :first="first"
-    :rows="pageSize"
-    :rows-per-page-options="[10, 20, 50, 100]"
-    :sort-field="sortField ?? undefined"
-    :sort-order="sortOrder"
-    paginator-template="FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink RowsPerPageDropdown"
-    current-page-report-template="{first}–{last} of {totalRecords}"
-    @page="onPage"
-    @sort="onSort"
+  <ListView
+    ref="list"
+    :fetch-page="listWebsiteMenus"
+    :filters="filters"
+    sort-field="sequence"
+    :sortable="WEBSITE_MENU_SORTABLE"
+    :page-size="pageSize"
+    :sync-url="syncUrl"
+    storage-key="website-menus"
+    :extra-fields="['name']"
+    @loaded="emit('loaded', $event)"
   >
-    <template #header>
+    <template #header="{ loading, reload }">
       <MultiRecordFilters
         :fields="FILTER_FIELDS"
         :filters="filters"
@@ -211,72 +164,42 @@ defineExpose({ reload })
       </div>
     </template>
 
-    <Column field="name" header="Name" sortable style="min-width: 14rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="2rem" />
-        <span v-else>{{ data.name }}</span>
-      </template>
-    </Column>
+    <Field name="name" label="Name" sortable />
 
     <!-- Not sortable: the backend orders through `model._meta.get_field()`,
-         which a relation would not survive. -->
-    <Column field="page" header="Page" style="min-width: 12rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <span v-else-if="data.page">{{ data.page.title }}</span>
+         which a relation would not survive. A page has a `title`, not a
+         `name`: without `displayPage` the cell would show its id. -->
+    <Field name="page" widget="many2one" label="Page" :options="{ relationDisplay: displayPage }" />
+
+    <Field name="link" label="Link">
+      <template #default="{ value }">
+        <span v-if="value" class="menu-cell__link">{{ value }}</span>
         <span v-else class="muted">—</span>
       </template>
-    </Column>
+    </Field>
 
-    <Column field="link" header="Link" style="min-width: 12rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <span v-else-if="data.link" class="menu-cell__link">{{ data.link }}</span>
-        <span v-else class="muted">—</span>
-      </template>
-    </Column>
+    <Field name="sequence" widget="integer" label="Sequence" sortable :width="10" />
 
-    <Column field="sequence" header="Sequence" sortable style="width: 8rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <span v-else>{{ data.sequence }}</span>
-      </template>
-    </Column>
+    <Field name="parent" widget="many2one" label="Parent" />
 
-    <Column field="parent" header="Parent" style="min-width: 12rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <span v-else-if="data.parent">{{ data.parent.name }}</span>
-        <span v-else class="muted">—</span>
-      </template>
-    </Column>
-
-    <Column style="width: 6rem" body-class="row-actions">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="2rem" width="2rem" shape="circle" />
-        <!-- A <div> of our own rather than styling the cell: `body-class` lands on
-             a <td> PrimeVue renders, which a scoped rule never reaches -- that is
-             how the two buttons ended up stacked in a 6rem column. -->
-        <div v-else class="row-actions__buttons">
-          <Button
-            v-if="canUpdate"
-            icon="pi pi-pencil"
-            text
-            rounded
-            severity="secondary"
-            aria-label="Edit"
-            @click="emit('open', data.id)"
-          />
-          <DeleteButton
-            v-if="canDelete"
-            label="Delete this menu item?"
-            :message="`“${data.name}” will be removed from the website menu.`"
-            @confirm="remove(data)"
-          />
-        </div>
-      </template>
-    </Column>
-  </DataTable>
+    <template #actions="{ row }">
+      <Button
+        v-if="canUpdate"
+        icon="pi pi-pencil"
+        text
+        rounded
+        severity="secondary"
+        aria-label="Edit"
+        @click="emit('open', row.id)"
+      />
+      <DeleteButton
+        v-if="canDelete"
+        label="Delete this menu item?"
+        :message="`“${row.name}” will be removed from the website menu.`"
+        @confirm="remove(row)"
+      />
+    </template>
+  </ListView>
 </template>
 
 <style scoped>
@@ -298,18 +221,5 @@ defineExpose({ reload })
   font-family: ui-monospace, monospace;
   font-size: 0.85rem;
   word-break: break-all;
-}
-
-.row-actions__buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.25rem;
-}
-
-.list__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
 }
 </style>

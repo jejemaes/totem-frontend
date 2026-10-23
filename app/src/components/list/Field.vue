@@ -31,6 +31,12 @@ const props = withDefaults(
     /** Percentage of the table width. */
     width?: number
     /**
+     * Header alignment. Defaults to `end` for `integer` and `float`, `start`
+     * otherwise -- set it on a column whose slot draws a number (an amount):
+     * the slot aligns its own cell, the header is ListView's.
+     */
+    align?: 'start' | 'end'
+    /**
      * The row keys the cell reads, i.e. what `?fields=` must carry while the
      * column is shown. Defaults to `[name]`; a cell drawing a full name from
      * two keys lists both.
@@ -47,6 +53,7 @@ const props = withDefaults(
     // column nobody remembered to flag.
     defaultDisplay: true,
     width: undefined,
+    align: undefined,
     fields: undefined,
   },
 )
@@ -55,6 +62,9 @@ defineSlots<{
   /** A one-off cell, drawn instead of the widget. */
   default?(scope: CellScope): unknown
 }>()
+
+/** The widgets whose cells are right-aligned: their header follows. */
+const NUMERIC: ReadonlySet<ListWidget> = new Set(['integer', 'float'])
 
 const slots = useSlots()
 const list = useListContext()
@@ -70,6 +80,7 @@ list.register(props.name, () => ({
   sortable: props.sortable,
   defaultDisplay: props.defaultDisplay,
   width: props.width,
+  align: props.align ?? (NUMERIC.has(props.widget) ? 'end' : 'start'),
   fields: props.fields ?? [props.name],
   cell: slots.default,
 }))

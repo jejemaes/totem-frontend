@@ -235,7 +235,7 @@ serves create and edit; the difference is only the scopes.
 ### Adding a list screen
 
 1. In `app/src/resources/<name>.ts`: a `Row` **type** (a `type`, not an `interface` — only aliases
-   get the implicit index signature that `RelationRecord` and `ListFilters` need), a
+   get the implicit index signature that `RelationRecord`, `ListFilters` and `ListRow` need), a
    `<NAME>_LIST_FIELDS` array declared `as const satisfies readonly (keyof XxxRow)[]`, a
    `<NAME>_SORTABLE` list of what the backend accepts in `?ordering=`, a `Filters` type, and a
    three-line `listXxx()` calling `fetchList`.
@@ -243,11 +243,12 @@ serves create and edit; the difference is only the scopes.
    defaults to **false**), a `FILTER_FIELDS` dict, then
    `useFilter<XxxFilters>(FILTER_FIELDS, { syncUrl: props.syncUrl })` — EXPLICITLY, because
    `useFilter` reads the URL unless told not to, and a list in a modal would pick up the host
-   page's filters — and `useResourceList({ fetchPage, filters, pageSize, sortField, sortable,
-   syncUrl: props.syncUrl })` behind a PrimeVue `DataTable lazy paginator row-hover
-   removable-sort data-key="id"`, with `<MultiRecordFilters>` as the `#header` toolbar, an
-   `#empty` block, and `Skeleton` rows while `isInitialLoad`. The pencil emits `open`; every
-   settled response emits `loaded`.
+   page's filters — then a `<ListView>` (see *The generic list framework*) given `fetch-page`,
+   `filters`, `sort-field`, `sortable`, `page-size`, `sync-url` and a `storage-key`, with
+   `<MultiRecordFilters>` in its `#header`, an `#empty` block, one `<Field>` per column and the
+   row's buttons in `#actions`. The pencil emits `open`; ListView's `loaded` is re-emitted.
+   Whatever the view reads from a row outside a column (the name a `<DeleteButton>` quotes)
+   goes in `extra-fields`, or hiding that column in the cog blanks it.
 3. In `app/src/pages/<feature>/XxxsPage.vue`: the header, the **New** link, and
    `<XxxListView sync-url @open="..." @loaded="...">`, `open` pushing the edit route with
    `route.query`.
@@ -374,9 +375,8 @@ value is not data, and it registers no key.
 
 ## The generic list framework
 
-`components/list/` is `<Form>`'s counterpart for tables, and **no list view uses it yet** -- the
-existing `XxxListView`s still wire `DataTable` + `useResourceList` by hand. `/form-demo` runs it
-against an in-memory store.
+`components/list/` is `<Form>`'s counterpart for tables, and every `XxxListView` is built on it.
+`/form-demo` also runs it against an in-memory store, with no backend and no session.
 
 ```vue
 <ListView :fetch-page="listContacts" :filters="filters" sort-field="last_name"
@@ -420,6 +420,9 @@ against an in-memory store.
 - `sortable` on a `<Field>` is granted only when `ListView`'s `sortable` whitelist holds the name.
 - **The loading mask waits 300 ms** (`delayedFlag.ts`). Shown at once, it greyed the table on every
   sort and page and made the lists feel slower than the hand-wired ones, which had none.
+- A `<Field>` slot is handed a generic `ListRow`, so a view casts it once through a local helper
+  (`function account(row: ListRow): AccountRow`) before calling a resource's formatter. A slot
+  drawing a number sets `align="end"`: the slot aligns its cell, the header is ListView's.
 - `resequence` enables row drag: one page of `MAX_PAGE_SIZE`, `sequenceField` order, no header
   sort, drops chained through `resequence.ts`.
 - `mode="selection"` adds checkboxes; `selection.ts` keeps a `Map` across pages and the ids come
@@ -630,5 +633,4 @@ From `README.md`'s "Prochaines étapes", plus the follow-up of the pages/views s
 4. Views in a modal: the first consumers exist -- `BudgetBalanceView` opens
    `BudgetLineListView` and `BudgetPositionFormView` in a `Dialog`, and `BudgetLineListView` opens
    `BudgetLineFormView` in its own, each remounted per open through a `:key` (copy that). Row selection across pages now exists in `ListView`
-   (`mode="selection"`); still open: a many2many field opening it in a Dialog, and migrating the
-   list views onto `ListView`.
+   (`mode="selection"`); still open: a many2many field opening it in a Dialog.

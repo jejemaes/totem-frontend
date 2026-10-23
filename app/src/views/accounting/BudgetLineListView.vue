@@ -16,22 +16,21 @@
  *
  * `orderable` (off by default, set by the Balance tab's Dialog) adds a drag
  * handle: every drop sends the position's WHOLE new order to the backend's
- * resequence route. In that mode the list is one page holding every line, in
- * sequence order with no header sort -- a drag only means something in that
- * order, and the route numbers only the ids it is given.
+ * resequence route. <ListView> does the rest once handed that route -- one
+ * page holding every line, in sequence order, no header sort, drops chained.
  */
 import Button from 'primevue/button'
-import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
 import Message from 'primevue/message'
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
 
 import { ApiError } from '@/api/client'
-import { MAX_PAGE_SIZE, type ListQuery, type Page } from '@/api/list'
+import type { ListQuery, Page } from '@/api/list'
 import { can } from '@/auth/permissions'
 import DeleteButton from '@/components/list/DeleteButton.vue'
-import { useResourceList } from '@/composables/useResourceList'
+import Field from '@/components/list/Field.vue'
+import type { ListRow } from '@/components/list/fields/types'
+import ListView from '@/components/list/ListView.vue'
 import { formatAmount } from '@/resources/accounts'
 import {
   BUDGET_LINE_SORTABLE,
@@ -78,67 +77,22 @@ function fetchPage(
   )
 }
 
-const { rows, total, loading, error, first, pageSize, sortField, sortOrder, onPage, onSort, reload } =
-  useResourceList({
-    fetchPage,
-    // EVERY line when orderable: the new order has to be sent whole.
-    pageSize: props.orderable ? MAX_PAGE_SIZE : props.pageSize,
-    sortField: 'sequence',
-    sortable: BUDGET_LINE_SORTABLE,
-  })
-
-// ---------------------------------------------------------------- reordering
-
 /**
- * The handle is offered only when a drop can be saved: the scope resequence
- * requires, and every line on screen -- past one page the order could not be
- * sent whole, and a partial one collides with the sequences it skips.
+ * The resequence route, handed to <ListView> only when a drop can be saved:
+ * asked for by the host, and allowed by the scope. Decided once -- ListView
+ * reads it at creation to size its single page.
  */
-const reorderable = computed(
-  () => props.orderable && canUpdate.value && total.value <= pageSize.value,
-)
+const resequence =
+  props.orderable && canUpdate.value
+    ? (ids: string[]): Promise<void> => resequenceBudgetLines(props.budgetId, ids)
+    : undefined
 
-/**
- * The order the user just dropped, shown until the next load lands. Local
- * because `rows` belongs to useResourceList; cleared by that load, which then
- * carries the server's numbering.
- */
-const ordered = shallowRef<BudgetLineRow[] | null>(null)
-watch(rows, () => {
-  ordered.value = null
-})
-
-const reorderError = ref<string | null>(null)
-
-/*
- * Drops are CHAINED, not fired in parallel: each request carries the full
- * order of its moment, so they must reach the server in drop order -- an older
- * order landing last would silently undo the newer one, the read-side race the
- * ticket idiom guards against, on a write. The list reloads once the chain is
- * idle, so a quick succession of drops is not interrupted by reloads.
- */
-let queue: Promise<void> = Promise.resolve()
-let queued = 0
-
-function onRowReorder(event: { value: BudgetLineRow[] }): void {
-  ordered.value = event.value
-  const ids = event.value.map((row) => row.id)
-  reorderError.value = null
-  queued += 1
-
-  queue = queue
-    .then(() => resequenceBudgetLines(props.budgetId, ids))
-    .catch((caught: unknown) => {
-      reorderError.value =
-        caught instanceof ApiError ? caught.message : 'The new order could not be saved.'
-    })
-    .finally(() => {
-      queued -= 1
-      // On failure too: the reload is what puts the server's order back.
-      // No `changed`: an order moves no amount, so the host's totals hold.
-      if (queued === 0) void reload()
-    })
+/** A <Field> slot is handed a generic row: formatAmount wants a line. */
+function line(row: ListRow): BudgetLineRow {
+  return row as BudgetLineRow
 }
+
+const list = useTemplateRef<{ reload(): Promise<void> }>('list')
 
 /*
  * The Dialog. `dialogKey` changes on every open so a FRESH form is mounted
@@ -158,7 +112,7 @@ function openForm(id: string | null): void {
 
 function onWritten(): void {
   dialogVisible.value = false
-  void reload()
+  void list.value?.reload()
   emit('changed')
 }
 
@@ -168,7 +122,7 @@ async function remove(row: BudgetLineRow): Promise<void> {
   deleteError.value = null
   try {
     await deleteBudgetLine(props.budgetId, row.id)
-    void reload()
+    void list.value?.reload()
     emit('changed')
   } catch (caught) {
     deleteError.value =
@@ -179,86 +133,56 @@ async function remove(row: BudgetLineRow): Promise<void> {
 
 <template>
   <div class="lines">
-    <Message v-if="error" severity="error" :closable="false">
-      <div class="list__error">
-        <span>{{ error }}</span>
-        <Button label="Retry" size="small" severity="danger" outlined @click="reload" />
-      </div>
-    </Message>
-
     <Message v-if="deleteError" severity="error" :closable="false">{{ deleteError }}</Message>
 
-    <Message v-if="reorderError" severity="error" :closable="false">{{ reorderError }}</Message>
-
-    <DataTable
-      lazy
+    <!-- NEVER sync-url: it lives inside a Dialog, over a page whose query
+         string is not its own. -->
+    <ListView
+      ref="list"
+      :fetch-page="fetchPage"
+      sort-field="sequence"
+      :sortable="BUDGET_LINE_SORTABLE"
+      :page-size="pageSize"
+      paginator="compact"
       size="small"
-      data-key="id"
-      removable-sort
-      :paginator="total > pageSize"
-      :value="ordered ?? rows"
-      :loading="loading"
-      :total-records="total"
-      :first="first"
-      :rows="pageSize"
-      :sort-field="sortField ?? undefined"
-      :sort-order="sortOrder"
-      paginator-template="PrevPageLink CurrentPageReport NextPageLink"
-      current-page-report-template="{first}–{last} of {totalRecords}"
-      @page="onPage"
-      @sort="onSort"
-      @row-reorder="onRowReorder"
+      :resequence="resequence"
+      storage-key="budget-lines"
+      :extra-fields="['name']"
+      empty-text="No line planned for this category yet."
     >
-      <template #empty>
-        <p class="lines__empty">No line planned for this category yet.</p>
-      </template>
-
-      <Column v-if="reorderable" row-reorder style="width: 2.5rem" />
-
-      <!-- No header sort when orderable: the rows ARE the sequence order, and
-           a drag in any other order would mean nothing. -->
-      <Column field="name" header="Line" :sortable="!orderable" />
+      <Field name="name" label="Line" sortable />
 
       <!-- Hidden when orderable: the row's place is its sequence, and a stale
            number next to a row just dragged would contradict it. -->
-      <Column v-if="!orderable" field="sequence" header="Sequence" sortable style="width: 8rem" />
+      <Field v-if="!orderable" name="sequence" widget="integer" label="Sequence" sortable
+             :width="15" />
 
-      <Column
-        field="planned_amount"
-        header="Planned"
-        :sortable="!orderable"
-        style="width: 10rem"
-        header-class="amount-header"
-      >
-        <template #body="{ data }">
-          <div class="amount">{{ formatAmount(data.planned_amount) }}</div>
+      <Field name="planned_amount" label="Planned" sortable align="end" :width="20">
+        <template #default="{ row }">
+          <div class="amount">{{ formatAmount(line(row).planned_amount) }}</div>
         </template>
-      </Column>
+      </Field>
 
-      <Column style="width: 6rem">
-        <template #body="{ data }">
-          <div class="row-actions__buttons">
-            <Button
-              v-if="canUpdate"
-              icon="pi pi-pencil"
-              text
-              rounded
-              size="small"
-              severity="secondary"
-              aria-label="Edit"
-              @click="openForm(data.id)"
-            />
-            <DeleteButton
-              v-if="canDelete"
-              label="Delete this line?"
-              :message="`“${data.name}” will be removed from the budget.`"
-              size="small"
-              @confirm="remove(data)"
-            />
-          </div>
-        </template>
-      </Column>
-    </DataTable>
+      <template #actions="{ row }">
+        <Button
+          v-if="canUpdate"
+          icon="pi pi-pencil"
+          text
+          rounded
+          size="small"
+          severity="secondary"
+          aria-label="Edit"
+          @click="openForm(row.id)"
+        />
+        <DeleteButton
+          v-if="canDelete"
+          label="Delete this line?"
+          :message="`“${row.name}” will be removed from the budget.`"
+          size="small"
+          @confirm="remove(row)"
+        />
+      </template>
+    </ListView>
 
     <!-- Under the table, not in a header: the outer list's "Add category" sits
          at the top right, and two add buttons stacked there would read as
@@ -294,11 +218,6 @@ async function remove(row: BudgetLineRow): Promise<void> {
   padding: 0.5rem 0 0.5rem 2.5rem;
 }
 
-.lines__empty {
-  margin: 0;
-  color: var(--app-muted);
-}
-
 .lines__footer {
   display: flex;
 }
@@ -307,22 +226,5 @@ async function remove(row: BudgetLineRow): Promise<void> {
 .amount {
   text-align: right;
   font-variant-numeric: tabular-nums;
-}
-
-:deep(.amount-header .p-datatable-column-header-content) {
-  justify-content: flex-end;
-}
-
-.row-actions__buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.25rem;
-}
-
-.list__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
 }
 </style>

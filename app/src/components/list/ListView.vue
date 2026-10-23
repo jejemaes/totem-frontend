@@ -99,7 +99,15 @@ const props = withDefaults(
      */
     resequence?: (ids: string[]) => Promise<unknown>
     sequenceField?: string
+    /**
+     * Keys asked for whatever the columns: what the view itself reads from a
+     * row -- the name a Delete confirmation quotes, say. Without them, hiding
+     * that column in the cog would quietly blank the sentence.
+     */
+    extraFields?: readonly string[]
     emptyText?: string
+    /** A denser table, for a list inside a Dialog. */
+    size?: 'small'
   }>(),
   {
     filters: undefined,
@@ -114,7 +122,9 @@ const props = withDefaults(
     storageKey: undefined,
     resequence: undefined,
     sequenceField: 'sequence',
+    extraFields: () => [],
     emptyText: 'No record yet.',
+    size: undefined,
   },
 )
 
@@ -211,7 +221,10 @@ const list = useResourceList<R, F>({
   sortable: props.sortable,
   syncUrl: props.syncUrl && props.mode === 'display',
   fields: () =>
-    requestedFields(declarations.value, columnState.value, props.resequence ? [props.sequenceField] : []),
+    requestedFields(declarations.value, columnState.value, [
+      ...props.extraFields,
+      ...(props.resequence ? [props.sequenceField] : []),
+    ]),
   // The columns are only known once the <Field>s below have run their setup,
   // i.e. after this one: the first request leaves in onMounted.
   immediate: false,
@@ -263,8 +276,6 @@ if (import.meta.env.DEV) {
     }
   })
 }
-
-const NUMERIC = new Set(['integer', 'float'])
 
 // --------------------------------------------------------------- reordering
 
@@ -329,8 +340,9 @@ function onSelectionChange(checked: R[] | R | null): void {
 
 const showPaginator = computed(() => {
   if (props.paginator === 'none') return false
-  // One page of everything: a pager would offer nowhere to go.
-  if (props.resequence) return total.value > pageSize.value
+  // One page of everything -- always the case when reorderable -- leaves a
+  // compact pager nowhere to go. The full one stays: it carries the page size.
+  if (props.paginator === 'compact' || props.resequence) return total.value > pageSize.value
   return true
 })
 
@@ -363,6 +375,7 @@ defineExpose({ reload: list.reload, reset: list.reset })
       row-hover
       data-key="id"
       removable-sort
+      :size="size"
       :value="displayed"
       :loading="masked"
       :paginator="showPaginator"
@@ -410,7 +423,7 @@ defineExpose({ reload: list.reload, reset: list.reset })
         :field="column.name"
         :sortable="isSortable(column)"
         :style="column.width ? { width: `${column.width}%` } : undefined"
-        :header-class="NUMERIC.has(column.widget) ? 'list-view__header--end' : undefined"
+        :header-class="column.align === 'end' ? 'list-view__header--end' : undefined"
       >
         <template #header>
           <span class="list-view__label">
