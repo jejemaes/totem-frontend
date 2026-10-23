@@ -26,6 +26,12 @@ export interface ListQuery<F extends ListFilters = ListFilters> {
   /** Comma-separated PUBLIC field names, '-' prefix for descending. */
   ordering?: string | null
   filters?: F
+  /**
+   * The keys to ask for, replacing the resource's own `XXX_LIST_FIELDS` -- for
+   * a list whose columns the user picks. Absent, the resource's default holds,
+   * so every existing `listXxx()` gained this without being touched.
+   */
+  fields?: readonly string[]
 }
 
 /** `page_size` is declared exclusiveMaximum: 200, so 200 itself is a 422. */
@@ -71,7 +77,11 @@ export function listParams(query: ListQuery, fields: readonly string[]): URLSear
     page_size: String(pageSize),
   })
 
-  if (fields.length) params.set('fields', fields.join(','))
+  // The query's own list wins: it is the caller saying what is on screen. An
+  // EMPTY one does not -- no `?fields=` means every field, the opposite of
+  // what an empty list would suggest.
+  const wanted = query.fields?.length ? query.fields : fields
+  if (wanted.length) params.set('fields', wanted.join(','))
   if (query.ordering) params.set('ordering', query.ordering)
 
   for (const [key, value] of Object.entries(normaliseFilters(query.filters))) {

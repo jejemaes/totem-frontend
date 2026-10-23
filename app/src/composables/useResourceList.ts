@@ -58,6 +58,22 @@ export interface UseResourceListOptions<T, F extends ListFilters> {
   syncUrl?: boolean
   /** Sortable field whitelist, used to reject a stale or hand-edited URL. */
   sortable?: readonly string[]
+  /**
+   * The `?fields=` to ask for, read reactively: a list whose columns the user
+   * picks. A getter rather than a ref so the caller can derive it. A change
+   * reloads the SAME page -- showing another column is not a new query, and
+   * row 41 is still row 41. Only the SET counts: reordering the columns asks
+   * for nothing new, so it fetches nothing.
+   */
+  fields?: () => readonly string[]
+  /**
+   * Fetch at creation. Defaults to true. False is for a caller whose query is
+   * not complete yet when it creates the list -- <ListView>, whose columns
+   * register during its first render, after its setup -- and which then calls
+   * `reload()` itself. Until that first load, a change of `fields` fetches
+   * nothing: it is the query being assembled, not a new one.
+   */
+  immediate?: boolean
 }
 
 export interface ResourceList<T> {
@@ -124,12 +140,15 @@ export function useResourceList<T, F extends ListFilters>(
     pageSize: pageSize.value,
     ordering: orderingFrom(sortField.value, sortOrder.value),
     filters,
+    ...(options.fields ? { fields: options.fields() } : {}),
   }))
 
   let seq = 0
   let inFlight: AbortController | undefined
+  let started = false
 
   async function load(): Promise<void> {
+    started = true
     const ticket = ++seq
     inFlight?.abort()
     const controller = (inFlight = new AbortController())
@@ -203,6 +222,19 @@ export function useResourceList<T, F extends ListFilters>(
     },
   )
 
+  if (options.fields) {
+    const getFields = options.fields
+    // Sorted, so a reorder produces the same key. Not debounced: a checkbox
+    // is one deliberate click, and the race ticket already discards whatever
+    // a quick succession of them supersedes.
+    watch(
+      () => [...getFields()].sort().join(','),
+      () => {
+        if (started) void load()
+      },
+    )
+  }
+
   // ---------------------------------------------------------------- URL sync
 
   /** The subset of the query string this list owns. */
@@ -273,7 +305,7 @@ export function useResourceList<T, F extends ListFilters>(
   // A direct call, not onMounted: the request leaves a tick earlier, and the
   // composable stays usable inside a bare effectScope -- which is what makes
   // the tests possible.
-  void load()
+  if (options.immediate ?? true) void load()
 
   return {
     rows,
