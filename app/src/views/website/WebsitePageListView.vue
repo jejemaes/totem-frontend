@@ -11,13 +11,13 @@ import DataTable from 'primevue/datatable'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
-import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref, watch } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
 import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
 import type { FilterFields } from '@/components/filters/filters'
+import DeleteButton from '@/components/list/DeleteButton.vue'
 import { useFilter } from '@/composables/useFilter'
 import { useResourceList } from '@/composables/useResourceList'
 import {
@@ -43,8 +43,6 @@ const emit = defineEmits<{
   /** Every settled response, so the caller can show the count in its header. */
   loaded: [total: number]
 }>()
-
-const confirm = useConfirm()
 
 /** Computeds, not bare `can()` calls: see ContactListView. */
 const canUpdate = computed(() => can('totem.websitepage.update'))
@@ -129,19 +127,6 @@ async function remove(row: WebsitePageRow): Promise<void> {
     deleteError.value =
       caught instanceof ApiError ? caught.message : 'This page could not be deleted.'
   }
-}
-
-function askDelete(row: WebsitePageRow): void {
-  confirm.require({
-    header: 'Delete this page?',
-    message: `“${row.title}” will be removed from the website.`,
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
-    acceptProps: { label: 'Delete', severity: 'danger' },
-    accept: () => {
-      void remove(row)
-    },
-  })
 }
 
 // On `loading` going false rather than on `total`: a reload landing on the same
@@ -245,14 +230,11 @@ defineExpose({ reload })
             aria-label="Edit"
             @click="emit('open', data.id)"
           />
-          <Button
+          <DeleteButton
             v-if="canDelete"
-            icon="pi pi-trash"
-            text
-            rounded
-            severity="danger"
-            aria-label="Delete"
-            @click="askDelete(data)"
+            label="Delete this page?"
+            :message="`“${data.title}” will be removed from the website.`"
+            @confirm="remove(data)"
           />
         </div>
       </template>

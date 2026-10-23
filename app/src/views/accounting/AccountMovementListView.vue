@@ -18,7 +18,6 @@ import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
-import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref, watch } from 'vue'
 
 import { ApiError } from '@/api/client'
@@ -28,6 +27,7 @@ import ColorTag from '@/components/ColorTag.vue'
 import { toDateOrNull } from '@/components/form/fields/values'
 import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
 import type { FilterFields } from '@/components/filters/filters'
+import DeleteButton from '@/components/list/DeleteButton.vue'
 import { useFilter } from '@/composables/useFilter'
 import { useResourceList } from '@/composables/useResourceList'
 import {
@@ -62,8 +62,6 @@ const emit = defineEmits<{
   /** A row was deleted: whatever the caller shows about the account (its balance) is stale. */
   deleted: [id: string]
 }>()
-
-const confirm = useConfirm()
 
 /** Computeds, not bare `can()` calls: see ContactListView. */
 const canUpdate = computed(() => can('totem.accountmovement.update'))
@@ -191,19 +189,6 @@ async function remove(row: AccountMovementRow): Promise<void> {
   }
 }
 
-function askDelete(row: AccountMovementRow): void {
-  confirm.require({
-    header: 'Delete this movement?',
-    message: `“${row.name}” will be removed, and the account balance with it.`,
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
-    acceptProps: { label: 'Delete', severity: 'danger' },
-    accept: () => {
-      void remove(row)
-    },
-  })
-}
-
 // On `loading` going false rather than on `total`: a reload landing on the same
 // count must still be reported.
 watch(loading, (busy) => {
@@ -321,14 +306,11 @@ defineExpose({ reload })
             aria-label="Edit"
             @click="emit('open', data.id)"
           />
-          <Button
+          <DeleteButton
             v-if="canDelete"
-            icon="pi pi-trash"
-            text
-            rounded
-            severity="danger"
-            aria-label="Delete"
-            @click="askDelete(data)"
+            label="Delete this movement?"
+            :message="`“${data.name}” will be removed, and the account balance with it.`"
+            @confirm="remove(data)"
           />
         </div>
       </template>
