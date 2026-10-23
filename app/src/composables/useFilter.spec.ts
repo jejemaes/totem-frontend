@@ -1,7 +1,7 @@
 import { effectScope } from 'vue'
 import { describe, expect, it } from 'vitest'
 
-import type { FilterFields } from '@/components/list/filters'
+import type { FilterFields } from '@/components/filters/filters'
 
 import { useFilter, type RecordFilters } from './useFilter'
 
@@ -14,7 +14,7 @@ const FIELDS: FilterFields = {
 /**
  * Runs the composable in a bare scope -- no component, no router, hence
  * `syncUrl: false`. The restore itself is pure and tested in
- * components/list/filters.spec.ts.
+ * components/filters/filters.spec.ts.
  */
 function mount(): RecordFilters<Record<string, string | number | boolean | null>> {
   const scope = effectScope()

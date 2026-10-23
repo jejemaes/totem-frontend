@@ -45,7 +45,7 @@ import {
   type ActiveFilter,
   type FilterFields,
   type FilterValues,
-} from '@/components/list/filters'
+} from '@/components/filters/filters'
 
 export interface UseFilterOptions {
   /**

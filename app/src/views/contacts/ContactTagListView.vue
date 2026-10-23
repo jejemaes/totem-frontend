@@ -15,8 +15,8 @@ import { computed, watch } from 'vue'
 
 import { can } from '@/auth/permissions'
 import ColorDot from '@/components/ColorDot.vue'
-import MultiRecordFilters from '@/components/list/MultiRecordFilters.vue'
-import type { FilterFields } from '@/components/list/filters'
+import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
+import type { FilterFields } from '@/components/filters/filters'
 import { useFilter } from '@/composables/useFilter'
 import { useResourceList } from '@/composables/useResourceList'
 import {
