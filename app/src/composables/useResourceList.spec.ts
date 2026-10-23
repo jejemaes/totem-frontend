@@ -1,4 +1,4 @@
-import { effectScope, nextTick, reactive } from 'vue'
+import { effectScope, nextTick, reactive, ref } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
@@ -197,6 +197,46 @@ describe('useResourceList', () => {
     expect(list.rows.value).toEqual([])
     expect(list.total.value).toBe(0)
     expect(list.isInitialLoad.value).toBe(false)
+    scope.stop()
+  })
+
+  it('reloads the same page when the fields change, not on a mere reorder', async () => {
+    const fetchPage = vi.fn(async (_query: ListQuery) => page([{ id: 'a' }], 50))
+    const fields = ref<string[]>(['id', 'name'])
+    const { list, scope } = mount({ fetchPage, fields: () => fields.value })
+    await flush()
+    expect(fetchPage.mock.calls[0][0].fields).toEqual(['id', 'name'])
+
+    list.onPage({ first: 20, rows: 20 })
+    await flush()
+    expect(fetchPage).toHaveBeenCalledTimes(2)
+
+    fields.value = ['name', 'id']
+    await flush()
+    expect(fetchPage).toHaveBeenCalledTimes(2)
+
+    fields.value = ['id', 'name', 'email']
+    await flush()
+    expect(fetchPage).toHaveBeenCalledTimes(3)
+    const query = fetchPage.mock.calls[2][0]
+    expect(query.fields).toEqual(['id', 'name', 'email'])
+    expect(query.page).toBe(2)
+    scope.stop()
+  })
+
+  it('waits for reload() when not immediate, ignoring the fields assembled before', async () => {
+    const fetchPage = vi.fn(async (_query: ListQuery) => page([{ id: 'a' }], 1))
+    const fields = ref<string[]>(['id'])
+    const { list, scope } = mount({ fetchPage, fields: () => fields.value, immediate: false })
+    expect(list.isInitialLoad.value).toBe(true)
+
+    fields.value = ['id', 'name']
+    await flush()
+    expect(fetchPage).not.toHaveBeenCalled()
+
+    await list.reload()
+    expect(fetchPage).toHaveBeenCalledTimes(1)
+    expect(fetchPage.mock.calls[0][0].fields).toEqual(['id', 'name'])
     scope.stop()
   })
 })

@@ -92,6 +92,17 @@ describe('listParams', () => {
     expect(params.get('is_active')).toBe('false')
     expect(params.has('login')).toBe(false)
   })
+
+  it("lets the query's own fields replace the resource's default", () => {
+    const params = listParams({ page: 1, pageSize: 10, fields: ['id', 'email'] }, fields)
+    expect(params.get('fields')).toBe('id,email')
+  })
+
+  it('keeps the default for an empty field list, which would mean every field', () => {
+    expect(listParams({ page: 1, pageSize: 10, fields: [] }, fields).get('fields')).toBe(
+      'id,login',
+    )
+  })
 })
 
 describe('readListQuery', () => {

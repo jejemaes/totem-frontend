@@ -14,6 +14,7 @@ import type { RelationFetch, RelationResolve } from '@/components/form/fields/ma
 import FieldSwitch from '@/components/form/FieldSwitch.vue'
 import Field from '@/components/form/fields/Field.vue'
 import Form from '@/components/form/Form.vue'
+import ListViewDemo from '@/views/demo/ListViewDemo.vue'
 
 /*
  * Demo page: nothing is sent to the backend. It exists so a form definition can
@@ -447,6 +448,14 @@ const DEFINITION = `<Form :data="data" @save="onSave">
         </template>
       </Card>
 
+      <!-- The whole row: a table is wider than a form. -->
+      <Card class="cards__wide">
+        <template #title>List view</template>
+        <template #content>
+          <ListViewDemo />
+        </template>
+      </Card>
+
       <Card>
         <template #title>Definition</template>
         <template #content>
@@ -458,6 +467,11 @@ const DEFINITION = `<Form :data="data" @save="onSave">
 </template>
 
 <style scoped>
+.cards__wide {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
 .preview {
   margin: 0;
   padding: 0.75rem;

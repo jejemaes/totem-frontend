@@ -37,6 +37,7 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
     components/   ColorDot.vue, ColorTag.vue, colors.ts
       form/       Form.vue, context.ts, FieldSwitch, fields/, widget/
       filters/    MultiRecordFilters.vue, filters.ts
+      list/       ListView.vue, Field.vue, context.ts, ColumnMenu.vue, fields/ (the cells)
     composables/  useResourceList.ts, useResourceForm.ts, useFilter.ts, useTheme.ts
     layouts/      AdminLayout.vue, BlankLayout.vue, AppMenu.vue, menu.ts
     plugins/      primevue.ts
@@ -184,6 +185,7 @@ No decorators, no auto-discovery, no `import.meta.glob`:
 | What           | Where                                                       |
 | -------------- | ----------------------------------------------------------- |
 | Widgets        | `WIDGETS` in `form/fields/Field.vue` + the `Widget` union in `form/fields/types.ts` |
+| List cells     | `LIST_WIDGETS` in `list/fields/Cell.vue` + the `ListWidget` union in `list/fields/types.ts` |
 | Routes         | the `routes` array in `router/index.ts`                     |
 | Sidebar menu   | the `menu` array in `layouts/menu.ts`                       |
 | Colour palette | `FIELD_COLORS` / `MAX_COLOR_INDEX` in `components/colors.ts` |
@@ -368,6 +370,57 @@ static import would put a rich-text editor in the login page's entry chunk. It i
 vs `link` on a website menu) when the backend stores no discriminator. It is purely visual, its
 value is not data, and it registers no key.
 
+## The generic list framework
+
+`components/list/` is `<Form>`'s counterpart for tables, and **no list view uses it yet** -- the
+existing `XxxListView`s still wire `DataTable` + `useResourceList` by hand. `/form-demo` runs it
+against an in-memory store.
+
+```vue
+<ListView :fetch-page="listContacts" :filters="filters" sort-field="last_name"
+          :sortable="CONTACT_SORTABLE" storage-key="contacts" :sync-url="syncUrl">
+  <template #header="{ loading, reload }"><MultiRecordFilters ... /></template>
+  <Field name="email" label="Email" sortable :width="30" />
+  <Field name="tags" widget="many2many_tags" label="Tags" :default-display="false" />
+  <Field name="last_name" label="Name" :fields="['first_name', 'last_name']" sortable>
+    <template #default="{ row }">{{ displayName(row) }}</template>
+  </Field>
+  <template #actions="{ row }"><Button icon="pi pi-pencil" ... /></template>
+</ListView>
+```
+
+- **A list `<Field>` renders nothing.** It registers a getter through `LIST_CONTEXT` and
+  `ListView` renders every `<Column>` itself. PrimeVue only finds a `<Column>` that is a direct
+  child of the `DataTable` (or under a keyed vnode), and only a declared column can be hidden or
+  reordered by the user.
+- **The first request leaves in `onMounted`** (`useResourceList({ immediate: false })`): the
+  `<Field>`s register during `ListView`'s first render, after its setup, and the request must
+  already carry their `?fields=`.
+- **`?fields=` is computed** -- `id`, plus the `fields` of every visible column (default
+  `[name]`), plus `sequence` when reorderable -- and passed as `ListQuery.fields`, which overrides
+  the resource's `XXX_LIST_FIELDS` in `fetchList`. Ticking a column reloads the SAME page; a mere
+  reorder fetches nothing. A row type is therefore optimistic: a hidden column's key is absent,
+  and every cell reads `undefined` as empty.
+- **The column choice** (ticked, ordered) lives in `localStorage` under
+  `totem.list.<storageKey>`, by NAME. `columns.ts` merges it with the declarations: an unknown
+  name is dropped, a new column is appended with its `defaultDisplay`, and the last visible
+  column cannot be unticked.
+- **The column menu's Popover sits OUTSIDE the `DataTable`**; the header holds a bare cog.
+  PrimeVue renders a `#header` slot through `<component :is>`, so whatever lives there is
+  remounted on every table render -- the menu used to close under each click. Every `<Column>`
+  also carries a `column-key` for the same family of reason.
+- `sortable` on a `<Field>` is granted only when `ListView`'s `sortable` whitelist holds the name.
+- `resequence` enables row drag: one page of `MAX_PAGE_SIZE`, `sequenceField` order, no header
+  sort, drops chained through `resequence.ts`.
+- `mode="selection"` adds checkboxes; `selection.ts` keeps a `Map` across pages and the ids come
+  back through `v-model:selection` (plus `selection-rows`, to label m2m chips). `syncUrl` is
+  ignored in that mode.
+
+A cell is not a form widget: it edits nothing and gets the whole row, hence its own registry.
+`Cell.vue` owns the skeleton and the emptiness check (`isBlankCell` -- `false` and `0` are
+values); formatting lives in `fields/cells.ts`. A one-off cell is the `<Field>`'s slot; a
+reusable specific one goes in `list/widgets/` (none yet, the folder does not exist).
+
 ## The API and its error contract
 
 `app/src/api/client.ts` — `apiFetch`, `postJson`, `patchJson`, `apiDelete`, `ApiError`,
@@ -467,6 +520,8 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | `MultiRecordFilters.vue`       | `filters/filters.ts`    |
 | `ColorTag.vue`                 | `colors.ts`             |
 | every field                    | `fields/values.ts`      |
+| `ListView.vue`                 | `list/columns.ts`, `list/selection.ts`, `list/resequence.ts` |
+| every list cell                | `list/fields/cells.ts`  |
 
 Follow that split for anything new: if a bug would stay invisible until a user hits it, its logic
 belongs in a sibling `.ts` with a `.spec.ts`. Specs sit next to their module and import it
@@ -564,5 +619,6 @@ From `README.md`'s "Prochaines étapes", plus the follow-up of the pages/views s
    the token it should renew. Fix that first.
 4. Views in a modal: the first consumers exist -- `BudgetBalanceView` opens
    `BudgetLineListView` and `BudgetPositionFormView` in a `Dialog`, and `BudgetLineListView` opens
-   `BudgetLineFormView` in its own, each remounted per open through a `:key` (copy that). Still open: row selection on the list views (`selection: 'single' | 'multiple'`),
-   which needs its own `Map` because a lazy `DataTable` forgets checked rows across pages.
+   `BudgetLineFormView` in its own, each remounted per open through a `:key` (copy that). Row selection across pages now exists in `ListView`
+   (`mode="selection"`); still open: a many2many field opening it in a Dialog, and migrating the
+   list views onto `ListView`.
