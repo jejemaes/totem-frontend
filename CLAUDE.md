@@ -36,7 +36,8 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
     auth/         oauth.ts, tokenStorage.ts, authStore.ts (Pinia), permissions.ts
     components/   ColorDot.vue, ColorTag.vue, colors.ts
       form/       Form.vue, context.ts, FieldSwitch, fields/, widget/
-      list/       MultiRecordFilters.vue, filters.ts
+      filters/    MultiRecordFilters.vue, filters.ts
+      list/       ListView.vue, Field.vue, context.ts, ColumnMenu.vue, DeleteButton.vue, fields/
     composables/  useResourceList.ts, useResourceForm.ts, useFilter.ts, useTheme.ts
     layouts/      AdminLayout.vue, BlankLayout.vue, AppMenu.vue, menu.ts
     plugins/      primevue.ts
@@ -184,6 +185,7 @@ No decorators, no auto-discovery, no `import.meta.glob`:
 | What           | Where                                                       |
 | -------------- | ----------------------------------------------------------- |
 | Widgets        | `WIDGETS` in `form/fields/Field.vue` + the `Widget` union in `form/fields/types.ts` |
+| List cells     | `LIST_WIDGETS` in `list/fields/Cell.vue` + the `ListWidget` union in `list/fields/types.ts` |
 | Routes         | the `routes` array in `router/index.ts`                     |
 | Sidebar menu   | the `menu` array in `layouts/menu.ts`                       |
 | Colour palette | `FIELD_COLORS` / `MAX_COLOR_INDEX` in `components/colors.ts` |
@@ -233,7 +235,7 @@ serves create and edit; the difference is only the scopes.
 ### Adding a list screen
 
 1. In `app/src/resources/<name>.ts`: a `Row` **type** (a `type`, not an `interface` — only aliases
-   get the implicit index signature that `RelationRecord` and `ListFilters` need), a
+   get the implicit index signature that `RelationRecord`, `ListFilters` and `ListRow` need), a
    `<NAME>_LIST_FIELDS` array declared `as const satisfies readonly (keyof XxxRow)[]`, a
    `<NAME>_SORTABLE` list of what the backend accepts in `?ordering=`, a `Filters` type, and a
    three-line `listXxx()` calling `fetchList`.
@@ -241,11 +243,12 @@ serves create and edit; the difference is only the scopes.
    defaults to **false**), a `FILTER_FIELDS` dict, then
    `useFilter<XxxFilters>(FILTER_FIELDS, { syncUrl: props.syncUrl })` — EXPLICITLY, because
    `useFilter` reads the URL unless told not to, and a list in a modal would pick up the host
-   page's filters — and `useResourceList({ fetchPage, filters, pageSize, sortField, sortable,
-   syncUrl: props.syncUrl })` behind a PrimeVue `DataTable lazy paginator row-hover
-   removable-sort data-key="id"`, with `<MultiRecordFilters>` as the `#header` toolbar, an
-   `#empty` block, and `Skeleton` rows while `isInitialLoad`. The pencil emits `open`; every
-   settled response emits `loaded`.
+   page's filters — then a `<ListView>` (see *The generic list framework*) given `fetch-page`,
+   `filters`, `sort-field`, `sortable`, `page-size`, `sync-url` and a `storage-key`, with
+   `<MultiRecordFilters>` in its `#header`, an `#empty` block, one `<Field>` per column and the
+   row's buttons in `#actions`. The pencil emits `open`; ListView's `loaded` is re-emitted.
+   Whatever the view reads from a row outside a column (the name a `<DeleteButton>` quotes)
+   goes in `extra-fields`, or hiding that column in the cog blanks it.
 3. In `app/src/pages/<feature>/XxxsPage.vue`: the header, the **New** link, and
    `<XxxListView sync-url @open="..." @loaded="...">`, `open` pushing the edit route with
    `route.query`.
@@ -257,7 +260,7 @@ complete example. Wrap permission checks in a `computed`, never a bare `can()` i
 
 ### The filter bar
 
-`components/list/MultiRecordFilters.vue` is the `#header` of every list: a search box, a **Filters**
+`components/filters/MultiRecordFilters.vue` is the `#header` of every list: a search box, a **Filters**
 button badged with the number of active filters, and a refresh button. The button opens a dialog
 holding an ordinary `<Form>` with one `<Field>` per declared filter — which is the whole point of
 `FilterType` being a **subset of `Widget`**: a filter form needed nothing added to the form
@@ -290,7 +293,7 @@ Two rules worth not rediscovering:
   reads `Object.keys(filters)` once, at creation, to know which parameters it owns; a key added
   later would never reach the URL and never be cleared from it.
 
-The conversions live in `components/list/filters.ts`, Vue-free and with a spec, for the same reason
+The conversions live in `components/filters/filters.ts`, Vue-free and with a spec, for the same reason
 `fields/values.ts` does.
 
 ### Adding a form screen
@@ -307,7 +310,9 @@ those into `router.push`. A Delete button lives in the form's `#actions` row, le
 
 Payloads are built **key by key** in local `createPayload(values)` / `updatePayload(changed)`
 helpers — never by copying the draft. See *the PATCH asymmetry* below for why that is not
-pedantry. Deletes go through `useConfirm()`; the dialog is mounted once in `AdminLayout`.
+pedantry. Deletes go through `useConfirm()`; the dialog is mounted once in `AdminLayout`. A list
+row's trash is `<DeleteButton label="Delete this X?" :message="..." @confirm="remove(row)">`
+(`components/list/`): it asks and emits, the view still sends the request and shows the refusal.
 
 `<Form>` works on a **copy** of `data`, keeps a baseline, and emits `save: [values, changed]` — a
 create sends `values`, an update sends `changed`. It watches `props.data` on identity, never
@@ -367,6 +372,67 @@ static import would put a rich-text editor in the login page's entry chunk. It i
 `FieldSwitch` is adjacent but **not** a widget: it picks between mutually exclusive fields (`page`
 vs `link` on a website menu) when the backend stores no discriminator. It is purely visual, its
 value is not data, and it registers no key.
+
+## The generic list framework
+
+`components/list/` is `<Form>`'s counterpart for tables, and every `XxxListView` is built on it.
+`/form-demo` also runs it against an in-memory store, with no backend and no session.
+
+```vue
+<ListView :fetch-page="listContacts" :filters="filters" sort-field="last_name"
+          :sortable="CONTACT_SORTABLE" storage-key="contacts" :sync-url="syncUrl">
+  <template #header="{ loading, reload }"><MultiRecordFilters ... /></template>
+  <Field name="email" label="Email" sortable :width="30" />
+  <Field name="tags" widget="many2many_tags" label="Tags" :default-display="false" />
+  <Field name="last_name" label="Name" :fields="['first_name', 'last_name']" sortable>
+    <template #default="{ row }">{{ displayName(row) }}</template>
+  </Field>
+  <template #actions="{ row }"><Button icon="pi pi-pencil" ... /></template>
+</ListView>
+```
+
+- **A list `<Field>` renders nothing.** It registers a getter through `LIST_CONTEXT` and
+  `ListView` renders every `<Column>` itself. PrimeVue only finds a `<Column>` that is a direct
+  child of the `DataTable` (or under a keyed vnode), and only a declared column can be hidden or
+  reordered by the user.
+- **The declarations are rendered by `FieldDeclarations.vue`, never inline in `ListView`'s
+  template.** Inline, the slot re-ran on every `ListView` render, and a `<Field>` given an object
+  naming a binding (`:options="{ relationDisplay: displayAccount }"`, which the compiler cannot
+  hoist) got new props each time -- new declarations, new render, new props: the budgets list
+  rendered 200 times on mount. Forwarded as a stable slot, it re-runs only when what the fields
+  themselves read changes.
+- **The first request leaves in `onMounted`** (`useResourceList({ immediate: false })`): the
+  `<Field>`s register during `ListView`'s first render, after its setup, and the request must
+  already carry their `?fields=`.
+- **`?fields=` is computed** -- `id`, plus the `fields` of every visible column (default
+  `[name]`), plus `sequence` when reorderable -- and passed as `ListQuery.fields`, which overrides
+  the resource's `XXX_LIST_FIELDS` in `fetchList`. Ticking a column reloads the SAME page; a mere
+  reorder fetches nothing. A row type is therefore optimistic: a hidden column's key is absent,
+  and every cell reads `undefined` as empty.
+- **The column choice** (ticked, ordered) lives in `localStorage` under
+  `totem.list.<storageKey>`, by NAME. `columns.ts` merges it with the declarations: an unknown
+  name is dropped, a new column is appended with its `defaultDisplay`, and the last visible
+  column cannot be unticked.
+- **The column menu's Popover sits OUTSIDE the `DataTable`**; the header holds a bare cog.
+  PrimeVue renders a `#header` slot through `<component :is>`, so whatever lives there is
+  remounted on every table render -- the menu used to close under each click. Every `<Column>`
+  also carries a `column-key` for the same family of reason.
+- `sortable` on a `<Field>` is granted only when `ListView`'s `sortable` whitelist holds the name.
+- **The loading mask waits 300 ms** (`delayedFlag.ts`). Shown at once, it greyed the table on every
+  sort and page and made the lists feel slower than the hand-wired ones, which had none.
+- A `<Field>` slot is handed a generic `ListRow`, so a view casts it once through a local helper
+  (`function account(row: ListRow): AccountRow`) before calling a resource's formatter. A slot
+  drawing a number sets `align="end"`: the slot aligns its cell, the header is ListView's.
+- `resequence` enables row drag: one page of `MAX_PAGE_SIZE`, `sequenceField` order, no header
+  sort, drops chained through `resequence.ts`.
+- `mode="selection"` adds checkboxes; `selection.ts` keeps a `Map` across pages and the ids come
+  back through `v-model:selection` (plus `selection-rows`, to label m2m chips). `syncUrl` is
+  ignored in that mode.
+
+A cell is not a form widget: it edits nothing and gets the whole row, hence its own registry.
+`Cell.vue` owns the skeleton and the emptiness check (`isBlankCell` -- `false` and `0` are
+values); formatting lives in `fields/cells.ts`. A one-off cell is the `<Field>`'s slot; a
+reusable specific one goes in `list/widgets/` (none yet, the folder does not exist).
 
 ## The API and its error contract
 
@@ -464,9 +530,11 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | `HtmlField.vue`                | `html.ts`               |
 | `FieldSwitch.vue`              | `fieldSwitch.ts`        |
 | `UserRolesSelectionWidget.vue` | `userRolesSelection.ts` |
-| `MultiRecordFilters.vue`       | `list/filters.ts`       |
+| `MultiRecordFilters.vue`       | `filters/filters.ts`    |
 | `ColorTag.vue`                 | `colors.ts`             |
 | every field                    | `fields/values.ts`      |
+| `ListView.vue`                 | `list/columns.ts`, `list/selection.ts`, `list/resequence.ts`, `list/delayedFlag.ts` |
+| every list cell                | `list/fields/cells.ts`  |
 
 Follow that split for anything new: if a bug would stay invisible until a user hits it, its logic
 belongs in a sibling `.ts` with a `.spec.ts`. Specs sit next to their module and import it
@@ -564,5 +632,5 @@ From `README.md`'s "Prochaines étapes", plus the follow-up of the pages/views s
    the token it should renew. Fix that first.
 4. Views in a modal: the first consumers exist -- `BudgetBalanceView` opens
    `BudgetLineListView` and `BudgetPositionFormView` in a `Dialog`, and `BudgetLineListView` opens
-   `BudgetLineFormView` in its own, each remounted per open through a `:key` (copy that). Still open: row selection on the list views (`selection: 'single' | 'multiple'`),
-   which needs its own `Map` because a lazy `DataTable` forgets checked rows across pages.
+   `BudgetLineFormView` in its own, each remounted per open through a `:key` (copy that). Row selection across pages now exists in `ListView`
+   (`mode="selection"`); still open: a many2many field opening it in a Dialog.

@@ -39,7 +39,11 @@ export interface UserRoleRef {
   name: string
 }
 
-export interface UserRow {
+/**
+ * A `type` and not an `interface`: only type aliases get the implicit index
+ * signature that makes a row assignable to <ListView>'s `ListRow`.
+ */
+export type UserRow = {
   id: string
   /** The ORM field is `username`; the API exposes and expects `login`. */
   login: string

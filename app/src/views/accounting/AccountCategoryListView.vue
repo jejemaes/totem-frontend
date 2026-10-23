@@ -8,20 +8,18 @@
  * general ones in would make every account look like it owns them.
  */
 import Button from 'primevue/button'
-import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
 import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
-import { useConfirm } from 'primevue/useconfirm'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
-import ColorDot from '@/components/ColorDot.vue'
-import MultiRecordFilters from '@/components/list/MultiRecordFilters.vue'
-import type { FilterFields } from '@/components/list/filters'
+import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
+import type { FilterFields } from '@/components/filters/filters'
+import DeleteButton from '@/components/list/DeleteButton.vue'
+import Field from '@/components/list/Field.vue'
+import type { ListRow } from '@/components/list/fields/types'
+import ListView from '@/components/list/ListView.vue'
 import { useFilter } from '@/composables/useFilter'
-import { useResourceList } from '@/composables/useResourceList'
 import {
   ACCOUNT_CATEGORY_SORTABLE,
   deleteAccountCategory,
@@ -46,8 +44,6 @@ const emit = defineEmits<{
   /** Every settled response, so the caller can show the count in its header. */
   loaded: [total: number]
 }>()
-
-const confirm = useConfirm()
 
 /** Computeds, not bare `can()` calls: see ContactListView. */
 const canUpdate = computed(() => can('totem.accountcategory.update'))
@@ -82,32 +78,12 @@ const { filters, setFilters, updateFilters, activeFilters } = useFilter<AccountC
   { syncUrl: props.syncUrl },
 )
 
-const {
-  rows,
-  total,
-  loading,
-  error,
-  first,
-  pageSize,
-  sortField,
-  sortOrder,
-  isInitialLoad,
-  onPage,
-  onSort,
-  reload,
-} = useResourceList({
-  fetchPage: listAccountCategories,
-  filters,
-  pageSize: props.pageSize,
-  sortField: 'name',
-  syncUrl: props.syncUrl,
-  sortable: ACCOUNT_CATEGORY_SORTABLE,
-})
+/** A <Field> slot is handed a generic row: the helpers below want a category. */
+function category(row: ListRow): AccountCategoryRow {
+  return row as AccountCategoryRow
+}
 
-const skeletonRows = Array.from(
-  { length: 5 },
-  (_, i) => ({ id: `skeleton-${i}` }) as AccountCategoryRow,
-)
+const list = useTemplateRef<{ reload(): Promise<void> }>('list')
 
 const deleteError = ref<string | null>(null)
 
@@ -117,67 +93,34 @@ async function remove(row: AccountCategoryRow): Promise<void> {
     await deleteAccountCategory(row.id)
     // The 404 recovery in useResourceList covers the case where that row was
     // the last one of the last page.
-    void reload()
+    void list.value?.reload()
   } catch (caught) {
     deleteError.value =
       caught instanceof ApiError ? caught.message : 'This category could not be deleted.'
   }
 }
 
-function askDelete(row: AccountCategoryRow): void {
-  confirm.require({
-    header: 'Delete this category?',
-    // SET_NULL on the movement side: worth saying, since nothing else warns.
-    message: `“${row.name}” will be removed. Its movements are kept, uncategorised.`,
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
-    acceptProps: { label: 'Delete', severity: 'danger' },
-    accept: () => {
-      void remove(row)
-    },
-  })
-}
-
-// On `loading` going false rather than on `total`: a reload landing on the same
-// count must still be reported.
-watch(loading, (busy) => {
-  if (!busy && !error.value) emit('loaded', total.value)
-})
-
-defineExpose({ reload })
+defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.resolve() })
 </script>
 
 <template>
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    <div class="list__error">
-      <span>{{ error }}</span>
-      <Button label="Retry" size="small" severity="danger" outlined @click="reload" />
-    </div>
-  </Message>
-
   <Message v-if="deleteError" severity="error" :closable="false" class="page__message">
     {{ deleteError }}
   </Message>
 
-  <DataTable
-    lazy
-    paginator
-    row-hover
-    data-key="id"
-    removable-sort
-    :value="isInitialLoad ? skeletonRows : rows"
-    :total-records="total"
-    :first="first"
-    :rows="pageSize"
-    :rows-per-page-options="[10, 20, 50, 100]"
-    :sort-field="sortField ?? undefined"
-    :sort-order="sortOrder"
-    paginator-template="FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink RowsPerPageDropdown"
-    current-page-report-template="{first}–{last} of {totalRecords}"
-    @page="onPage"
-    @sort="onSort"
+  <ListView
+    ref="list"
+    :fetch-page="listAccountCategories"
+    :filters="filters"
+    sort-field="name"
+    :sortable="ACCOUNT_CATEGORY_SORTABLE"
+    :page-size="pageSize"
+    :sync-url="syncUrl"
+    storage-key="account-categories"
+    :extra-fields="['name']"
+    @loaded="emit('loaded', $event)"
   >
-    <template #header>
+    <template #header="{ loading, reload }">
       <MultiRecordFilters
         :fields="FILTER_FIELDS"
         :filters="filters"
@@ -198,57 +141,37 @@ defineExpose({ reload })
       </div>
     </template>
 
-    <Column field="name" header="Name" sortable style="min-width: 16rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="2rem" />
-        <span v-else>{{ data.name }}</span>
-      </template>
-    </Column>
+    <Field name="name" label="Name" sortable />
 
-    <Column field="color" header="Colour" sortable style="width: 8rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <ColorDot v-else :color="data.color" />
-      </template>
-    </Column>
+    <Field name="color" widget="color" label="Colour" sortable :width="10" />
 
-    <Column field="account" header="Account" style="min-width: 14rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <span v-else-if="data.account">{{ displayAccount(data.account) }}</span>
+    <Field name="account" label="Account">
+      <template #default="{ row }">
+        <span v-if="category(row).account">{{ displayAccount(category(row).account!) }}</span>
         <!-- No owner means usable everywhere: say so rather than leave a hole. -->
         <span v-else class="category-cell__general">General</span>
       </template>
-    </Column>
+    </Field>
 
-    <Column style="width: 6rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="2rem" width="2rem" shape="circle" />
-        <!-- A <div> of our own rather than styling the cell: `body-class` lands
-             on a <td> PrimeVue renders, which a scoped rule never reaches. -->
-        <div v-else class="row-actions__buttons">
-          <Button
-            v-if="canUpdate"
-            icon="pi pi-pencil"
-            text
-            rounded
-            severity="secondary"
-            aria-label="Edit"
-            @click="emit('open', data.id)"
-          />
-          <Button
-            v-if="canDelete"
-            icon="pi pi-trash"
-            text
-            rounded
-            severity="danger"
-            aria-label="Delete"
-            @click="askDelete(data)"
-          />
-        </div>
-      </template>
-    </Column>
-  </DataTable>
+    <template #actions="{ row }">
+      <Button
+        v-if="canUpdate"
+        icon="pi pi-pencil"
+        text
+        rounded
+        severity="secondary"
+        aria-label="Edit"
+        @click="emit('open', row.id)"
+      />
+      <!-- SET_NULL on the movement side: worth saying, since nothing else warns. -->
+      <DeleteButton
+        v-if="canDelete"
+        label="Delete this category?"
+        :message="`“${row.name}” will be removed. Its movements are kept, uncategorised.`"
+        @confirm="remove(row)"
+      />
+    </template>
+  </ListView>
 </template>
 
 <style scoped>
@@ -267,18 +190,5 @@ defineExpose({ reload })
 .category-cell__general {
   color: var(--app-muted);
   font-style: italic;
-}
-
-.row-actions__buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.25rem;
-}
-
-.list__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
 }
 </style>

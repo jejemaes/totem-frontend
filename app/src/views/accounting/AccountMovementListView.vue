@@ -14,22 +14,19 @@
  * change of `filters`, which the account is not part of.
  */
 import Button from 'primevue/button'
-import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
 import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
-import { useConfirm } from 'primevue/useconfirm'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
 
 import { ApiError } from '@/api/client'
 import type { ListQuery, Page } from '@/api/list'
 import { can } from '@/auth/permissions'
-import ColorTag from '@/components/ColorTag.vue'
-import { toDateOrNull } from '@/components/form/fields/values'
-import MultiRecordFilters from '@/components/list/MultiRecordFilters.vue'
-import type { FilterFields } from '@/components/list/filters'
+import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
+import type { FilterFields } from '@/components/filters/filters'
+import DeleteButton from '@/components/list/DeleteButton.vue'
+import Field from '@/components/list/Field.vue'
+import type { ListRow } from '@/components/list/fields/types'
+import ListView from '@/components/list/ListView.vue'
 import { useFilter } from '@/composables/useFilter'
-import { useResourceList } from '@/composables/useResourceList'
 import {
   accountCategoryDisplayNames,
   searchApplicableCategories,
@@ -62,8 +59,6 @@ const emit = defineEmits<{
   /** A row was deleted: whatever the caller shows about the account (its balance) is stale. */
   deleted: [id: string]
 }>()
-
-const confirm = useConfirm()
 
 /** Computeds, not bare `can()` calls: see ContactListView. */
 const canUpdate = computed(() => can('totem.accountmovement.update'))
@@ -137,43 +132,12 @@ function fetchPage(
   )
 }
 
-const {
-  rows,
-  total,
-  loading,
-  error,
-  first,
-  pageSize,
-  sortField,
-  sortOrder,
-  isInitialLoad,
-  onPage,
-  onSort,
-  reload,
-} = useResourceList({
-  fetchPage,
-  filters,
-  pageSize: props.pageSize,
-  // Newest first, the backend's own default: a ledger is read from the top.
-  sortField: 'date',
-  sortOrder: -1,
-  syncUrl: props.syncUrl,
-  sortable: ACCOUNT_MOVEMENT_SORTABLE,
-})
-
-/**
- * A calendar day in the reader's locale. Through toDateOrNull, NEVER
- * `new Date('2026-10-16')`: that parses as UTC midnight, which west of
- * Greenwich is still the 15th.
- */
-function formatDay(value: string | null | undefined): string {
-  return toDateOrNull(value)?.toLocaleDateString() ?? '—'
+/** A <Field> slot is handed a generic row: the helpers below want a movement. */
+function movement(row: ListRow): AccountMovementRow {
+  return row as AccountMovementRow
 }
 
-const skeletonRows = Array.from(
-  { length: 5 },
-  (_, i) => ({ id: `skeleton-${i}` }) as AccountMovementRow,
-)
+const list = useTemplateRef<{ reload(): Promise<void> }>('list')
 
 const deleteError = ref<string | null>(null)
 
@@ -184,66 +148,35 @@ async function remove(row: AccountMovementRow): Promise<void> {
     emit('deleted', row.id)
     // The 404 recovery in useResourceList covers the case where that row was
     // the last one of the last page.
-    void reload()
+    void list.value?.reload()
   } catch (caught) {
     deleteError.value =
       caught instanceof ApiError ? caught.message : 'This movement could not be deleted.'
   }
 }
 
-function askDelete(row: AccountMovementRow): void {
-  confirm.require({
-    header: 'Delete this movement?',
-    message: `“${row.name}” will be removed, and the account balance with it.`,
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
-    acceptProps: { label: 'Delete', severity: 'danger' },
-    accept: () => {
-      void remove(row)
-    },
-  })
-}
-
-// On `loading` going false rather than on `total`: a reload landing on the same
-// count must still be reported.
-watch(loading, (busy) => {
-  if (!busy && !error.value) emit('loaded', total.value)
-})
-
-defineExpose({ reload })
+defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.resolve() })
 </script>
 
 <template>
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    <div class="list__error">
-      <span>{{ error }}</span>
-      <Button label="Retry" size="small" severity="danger" outlined @click="reload" />
-    </div>
-  </Message>
-
   <Message v-if="deleteError" severity="error" :closable="false" class="page__message">
     {{ deleteError }}
   </Message>
 
-  <DataTable
-    lazy
-    paginator
-    row-hover
-    data-key="id"
-    removable-sort
-    :value="isInitialLoad ? skeletonRows : rows"
-    :total-records="total"
-    :first="first"
-    :rows="pageSize"
-    :rows-per-page-options="[10, 20, 50, 100]"
-    :sort-field="sortField ?? undefined"
-    :sort-order="sortOrder"
-    paginator-template="FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink RowsPerPageDropdown"
-    current-page-report-template="{first}–{last} of {totalRecords}"
-    @page="onPage"
-    @sort="onSort"
+  <ListView
+    ref="list"
+    :fetch-page="fetchPage"
+    :filters="filters"
+    sort-field="date"
+    :sort-order="-1"
+    :sortable="ACCOUNT_MOVEMENT_SORTABLE"
+    :page-size="pageSize"
+    :sync-url="syncUrl"
+    storage-key="account-movements"
+    :extra-fields="['name']"
+    @loaded="emit('loaded', $event)"
   >
-    <template #header>
+    <template #header="{ loading, reload }">
       <MultiRecordFilters
         :fields="FILTER_FIELDS"
         :filters="filters"
@@ -265,75 +198,39 @@ defineExpose({ reload })
       </div>
     </template>
 
-    <Column field="date" header="Date" sortable style="width: 9rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <span v-else class="movement-cell__date">{{ formatDay(data.date) }}</span>
-      </template>
-    </Column>
+    <!-- Newest first, the backend's own default: a ledger is read from the top. -->
+    <Field name="date" widget="date" label="Date" sortable :width="12" />
 
-    <Column field="name" header="Name" sortable style="min-width: 16rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="2rem" />
-        <span v-else>{{ data.name }}</span>
-      </template>
-    </Column>
+    <Field name="name" label="Name" sortable />
 
-    <Column field="category" header="Category" style="width: 14rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1.5rem" />
-        <ColorTag
-          v-else-if="data.category"
-          :label="data.category.name"
-          :color="data.category.color"
-        />
-        <span v-else class="movement-cell__none">—</span>
-      </template>
-    </Column>
+    <Field name="category" widget="many2one" label="Category" :width="18" />
 
-    <Column
-      field="amount"
-      header="Amount"
-      sortable
-      style="width: 10rem"
-      header-class="amount-header"
-    >
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <div v-else class="amount" :class="`amount--${amountDirection(data.amount)}`">
-          {{ formatAmount(data.amount) }}
+    <Field name="amount" label="Amount" sortable align="end" :width="14">
+      <template #default="{ row }">
+        <div class="amount" :class="`amount--${amountDirection(movement(row).amount)}`">
+          {{ formatAmount(movement(row).amount) }}
         </div>
       </template>
-    </Column>
+    </Field>
 
-    <Column style="width: 6rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="2rem" width="2rem" shape="circle" />
-        <!-- A <div> of our own rather than styling the cell: `body-class` lands
-             on a <td> PrimeVue renders, which a scoped rule never reaches. -->
-        <div v-else class="row-actions__buttons">
-          <Button
-            v-if="canUpdate"
-            icon="pi pi-pencil"
-            text
-            rounded
-            severity="secondary"
-            aria-label="Edit"
-            @click="emit('open', data.id)"
-          />
-          <Button
-            v-if="canDelete"
-            icon="pi pi-trash"
-            text
-            rounded
-            severity="danger"
-            aria-label="Delete"
-            @click="askDelete(data)"
-          />
-        </div>
-      </template>
-    </Column>
-  </DataTable>
+    <template #actions="{ row }">
+      <Button
+        v-if="canUpdate"
+        icon="pi pi-pencil"
+        text
+        rounded
+        severity="secondary"
+        aria-label="Edit"
+        @click="emit('open', row.id)"
+      />
+      <DeleteButton
+        v-if="canDelete"
+        label="Delete this movement?"
+        :message="`“${row.name}” will be removed, and the account balance with it.`"
+        @confirm="remove(row)"
+      />
+    </template>
+  </ListView>
 </template>
 
 <style scoped>
@@ -349,14 +246,6 @@ defineExpose({ reload })
   font-size: 1.5rem;
 }
 
-.movement-cell__date {
-  font-variant-numeric: tabular-nums;
-}
-
-.movement-cell__none {
-  color: var(--app-muted);
-}
-
 /* Right-aligned with tabular digits: a money column is scanned by magnitude. */
 .amount {
   text-align: right;
@@ -369,22 +258,5 @@ defineExpose({ reload })
 
 .amount--credit {
   color: var(--p-primary-color);
-}
-
-:deep(.amount-header .p-datatable-column-header-content) {
-  justify-content: flex-end;
-}
-
-.row-actions__buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.25rem;
-}
-
-.list__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
 }
 </style>

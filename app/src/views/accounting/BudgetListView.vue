@@ -10,20 +10,19 @@
  * `search` the backend ignores.
  */
 import Button from 'primevue/button'
-import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
 import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
-import { useConfirm } from 'primevue/useconfirm'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
-import MultiRecordFilters from '@/components/list/MultiRecordFilters.vue'
-import type { FilterFields } from '@/components/list/filters'
+import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
+import type { FilterFields } from '@/components/filters/filters'
+import DeleteButton from '@/components/list/DeleteButton.vue'
+import Field from '@/components/list/Field.vue'
+import type { ListRow } from '@/components/list/fields/types'
+import ListView from '@/components/list/ListView.vue'
 import { useFilter } from '@/composables/useFilter'
-import { useResourceList } from '@/composables/useResourceList'
 import {
   accountDisplayNames,
   displayAccount,
@@ -54,8 +53,6 @@ const emit = defineEmits<{
   /** Every settled response, so the caller can show the count in its header. */
   loaded: [total: number]
 }>()
-
-const confirm = useConfirm()
 
 /** Computeds, not bare `can()` calls: see ContactListView. */
 const canUpdate = computed(() => can('totem.budget.update'))
@@ -111,32 +108,12 @@ const { filters, setFilters, updateFilters, activeFilters } = useFilter<BudgetFi
   { syncUrl: props.syncUrl, searchKey: SEARCH_KEY },
 )
 
-const {
-  rows,
-  total,
-  loading,
-  error,
-  first,
-  pageSize,
-  sortField,
-  sortOrder,
-  isInitialLoad,
-  onPage,
-  onSort,
-  reload,
-} = useResourceList({
-  fetchPage: listBudgets,
-  filters,
-  pageSize: props.pageSize,
-  sortField: 'name',
-  syncUrl: props.syncUrl,
-  sortable: BUDGET_SORTABLE,
-})
+/** A <Field> slot is handed a generic row: the helpers below want a budget. */
+function budget(row: ListRow): BudgetRow {
+  return row as BudgetRow
+}
 
-const skeletonRows = Array.from(
-  { length: 5 },
-  (_, i) => ({ id: `skeleton-${i}` }) as BudgetRow,
-)
+const list = useTemplateRef<{ reload(): Promise<void> }>('list')
 
 const deleteError = ref<string | null>(null)
 
@@ -146,66 +123,34 @@ async function remove(row: BudgetRow): Promise<void> {
     await deleteBudget(row.id)
     // The 404 recovery in useResourceList covers the case where that row was
     // the last one of the last page.
-    void reload()
+    void list.value?.reload()
   } catch (caught) {
     deleteError.value =
       caught instanceof ApiError ? caught.message : 'This budget could not be deleted.'
   }
 }
 
-function askDelete(row: BudgetRow): void {
-  confirm.require({
-    header: 'Delete this budget?',
-    message: `“${row.name}” will be removed, with its positions and lines.`,
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
-    acceptProps: { label: 'Delete', severity: 'danger' },
-    accept: () => {
-      void remove(row)
-    },
-  })
-}
-
-// On `loading` going false rather than on `total`: a reload landing on the same
-// count must still be reported.
-watch(loading, (busy) => {
-  if (!busy && !error.value) emit('loaded', total.value)
-})
-
-defineExpose({ reload })
+defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.resolve() })
 </script>
 
 <template>
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    <div class="list__error">
-      <span>{{ error }}</span>
-      <Button label="Retry" size="small" severity="danger" outlined @click="reload" />
-    </div>
-  </Message>
-
   <Message v-if="deleteError" severity="error" :closable="false" class="page__message">
     {{ deleteError }}
   </Message>
 
-  <DataTable
-    lazy
-    paginator
-    row-hover
-    data-key="id"
-    removable-sort
-    :value="isInitialLoad ? skeletonRows : rows"
-    :total-records="total"
-    :first="first"
-    :rows="pageSize"
-    :rows-per-page-options="[10, 20, 50, 100]"
-    :sort-field="sortField ?? undefined"
-    :sort-order="sortOrder"
-    paginator-template="FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink RowsPerPageDropdown"
-    current-page-report-template="{first}–{last} of {totalRecords}"
-    @page="onPage"
-    @sort="onSort"
+  <ListView
+    ref="list"
+    :fetch-page="listBudgets"
+    :filters="filters"
+    sort-field="name"
+    :sortable="BUDGET_SORTABLE"
+    :page-size="pageSize"
+    :sync-url="syncUrl"
+    storage-key="budgets"
+    :extra-fields="['name']"
+    @loaded="emit('loaded', $event)"
   >
-    <template #header>
+    <template #header="{ loading, reload }">
       <MultiRecordFilters
         :fields="FILTER_FIELDS"
         :filters="filters"
@@ -228,93 +173,50 @@ defineExpose({ reload })
       </div>
     </template>
 
-    <Column field="name" header="Name" sortable style="min-width: 14rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="2rem" />
-        <span v-else>{{ data.name }}</span>
-      </template>
-    </Column>
+    <Field name="name" label="Name" sortable />
 
-    <Column field="account" header="Account" style="min-width: 12rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <span v-else-if="data.account">{{ displayAccount(data.account) }}</span>
-      </template>
-    </Column>
+    <Field name="account" widget="many2one" label="Account"
+           :options="{ relationDisplay: displayAccount }" />
 
-    <Column field="user" header="User" style="width: 10rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <span v-else-if="data.user">{{ displayUser(data.user) }}</span>
-        <span v-else class="budget-cell__none">—</span>
-      </template>
-    </Column>
+    <Field name="user" widget="many2one" label="User" :options="{ relationDisplay: displayUser }"
+           :width="12" />
 
-    <Column
-      field="total_planned_amount"
-      header="Planned"
-      sortable
-      style="width: 10rem"
-      header-class="amount-header"
-    >
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <div v-else class="amount">{{ formatAmount(data.total_planned_amount) }}</div>
+    <Field name="total_planned_amount" label="Planned" sortable align="end" :width="12">
+      <template #default="{ row }">
+        <div class="amount">{{ formatAmount(budget(row).total_planned_amount) }}</div>
       </template>
-    </Column>
+    </Field>
 
-    <Column
-      field="total_practical_amount"
-      header="Actual"
-      sortable
-      style="width: 10rem"
-      header-class="amount-header"
-    >
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <div v-else class="amount">{{ formatAmount(data.total_practical_amount) }}</div>
+    <Field name="total_practical_amount" label="Actual" sortable align="end" :width="12">
+      <template #default="{ row }">
+        <div class="amount">{{ formatAmount(budget(row).total_practical_amount) }}</div>
       </template>
-    </Column>
+    </Field>
 
-    <Column field="active" header="Active" sortable style="width: 8rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1.5rem" />
-        <Tag
-          v-else
-          :value="data.active ? 'Active' : 'Archived'"
-          :severity="data.active ? 'success' : 'secondary'"
-        />
+    <Field name="active" label="Active" sortable :width="10">
+      <template #default="{ value }">
+        <Tag :value="value ? 'Active' : 'Archived'" :severity="value ? 'success' : 'secondary'" />
       </template>
-    </Column>
+    </Field>
 
-    <Column style="width: 6rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="2rem" width="2rem" shape="circle" />
-        <!-- A <div> of our own rather than styling the cell: `body-class` lands
-             on a <td> PrimeVue renders, which a scoped rule never reaches. -->
-        <div v-else class="row-actions__buttons">
-          <Button
-            v-if="canUpdate"
-            icon="pi pi-pencil"
-            text
-            rounded
-            severity="secondary"
-            aria-label="Edit"
-            @click="emit('open', data.id)"
-          />
-          <Button
-            v-if="canDelete"
-            icon="pi pi-trash"
-            text
-            rounded
-            severity="danger"
-            aria-label="Delete"
-            @click="askDelete(data)"
-          />
-        </div>
-      </template>
-    </Column>
-  </DataTable>
+    <template #actions="{ row }">
+      <Button
+        v-if="canUpdate"
+        icon="pi pi-pencil"
+        text
+        rounded
+        severity="secondary"
+        aria-label="Edit"
+        @click="emit('open', row.id)"
+      />
+      <DeleteButton
+        v-if="canDelete"
+        label="Delete this budget?"
+        :message="`“${row.name}” will be removed, with its positions and lines.`"
+        @confirm="remove(row)"
+      />
+    </template>
+  </ListView>
 </template>
 
 <style scoped>
@@ -330,30 +232,9 @@ defineExpose({ reload })
   font-size: 1.5rem;
 }
 
-.budget-cell__none {
-  color: var(--app-muted);
-}
-
 /* Right-aligned with tabular digits: a money column is scanned by magnitude. */
 .amount {
   text-align: right;
   font-variant-numeric: tabular-nums;
-}
-
-:deep(.amount-header .p-datatable-column-header-content) {
-  justify-content: flex-end;
-}
-
-.row-actions__buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.25rem;
-}
-
-.list__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
 }
 </style>
