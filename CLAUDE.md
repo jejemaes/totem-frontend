@@ -37,7 +37,7 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
     components/   ColorDot.vue, ColorTag.vue, colors.ts
       form/       Form.vue, context.ts, FieldSwitch, fields/, widget/
       filters/    MultiRecordFilters.vue, filters.ts
-      list/       ListView.vue, Field.vue, context.ts, ColumnMenu.vue, fields/ (the cells)
+      list/       ListView.vue, Field.vue, context.ts, ColumnMenu.vue, DeleteButton.vue, fields/
     composables/  useResourceList.ts, useResourceForm.ts, useFilter.ts, useTheme.ts
     layouts/      AdminLayout.vue, BlankLayout.vue, AppMenu.vue, menu.ts
     plugins/      primevue.ts
@@ -309,7 +309,9 @@ those into `router.push`. A Delete button lives in the form's `#actions` row, le
 
 Payloads are built **key by key** in local `createPayload(values)` / `updatePayload(changed)`
 helpers — never by copying the draft. See *the PATCH asymmetry* below for why that is not
-pedantry. Deletes go through `useConfirm()`; the dialog is mounted once in `AdminLayout`.
+pedantry. Deletes go through `useConfirm()`; the dialog is mounted once in `AdminLayout`. A list
+row's trash is `<DeleteButton label="Delete this X?" :message="..." @confirm="remove(row)">`
+(`components/list/`): it asks and emits, the view still sends the request and shows the refusal.
 
 `<Form>` works on a **copy** of `data`, keeps a baseline, and emits `save: [values, changed]` — a
 create sends `values`, an update sends `changed`. It watches `props.data` on identity, never

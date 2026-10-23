@@ -25,12 +25,12 @@ import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
 import Message from 'primevue/message'
-import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref, shallowRef, watch } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { MAX_PAGE_SIZE, type ListQuery, type Page } from '@/api/list'
 import { can } from '@/auth/permissions'
+import DeleteButton from '@/components/list/DeleteButton.vue'
 import { useResourceList } from '@/composables/useResourceList'
 import { formatAmount } from '@/resources/accounts'
 import {
@@ -60,8 +60,6 @@ const emit = defineEmits<{
   /** A line was added, edited or deleted: the totals the host shows are stale. */
   changed: []
 }>()
-
-const confirm = useConfirm()
 
 /** Computeds, not bare `can()` calls: see ContactListView. */
 const canCreate = computed(() => can('totem.budget.create'))
@@ -177,19 +175,6 @@ async function remove(row: BudgetLineRow): Promise<void> {
       caught instanceof ApiError ? caught.message : 'This line could not be deleted.'
   }
 }
-
-function askDelete(row: BudgetLineRow): void {
-  confirm.require({
-    header: 'Delete this line?',
-    message: `“${row.name}” will be removed from the budget.`,
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
-    acceptProps: { label: 'Delete', severity: 'danger' },
-    accept: () => {
-      void remove(row)
-    },
-  })
-}
 </script>
 
 <template>
@@ -263,15 +248,12 @@ function askDelete(row: BudgetLineRow): void {
               aria-label="Edit"
               @click="openForm(data.id)"
             />
-            <Button
+            <DeleteButton
               v-if="canDelete"
-              icon="pi pi-trash"
-              text
-              rounded
+              label="Delete this line?"
+              :message="`“${data.name}” will be removed from the budget.`"
               size="small"
-              severity="danger"
-              aria-label="Delete"
-              @click="askDelete(data)"
+              @confirm="remove(data)"
             />
           </div>
         </template>
