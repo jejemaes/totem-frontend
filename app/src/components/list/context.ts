@@ -36,6 +36,8 @@ export interface ListColumn extends ColumnDeclaration {
   sortable: boolean
   /** Percentage of the table width. */
   width?: number
+  /** Header alignment. `end` for numbers, so the header sits over its digits. */
+  align: 'start' | 'end'
   /** The <Field>'s default slot, when the view draws the cell itself. */
   cell?: CellSlot
 }

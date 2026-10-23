@@ -9,20 +9,19 @@
  * this table can offer one without the other.
  */
 import Button from 'primevue/button'
-import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
 import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
 import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
 import type { FilterFields } from '@/components/filters/filters'
 import DeleteButton from '@/components/list/DeleteButton.vue'
+import Field from '@/components/list/Field.vue'
+import type { ListRow } from '@/components/list/fields/types'
+import ListView from '@/components/list/ListView.vue'
 import { useFilter } from '@/composables/useFilter'
-import { useResourceList } from '@/composables/useResourceList'
 import {
   ACCOUNT_SORTABLE,
   amountDirection,
@@ -79,33 +78,12 @@ const { filters, setFilters, updateFilters, activeFilters } = useFilter<AccountF
   { syncUrl: props.syncUrl },
 )
 
-const {
-  rows,
-  total,
-  loading,
-  error,
-  first,
-  pageSize,
-  sortField,
-  sortOrder,
-  isInitialLoad,
-  onPage,
-  onSort,
-  reload,
-} = useResourceList({
-  fetchPage: listAccounts,
-  filters,
-  pageSize: props.pageSize,
-  // The backend's own default ordering: a chart of accounts reads by code.
-  sortField: 'code',
-  syncUrl: props.syncUrl,
-  sortable: ACCOUNT_SORTABLE,
-})
+/** A <Field> slot is handed a generic row: the helpers below want an account. */
+function account(row: ListRow): AccountRow {
+  return row as AccountRow
+}
 
-const skeletonRows = Array.from(
-  { length: 5 },
-  (_, i) => ({ id: `skeleton-${i}` }) as AccountRow,
-)
+const list = useTemplateRef<{ reload(): Promise<void> }>('list')
 
 const deleteError = ref<string | null>(null)
 
@@ -120,53 +98,34 @@ async function remove(row: AccountRow): Promise<void> {
     await deleteAccount(row.id)
     // The 404 recovery in useResourceList covers the case where that row was
     // the last one of the last page.
-    void reload()
+    void list.value?.reload()
   } catch (caught) {
     deleteError.value =
       caught instanceof ApiError ? caught.message : 'This account could not be deleted.'
   }
 }
 
-// On `loading` going false rather than on `total`: a reload landing on the same
-// count must still be reported.
-watch(loading, (busy) => {
-  if (!busy && !error.value) emit('loaded', total.value)
-})
-
-defineExpose({ reload })
+defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.resolve() })
 </script>
 
 <template>
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    <div class="list__error">
-      <span>{{ error }}</span>
-      <Button label="Retry" size="small" severity="danger" outlined @click="reload" />
-    </div>
-  </Message>
-
   <Message v-if="deleteError" severity="error" :closable="false" class="page__message">
     {{ deleteError }}
   </Message>
 
-  <DataTable
-    lazy
-    paginator
-    row-hover
-    data-key="id"
-    removable-sort
-    :value="isInitialLoad ? skeletonRows : rows"
-    :total-records="total"
-    :first="first"
-    :rows="pageSize"
-    :rows-per-page-options="[10, 20, 50, 100]"
-    :sort-field="sortField ?? undefined"
-    :sort-order="sortOrder"
-    paginator-template="FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink RowsPerPageDropdown"
-    current-page-report-template="{first}–{last} of {totalRecords}"
-    @page="onPage"
-    @sort="onSort"
+  <ListView
+    ref="list"
+    :fetch-page="listAccounts"
+    :filters="filters"
+    sort-field="code"
+    :sortable="ACCOUNT_SORTABLE"
+    :page-size="pageSize"
+    :sync-url="syncUrl"
+    storage-key="accounts"
+    :extra-fields="['code', 'name']"
+    @loaded="emit('loaded', $event)"
   >
-    <template #header>
+    <template #header="{ loading, reload }">
       <MultiRecordFilters
         :fields="FILTER_FIELDS"
         :filters="filters"
@@ -187,81 +146,57 @@ defineExpose({ reload })
       </div>
     </template>
 
-    <Column field="code" header="Code" sortable style="width: 12rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <span v-else class="account-cell__code">{{ data.code }}</span>
+    <!-- The backend's own default ordering: a chart of accounts reads by code. -->
+    <Field name="code" label="Code" sortable :width="15">
+      <template #default="{ value }">
+        <span class="account-cell__code">{{ value }}</span>
       </template>
-    </Column>
+    </Field>
 
-    <Column field="name" header="Name" sortable style="min-width: 16rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="2rem" />
-        <span v-else>{{ data.name }}</span>
-      </template>
-    </Column>
+    <Field name="name" label="Name" sortable />
 
-    <Column
-      field="balance"
-      header="Balance"
-      sortable
-      style="width: 12rem"
-      header-class="amount-header"
-    >
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1rem" />
-        <div v-else class="amount" :class="`amount--${amountDirection(data.balance)}`">
-          {{ formatAmount(data.balance) }}
+    <Field name="balance" label="Balance" sortable align="end" :width="15">
+      <template #default="{ row }">
+        <div class="amount" :class="`amount--${amountDirection(account(row).balance)}`">
+          {{ formatAmount(account(row).balance) }}
         </div>
       </template>
-    </Column>
+    </Field>
 
-    <Column field="active" header="Active" sortable style="width: 8rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="1.5rem" />
-        <Tag
-          v-else
-          :value="data.active ? 'Active' : 'Archived'"
-          :severity="data.active ? 'success' : 'secondary'"
-        />
+    <Field name="active" label="Active" sortable :width="10">
+      <template #default="{ value }">
+        <Tag :value="value ? 'Active' : 'Archived'" :severity="value ? 'success' : 'secondary'" />
       </template>
-    </Column>
+    </Field>
 
-    <Column style="width: 9rem">
-      <template #body="{ data }">
-        <Skeleton v-if="isInitialLoad" height="2rem" width="2rem" shape="circle" />
-        <!-- A <div> of our own rather than styling the cell: `body-class` lands
-             on a <td> PrimeVue renders, which a scoped rule never reaches. -->
-        <div v-else class="row-actions__buttons">
-          <Button
-            v-if="canReadMovements"
-            icon="pi pi-list"
-            text
-            rounded
-            severity="secondary"
-            aria-label="Movements"
-            title="Movements"
-            @click="emit('movements', data.id)"
-          />
-          <Button
-            v-if="canUpdate"
-            icon="pi pi-pencil"
-            text
-            rounded
-            severity="secondary"
-            aria-label="Edit"
-            @click="emit('open', data.id)"
-          />
-          <DeleteButton
-            v-if="canDelete"
-            label="Delete this account?"
-            :message="`“${data.code} · ${data.name}” and its own categories will be removed.`"
-            @confirm="remove(data)"
-          />
-        </div>
-      </template>
-    </Column>
-  </DataTable>
+    <template #actions="{ row }">
+      <Button
+        v-if="canReadMovements"
+        icon="pi pi-list"
+        text
+        rounded
+        severity="secondary"
+        aria-label="Movements"
+        title="Movements"
+        @click="emit('movements', row.id)"
+      />
+      <Button
+        v-if="canUpdate"
+        icon="pi pi-pencil"
+        text
+        rounded
+        severity="secondary"
+        aria-label="Edit"
+        @click="emit('open', row.id)"
+      />
+      <DeleteButton
+        v-if="canDelete"
+        label="Delete this account?"
+        :message="`“${row.code} · ${row.name}” and its own categories will be removed.`"
+        @confirm="remove(row)"
+      />
+    </template>
+  </ListView>
 </template>
 
 <style scoped>
@@ -291,22 +226,5 @@ defineExpose({ reload })
 
 .amount--debit {
   color: var(--p-red-500);
-}
-
-:deep(.amount-header .p-datatable-column-header-content) {
-  justify-content: flex-end;
-}
-
-.row-actions__buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.25rem;
-}
-
-.list__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
 }
 </style>
