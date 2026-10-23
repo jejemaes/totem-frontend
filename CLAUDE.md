@@ -418,6 +418,8 @@ against an in-memory store.
   remounted on every table render -- the menu used to close under each click. Every `<Column>`
   also carries a `column-key` for the same family of reason.
 - `sortable` on a `<Field>` is granted only when `ListView`'s `sortable` whitelist holds the name.
+- **The loading mask waits 300 ms** (`delayedFlag.ts`). Shown at once, it greyed the table on every
+  sort and page and made the lists feel slower than the hand-wired ones, which had none.
 - `resequence` enables row drag: one page of `MAX_PAGE_SIZE`, `sequenceField` order, no header
   sort, drops chained through `resequence.ts`.
 - `mode="selection"` adds checkboxes; `selection.ts` keeps a `Map` across pages and the ids come
@@ -528,7 +530,7 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | `MultiRecordFilters.vue`       | `filters/filters.ts`    |
 | `ColorTag.vue`                 | `colors.ts`             |
 | every field                    | `fields/values.ts`      |
-| `ListView.vue`                 | `list/columns.ts`, `list/selection.ts`, `list/resequence.ts` |
+| `ListView.vue`                 | `list/columns.ts`, `list/selection.ts`, `list/resequence.ts`, `list/delayedFlag.ts` |
 | every list cell                | `list/fields/cells.ts`  |
 
 Follow that split for anything new: if a bug would stay invisible until a user hits it, its logic

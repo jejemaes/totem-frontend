@@ -24,7 +24,16 @@ import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
 import Message from 'primevue/message'
 import Tooltip from 'primevue/tooltip'
-import { computed, onMounted, provide, ref, shallowReactive, shallowRef, watch } from 'vue'
+import {
+  computed,
+  onMounted,
+  onScopeDispose,
+  provide,
+  ref,
+  shallowReactive,
+  shallowRef,
+  watch,
+} from 'vue'
 
 import { ApiError } from '@/api/client'
 import { MAX_PAGE_SIZE, type ListFilters } from '@/api/list'
@@ -44,6 +53,7 @@ import {
   type ColumnState,
 } from './columns'
 import { LIST_CONTEXT, type ListColumn } from './context'
+import { createDelayedFlag } from './delayedFlag'
 import Cell from './fields/Cell.vue'
 import type { ListRow } from './fields/types'
 import { createResequenceQueue } from './resequence'
@@ -222,6 +232,19 @@ watch(loading, (busy) => {
   if (!busy && !error.value) emit('loaded', total.value)
 })
 
+/**
+ * The table's loading mask, shown only for a request still running after
+ * MASK_DELAY_MS -- see delayedFlag.ts for why not at once. The first load is
+ * left out: the skeleton rows already say it.
+ */
+const MASK_DELAY_MS = 300
+const masked = ref(false)
+const mask = createDelayedFlag(MASK_DELAY_MS, (on) => {
+  masked.value = on
+})
+watch(loading, (busy) => mask.set(busy && !isInitialLoad.value))
+onScopeDispose(() => mask.dispose())
+
 /** A header is sortable only when asked AND accepted -- and never while the
     rows ARE the sequence order. */
 function isSortable(column: ListColumn): boolean {
@@ -341,7 +364,7 @@ defineExpose({ reload: list.reload, reset: list.reset })
       data-key="id"
       removable-sort
       :value="displayed"
-      :loading="loading && !isInitialLoad"
+      :loading="masked"
       :paginator="showPaginator"
       :total-records="total"
       :first="first"
