@@ -31,6 +31,7 @@ import { MAX_PAGE_SIZE, type ListFilters } from '@/api/list'
 import { useResourceList, type ListFetcher } from '@/composables/useResourceList'
 
 import ColumnMenu from './ColumnMenu.vue'
+import FieldDeclarations from './FieldDeclarations.vue'
 import {
   columnPrefsKey,
   moveColumn,
@@ -321,8 +322,9 @@ defineExpose({ reload: list.reload, reset: list.reset })
 
 <template>
   <div class="list-view">
-    <!-- The declarations: mounted so they register, never shown. -->
-    <div hidden><slot /></div>
+    <!-- The declarations: mounted so they register, never shown. Through
+         FieldDeclarations, never inline: see that file. -->
+    <div hidden><FieldDeclarations><slot /></FieldDeclarations></div>
 
     <Message v-if="error" severity="error" :closable="false">
       <div class="list-view__error">

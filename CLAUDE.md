@@ -395,6 +395,12 @@ against an in-memory store.
   `ListView` renders every `<Column>` itself. PrimeVue only finds a `<Column>` that is a direct
   child of the `DataTable` (or under a keyed vnode), and only a declared column can be hidden or
   reordered by the user.
+- **The declarations are rendered by `FieldDeclarations.vue`, never inline in `ListView`'s
+  template.** Inline, the slot re-ran on every `ListView` render, and a `<Field>` given an object
+  naming a binding (`:options="{ relationDisplay: displayAccount }"`, which the compiler cannot
+  hoist) got new props each time -- new declarations, new render, new props: the budgets list
+  rendered 200 times on mount. Forwarded as a stable slot, it re-runs only when what the fields
+  themselves read changes.
 - **The first request leaves in `onMounted`** (`useResourceList({ immediate: false })`): the
   `<Field>`s register during `ListView`'s first render, after its setup, and the request must
   already carry their `?fields=`.
