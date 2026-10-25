@@ -1,22 +1,15 @@
 <script setup lang="ts">
-import Button from 'primevue/button'
-import Card from 'primevue/card'
-import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
 import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import TabPanel from 'primevue/tabpanel'
 import TabPanels from 'primevue/tabpanels'
 import Tabs from 'primevue/tabs'
-import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref, watch } from 'vue'
 
-import { ApiError } from '@/api/client'
-import { can } from '@/auth/permissions'
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
-import Form from '@/components/form/Form.vue'
+import FormView from '@/components/form/FormView.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import { displayAccount, searchAccounts, type AccountRef } from '@/resources/accounts'
 import {
@@ -67,10 +60,6 @@ const emit = defineEmits<{
    */
   movements: [accountId: string, categoryId: string]
 }>()
-
-const confirm = useConfirm()
-
-const canDelete = computed(() => can('totem.budget.delete'))
 
 /** `FieldValue` is wider than the payload accepts. */
 function text(value: FieldValue): string | null {
@@ -142,9 +131,12 @@ const form = useResourceForm<BudgetDetail>({
   update: (id, changed) => updateBudget(id, updatePayload(changed)),
   notFoundMessage: 'This budget no longer exists.',
   onSaved: (budget, mode) => emit('saved', budget, mode),
+  remove: (id) => deleteBudget(id),
+  onDeleted: () => emit('deleted'),
+  deleteErrorMessage: 'This budget could not be deleted.',
 })
 
-const { isNew, data, loading, loadError, saving, error, fieldErrors } = form
+const { isNew, data } = form
 
 /**
  * The open tab. Balance comes first and is what an edit opens on: a saved
@@ -181,200 +173,102 @@ watch(isNew, (creating) => {
 const title = computed(() =>
   isNew.value ? 'New budget' : (text(data.value?.name ?? null) ?? 'Budget'),
 )
-const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
-
-watch(title, (value) => emit('title', value), { immediate: true })
-
-const deleting = ref(false)
-const deleteError = ref<string | null>(null)
-
-async function remove(): Promise<void> {
-  const id = props.id ?? ''
-  if (!id) return
-
-  deleting.value = true
-  deleteError.value = null
-  try {
-    await deleteBudget(id)
-    emit('deleted')
-  } catch (caught) {
-    deleteError.value =
-      caught instanceof ApiError ? caught.message : 'This budget could not be deleted.'
-  } finally {
-    deleting.value = false
-  }
-}
-
-function askDelete(): void {
-  confirm.require({
-    header: 'Delete this budget?',
-    message: `“${title.value}” will be removed, with its positions and lines.`,
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
-    acceptProps: { label: 'Delete', severity: 'danger' },
-    accept: () => {
-      void remove()
-    },
-  })
-}
 </script>
 
 <template>
-  <Message v-if="loadError" severity="error" :closable="false" class="page__message">
-    <div class="form__error">
-      <span>{{ loadError }}</span>
-      <Button label="Back" size="small" severity="danger" outlined @click="emit('cancel')" />
+  <FormView
+    :form="form"
+    :title="title"
+    width="medium"
+    :skeleton="4"
+    delete-permission="totem.budget.delete"
+    delete-header="Delete this budget?"
+    :delete-message="`“${title}” will be removed, with its positions and lines.`"
+    @cancel="emit('cancel')"
+    @title="emit('title', $event)"
+  >
+    <Field
+      name="name"
+      widget="string"
+      label="Name"
+      required
+      :options="{ maxLength: 255, placeholder: 'Household 2026' }"
+    />
+
+    <!-- Two columns of the view's own: a layout concern of this screen,
+         not something <Form> should grow. <Field> registers through
+         inject, so any wrapper is transparent to it. Read row by row:
+         account | active, then user. -->
+    <div class="budget-form__columns">
+      <Field
+        name="account"
+        widget="many2one"
+        label="Account"
+        :required="isNew"
+        :readonly="!isNew"
+        :options="{
+          fetch: searchAccounts,
+          record: account,
+          relationDisplay: displayAccount,
+          permission: 'totem.account.read',
+        }"
+        :help="isNew ? undefined : 'Set at creation, it cannot be changed.'"
+      />
+
+      <Field name="active" widget="boolean" label="Active" required />
+
+      <Field
+        name="user"
+        widget="many2one"
+        label="User"
+        :options="{
+          fetch: searchUsers,
+          record: user,
+          relationDisplay: displayUser,
+          permission: 'totem.user.read',
+        }"
+        help="The user in charge of the budget."
+      />
     </div>
-  </Message>
 
-  <Message v-if="deleteError" severity="error" :closable="false" class="page__message">
-    {{ deleteError }}
-  </Message>
-
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    {{ error }}
-  </Message>
-
-  <Card v-if="!loadError" class="budget-form">
-    <template #content>
-      <div v-if="loading" class="budget-form__skeleton">
-        <Skeleton v-for="n in 4" :key="n" height="3.2rem" />
-      </div>
-
-      <Form
-        v-else-if="data"
-        :data="data"
-        :save-label="saveLabel"
-        :saving="saving"
-        :errors="fieldErrors"
-        @save="form.save"
-      >
-        <template #default>
-          <Field
-            name="name"
-            widget="string"
-            label="Name"
-            required
-            :options="{ maxLength: 255, placeholder: 'Household 2026' }"
+    <Tabs v-model:value="tab" class="budget-form__tabs">
+      <TabList>
+        <Tab v-if="!isNew" value="balance">Balance</Tab>
+        <Tab value="note">Note</Tab>
+        <Tab v-if="!isNew" value="infos">Infos</Tab>
+      </TabList>
+      <TabPanels>
+        <!-- Keyed on the id: the routed page reuses this component when
+             only the param changes, and the balance must follow. -->
+        <TabPanel v-if="!isNew" value="balance">
+          <BudgetBalanceView
+            v-if="balanceSeen && id"
+            :key="id"
+            :budget-id="id"
+            :account-id="account?.id ?? null"
+            @movements="openMovements"
           />
+        </TabPanel>
 
-          <!-- Two columns of the view's own: a layout concern of this screen,
-               not something <Form> should grow. <Field> registers through
-               inject, so any wrapper is transparent to it. Read row by row:
-               account | active, then user. -->
+        <TabPanel value="note">
+          <!-- Default options: `allowWidget` stays off, like the
+               backend's HtmlField on this model. -->
+          <Field name="note" widget="html" label="Note" :options="{ rows: 8 }" />
+        </TabPanel>
+
+        <!-- Shown, never sent: neither schema accepts the dates. -->
+        <TabPanel v-if="!isNew" value="infos">
           <div class="budget-form__columns">
-            <Field
-              name="account"
-              widget="many2one"
-              label="Account"
-              :required="isNew"
-              :readonly="!isNew"
-              :options="{
-                fetch: searchAccounts,
-                record: account,
-                relationDisplay: displayAccount,
-                permission: 'totem.account.read',
-              }"
-              :help="isNew ? undefined : 'Set at creation, it cannot be changed.'"
-            />
-
-            <Field name="active" widget="boolean" label="Active" required />
-
-            <Field
-              name="user"
-              widget="many2one"
-              label="User"
-              :options="{
-                fetch: searchUsers,
-                record: user,
-                relationDisplay: displayUser,
-                permission: 'totem.user.read',
-              }"
-              help="The user in charge of the budget."
-            />
+            <Field name="create_date" widget="datetime" label="Created on" readonly />
+            <Field name="update_date" widget="datetime" label="Last updated" readonly />
           </div>
-
-          <Tabs v-model:value="tab" class="budget-form__tabs">
-            <TabList>
-              <Tab v-if="!isNew" value="balance">Balance</Tab>
-              <Tab value="note">Note</Tab>
-              <Tab v-if="!isNew" value="infos">Infos</Tab>
-            </TabList>
-            <TabPanels>
-              <!-- Keyed on the id: the routed page reuses this component when
-                   only the param changes, and the balance must follow. -->
-              <TabPanel v-if="!isNew" value="balance">
-                <BudgetBalanceView
-                  v-if="balanceSeen && id"
-                  :key="id"
-                  :budget-id="id"
-                  :account-id="account?.id ?? null"
-                  @movements="openMovements"
-                />
-              </TabPanel>
-
-              <TabPanel value="note">
-                <!-- Default options: `allowWidget` stays off, like the
-                     backend's HtmlField on this model. -->
-                <Field name="note" widget="html" label="Note" :options="{ rows: 8 }" />
-              </TabPanel>
-
-              <!-- Shown, never sent: neither schema accepts the dates. -->
-              <TabPanel v-if="!isNew" value="infos">
-                <div class="budget-form__columns">
-                  <Field name="create_date" widget="datetime" label="Created on" readonly />
-                  <Field name="update_date" widget="datetime" label="Last updated" readonly />
-                </div>
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
-        </template>
-
-        <template #actions="{ dirty }">
-          <!-- Left-aligned, away from Save: a destructive action does not
-               sit next to the button the user reaches for. -->
-          <Button
-            v-if="!isNew && canDelete"
-            label="Delete"
-            icon="pi pi-trash"
-            severity="danger"
-            text
-            class="form__delete"
-            :loading="deleting"
-            :disabled="saving"
-            @click="askDelete"
-          />
-          <Button
-            label="Cancel"
-            severity="secondary"
-            text
-            :disabled="saving"
-            @click="emit('cancel')"
-          />
-          <Button
-            type="submit"
-            :label="saveLabel"
-            icon="pi pi-check"
-            :loading="saving"
-            :disabled="!isNew && !dirty"
-          />
-        </template>
-      </Form>
-    </template>
-  </Card>
+        </TabPanel>
+      </TabPanels>
+    </Tabs>
+  </FormView>
 </template>
 
 <style scoped>
-/* Wider than the other forms: two columns, and a rich-text editor below. */
-.budget-form {
-  max-width: 56rem;
-}
-
-.budget-form__skeleton {
-  display: grid;
-  gap: 1rem;
-}
-
 .budget-form__columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -391,16 +285,5 @@ function askDelete(): void {
 /* The panel's own padding sits flush with the fields above. */
 .budget-form__tabs :deep(.p-tabpanels) {
   padding: 1rem 0 0;
-}
-
-.form__delete {
-  margin-right: auto;
-}
-
-.form__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
 }
 </style>

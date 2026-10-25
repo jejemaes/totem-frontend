@@ -1,14 +1,10 @@
 <script setup lang="ts">
-import Button from 'primevue/button'
-import Card from 'primevue/card'
-import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
-import Form from '@/components/form/Form.vue'
+import FormView from '@/components/form/FormView.vue'
 import UserRolesSelectionWidget from '@/components/form/widget/UserRolesSelectionWidget.vue'
 import { sameRoleIds } from '@/components/form/widget/userRolesSelection'
 import { useResourceForm } from '@/composables/useResourceForm'
@@ -27,8 +23,8 @@ import {
  * comes in as the `id` prop and every way out is an event -- the routed page
  * turns those into navigation, a Dialog into closing itself.
  * `useResourceForm` owns everything that differs -- loading the record, POST
- * versus PATCH, the error mapping -- so what is left here is the field list
- * and the two labels that change.
+ * versus PATCH, the error mapping -- and <FormView> everything drawn around the
+ * fields, so what is left here is the field list and the payloads.
  */
 const props = defineProps<{
   /** `null` creates. A prop rather than the route param, so a modal can drive it. */
@@ -50,7 +46,8 @@ const emit = defineEmits<{
  * a FieldValue is a primitive -- so it registers nothing and <Form> knows
  * nothing about it. Everything <Form> would have done is therefore explicit
  * below: seeding on load (`onLoaded`), telling an edit from an untouched list
- * (`rolesDirty`), enabling Save, and reaching the payload.
+ * (`rolesDirty`), enabling Save (`hasExternalChanges`, which <FormView> reads),
+ * and reaching the payload.
  */
 const roleIds = ref<string[]>([])
 
@@ -157,136 +154,70 @@ const form = useResourceForm<UserDetail>({
   onSaved: (user, mode) => emit('saved', user, mode),
 })
 
-const { isNew, data, loading, loadError, saving, error, fieldErrors } = form
+const { isNew, data, saving, fieldErrors } = form
 
 /** The login is the account's identity, so it titles the page once loaded. */
 const title = computed(() => (isNew.value ? 'New user' : (text(data.value?.login ?? null) ?? 'User')))
-const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
-
-watch(title, (value) => emit('title', value), { immediate: true })
 </script>
 
 <template>
-  <Message v-if="loadError" severity="error" :closable="false" class="page__message">
-    <div class="form__error">
-      <span>{{ loadError }}</span>
-      <Button label="Back" size="small" severity="danger" outlined @click="emit('cancel')" />
-    </div>
-  </Message>
+  <FormView
+    :form="form"
+    :title="title"
+    :skeleton="6"
+    @cancel="emit('cancel')"
+    @title="emit('title', $event)"
+    v-slot="{ draft }"
+  >
+    <Field
+      name="login"
+      widget="string"
+      label="Login"
+      required
+      :options="{ maxLength: 255, placeholder: 'jdoe' }"
+      help="Used to sign in. It must be unique."
+    />
 
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    {{ error }}
-  </Message>
+    <Field
+      name="email"
+      widget="string"
+      label="Email"
+      required
+      :options="{ maxLength: 255, placeholder: 'jane.doe@example.com' }"
+    />
 
-  <Card v-if="!loadError" class="user-form">
-    <template #content>
-      <!-- Placeholders with the form's real shape, so the card does not jump
-           when the record lands. -->
-      <div v-if="loading" class="user-form__skeleton">
-        <Skeleton v-for="n in 6" :key="n" height="3.2rem" />
-      </div>
+    <Field name="first_name" widget="string" label="First name" :options="{ maxLength: 255 }" />
 
-      <Form
-        v-else-if="data"
-        :data="data"
-        :save-label="saveLabel"
-        :saving="saving"
-        :errors="fieldErrors"
-        @save="form.save"
-      >
-        <template #default="{ draft }">
-          <Field
-            name="login"
-            widget="string"
-            label="Login"
-            required
-            :options="{ maxLength: 255, placeholder: 'jdoe' }"
-            help="Used to sign in. It must be unique."
-          />
+    <Field name="last_name" widget="string" label="Last name" :options="{ maxLength: 255 }" />
 
-          <Field
-            name="email"
-            widget="string"
-            label="Email"
-            required
-            :options="{ maxLength: 255, placeholder: 'jane.doe@example.com' }"
-          />
+    <Field
+      name="language"
+      widget="selection"
+      label="Language"
+      required
+      :options="{
+        choices: [
+          { value: 'fr', label: 'French' },
+          { value: 'en-us', label: 'English' },
+        ],
+      }"
+      help="Interface language for this account."
+    />
 
-          <Field name="first_name" widget="string" label="First name" :options="{ maxLength: 255 }" />
-
-          <Field name="last_name" widget="string" label="Last name" :options="{ maxLength: 255 }" />
-
-          <Field
-            name="language"
-            widget="selection"
-            label="Language"
-            required
-            :options="{
-              choices: [
-                { value: 'fr', label: 'French' },
-                { value: 'en-us', label: 'English' },
-              ],
-            }"
-            help="Interface language for this account."
-          />
-
-          <!-- Not a <Field>: its value is a list of role ids, which the
-               <Field> system cannot carry. It is passed `draft` for the same
-               reason a widget receives `values` -- so a rule can depend on a
-               sibling -- and everything <Field> would have forwarded is
-               explicit here: the lock during a save, and the server error,
-               which <Form> can only route to a registered field. -->
-          <UserRolesSelectionWidget
-            v-model="roleIds"
-            :values="draft"
-            label="Roles"
-            help="One role per category. Permissions are the union of the roles granted."
-            :readonly="saving"
-            :invalid="Boolean(fieldErrors.roles)"
-            :error="fieldErrors.roles"
-          />
-        </template>
-
-        <template #actions="{ dirty }">
-          <Button
-            label="Cancel"
-            severity="secondary"
-            text
-            :disabled="saving"
-            @click="emit('cancel')"
-          />
-          <!-- Nothing edited means nothing to PATCH, so on an existing
-               record Save has no work to do. A create always has.
-               `rolesDirty` is OR-ed in because the roles widget lives outside
-               the draft, so <Form>'s own `dirty` cannot see it. -->
-          <Button
-            type="submit"
-            :label="saveLabel"
-            icon="pi pi-check"
-            :loading="saving"
-            :disabled="!isNew && !dirty && !rolesDirty"
-          />
-        </template>
-      </Form>
-    </template>
-  </Card>
+    <!-- Not a <Field>: its value is a list of role ids, which the
+         <Field> system cannot carry. It is passed `draft` for the same
+         reason a widget receives `values` -- so a rule can depend on a
+         sibling -- and everything <Field> would have forwarded is
+         explicit here: the lock during a save, and the server error,
+         which <Form> can only route to a registered field. -->
+    <UserRolesSelectionWidget
+      v-model="roleIds"
+      :values="draft"
+      label="Roles"
+      help="One role per category. Permissions are the union of the roles granted."
+      :readonly="saving"
+      :invalid="Boolean(fieldErrors.roles)"
+      :error="fieldErrors.roles"
+    />
+  </FormView>
 </template>
-
-<style scoped>
-/* A full-width form is unreadable: the fields themselves are short. */
-.user-form {
-  max-width: 36rem;
-}
-
-.user-form__skeleton {
-  display: grid;
-  gap: 1rem;
-}
-
-.form__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-</style>

@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
-import Card from 'primevue/card'
 import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
 import { computed, onScopeDispose, ref, shallowRef } from 'vue'
 
 import { can } from '@/auth/permissions'
@@ -10,7 +8,7 @@ import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import { htmlOrNull } from '@/components/form/fields/html'
 import type { FieldValue } from '@/components/form/fields/types'
-import Form from '@/components/form/Form.vue'
+import FormView from '@/components/form/FormView.vue'
 import WebsiteThemeOptionSubform from '@/components/form/widget/WebsiteThemeOptionSubform.vue'
 import {
   sameThemeOptions,
@@ -243,7 +241,7 @@ const form: ResourceForm = useResourceForm<WebsiteDetail>({
   },
 })
 
-const { data, loading, loadError, saving, error, fieldErrors } = form
+const { data, loadError, saving, fieldErrors, externalDirty } = form
 
 /**
  * The record behind the current theme, for `options.record`.
@@ -344,236 +342,214 @@ function discard(): void {
       </div>
     </header>
 
-    <Message v-if="loadError" severity="error" :closable="false" class="page__message">
-      {{ loadError }}
-    </Message>
+    <FormView
+      :form="form"
+      title="Website configuration"
+      width="wide"
+      :skeleton="8"
+      :readonly="!canUpdate"
+      :cancellable="false"
+      :on-save="onSave"
+    >
+      <template #messages>
+        <Message v-if="saved" severity="success" :closable="false" class="page__message">
+          Settings saved.
+        </Message>
 
-    <Message v-if="error" severity="error" :closable="false" class="page__message">
-      {{ error }}
-    </Message>
-
-    <Message v-if="saved" severity="success" :closable="false" class="page__message">
-      Settings saved.
-    </Message>
-
-    <Message v-if="!loadError && !canUpdate" severity="info" :closable="false" class="page__message">
-      You may read these settings, but not change them.
-    </Message>
-
-    <Card v-if="!loadError" class="website-form">
-      <template #content>
-        <div v-if="loading" class="website-form__skeleton">
-          <Skeleton v-for="n in 8" :key="n" height="3.2rem" />
-        </div>
-
-        <Form
-          v-else-if="data"
-          :data="data"
-          save-label="Save"
-          :saving="saving"
-          :readonly="!canUpdate"
-          :errors="fieldErrors"
-          @save="onSave"
+        <Message
+          v-if="!loadError && !canUpdate"
+          severity="info"
+          :closable="false"
+          class="page__message"
         >
-          <template #default="{ draft }">
-            <Field
-              name="name"
-              widget="string"
-              label="Name"
-              required
-              :options="{ maxLength: 256, placeholder: 'Totem' }"
-              help="Shown in the browser tab and wherever the site names itself."
-            />
-
-            <Field
-              name="headline"
-              widget="string"
-              label="Headline"
-              required
-              :options="{ maxLength: 256, placeholder: 'The showcase of your business' }"
-            />
-
-            <!-- A relation over a registry rather than over a table: the value
-                 is a theme id, which is all this needs to be an ordinary
-                 many2one. `filter: false` because the route takes no search
-                 parameter and the catalogue is a handful of entries.
-                 `required`: the column is NOT NULL, so there is no empty state
-                 to offer -- and that also removes the clear button. -->
-            <Field
-              v-if="canReadThemes"
-              name="theme"
-              widget="many2one"
-              label="Theme"
-              required
-              :options="{
-                fetch: searchWebsiteThemes,
-                record: theme,
-                relationDisplay: displayTheme,
-                filter: false,
-              }"
-              help="Changing the theme RESETS its options: they are keyed by the options the
-                    previous theme declared, and nothing maps them onto another's."
-            />
-
-            <!-- The options of the theme above, built on the fly from the
-                 schema it publishes. A detached widget, not a <Field>: its
-                 value is a bag, which no FieldValue can carry. `saving` is
-                 OR-ed into `readonly` by hand -- it provides its own form
-                 context, so <Form>'s own lock does not reach it. -->
-            <WebsiteThemeOptionSubform
-              v-if="canReadThemes"
-              v-model="themeOptions"
-              :theme="optionTheme(draft.theme)"
-              label="Theme options"
-              help="What the selected theme lets you change without touching code. An option
-                    left empty keeps the theme's own value."
-              :readonly="!canUpdate || saving"
-              :error="fieldErrors.theme_options"
-            />
-
-            <!-- The page served at the root of the site. Nullable: a freshly
-                 provisioned system has no content yet. -->
-            <Field
-              name="homepage"
-              widget="many2one"
-              label="Homepage"
-              :options="{
-                fetch: searchWebsitePages,
-                record: homepage,
-                relationDisplay: displayPage,
-                permission: 'totem.websitepage.read',
-              }"
-              help="Page rendered at the root of the website."
-            />
-
-            <!-- A relation to the media store, picked from the same modal the
-                 rich text editor opens: a dropdown of filenames is not a way to
-                 choose a picture. The value is the media's id, so this stays an
-                 ordinary <Field>. Hidden without the media scope -- see
-                 canReadMedias. -->
-            <Field
-              v-if="canReadMedias"
-              name="cover_media"
-              widget="media_image"
-              label="Cover Image"
-              :options="{
-                record: coverMedia,
-                browseImages: browseWebsiteMedias,
-                browsePermission: 'totem.websitemedia.read',
-                uploadImage: uploadWebsiteMedia,
-                uploadPermission: 'totem.websitemedia.create',
-                maxUploadBytes: 5 * 1024 * 1024,
-              }"
-              help="Image a theme may show on the homepage. Only themes declaring the
-                    cover-media feature use it; the others ignore it."
-            />
-
-            <!-- `name` is label enough for the generic display, so no
-                 relationDisplay here. -->
-            <Field
-              name="menu"
-              widget="many2one"
-              label="Main menu"
-              :options="{
-                fetch: searchWebsiteMenus,
-                record: menu,
-                permission: 'totem.websitemenu.read',
-              }"
-              help="Parent item whose children make up the site's main menu."
-            />
-
-            <Field
-              name="meta_authors"
-              widget="string"
-              label="Meta author"
-              :options="{ maxLength: 256 }"
-              help="Value of the <meta name=&quot;author&quot;> tag."
-            />
-
-            <Field
-              name="meta_description"
-              widget="text"
-              label="Meta description"
-              :options="{ rows: 3 }"
-              help="Value of the <meta name=&quot;description&quot;> tag, used by search engines."
-            />
-
-            <!-- `allowWidget` here, matching HtmlField(allow_widget=True) on
-                 Website.footer: like Page.content, this column accepts a
-                 <t-widget> marker, so the field may offer to keep one. -->
-            <Field
-              name="footer"
-              widget="html"
-              label="Footer"
-              :options="{
-                rows: 8,
-                allowWidget: true,
-                fetchWidgets: fetchWebsiteWidgets,
-                allowColumns: true,
-                widgetPermission: 'totem.websitewidget.read',
-                uploadImage: uploadWebsiteMedia,
-                uploadPermission: 'totem.websitemedia.create',
-                maxUploadBytes: 5 * 1024 * 1024,
-                browseImages: browseWebsiteMedias,
-                browsePermission: 'totem.websitemedia.read',
-              }"
-              help="Shown at the bottom of every page of the site."
-            />
-
-            <Field
-              name="side_bar_content"
-              widget="html"
-              label="Sidebar Content"
-              :options="{
-                rows: 8,
-                allowWidget: true,
-                fetchWidgets: fetchWebsiteWidgets,
-                widgetPermission: 'totem.websitewidget.read',
-                uploadImage: uploadWebsiteMedia,
-                uploadPermission: 'totem.websitemedia.create',
-                maxUploadBytes: 5 * 1024 * 1024,
-                browseImages: browseWebsiteMedias,
-                browsePermission: 'totem.websitemedia.read',
-              }"
-              help="Shown on page with side bar layout."
-            />
-          </template>
-
-          <template #actions="{ dirty }">
-            <!-- `optionsDirty` is OR-ed in everywhere `dirty` is read: the theme
-                 options live outside the draft, so <Form>'s own dirtiness
-                 cannot see them, and without this an edit confined to the
-                 sub-form would leave Save disabled. -->
-            <Button
-              label="Discard"
-              severity="secondary"
-              text
-              :disabled="saving || (!dirty && !optionsDirty)"
-              @click="discard"
-            />
-            <Button
-              type="submit"
-              label="Save"
-              icon="pi pi-check"
-              :loading="saving"
-              :disabled="!dirty && !optionsDirty"
-            />
-          </template>
-        </Form>
+          You may read these settings, but not change them.
+        </Message>
       </template>
-    </Card>
+
+      <template #default="{ draft }">
+        <Field
+          name="name"
+          widget="string"
+          label="Name"
+          required
+          :options="{ maxLength: 256, placeholder: 'Totem' }"
+          help="Shown in the browser tab and wherever the site names itself."
+        />
+
+        <Field
+          name="headline"
+          widget="string"
+          label="Headline"
+          required
+          :options="{ maxLength: 256, placeholder: 'The showcase of your business' }"
+        />
+
+        <!-- A relation over a registry rather than over a table: the value
+             is a theme id, which is all this needs to be an ordinary
+             many2one. `filter: false` because the route takes no search
+             parameter and the catalogue is a handful of entries.
+             `required`: the column is NOT NULL, so there is no empty state
+             to offer -- and that also removes the clear button. -->
+        <Field
+          v-if="canReadThemes"
+          name="theme"
+          widget="many2one"
+          label="Theme"
+          required
+          :options="{
+            fetch: searchWebsiteThemes,
+            record: theme,
+            relationDisplay: displayTheme,
+            filter: false,
+          }"
+          help="Changing the theme RESETS its options: they are keyed by the options the
+                previous theme declared, and nothing maps them onto another's."
+        />
+
+        <!-- The options of the theme above, built on the fly from the
+             schema it publishes. A detached widget, not a <Field>: its
+             value is a bag, which no FieldValue can carry. `saving` is
+             OR-ed into `readonly` by hand -- it provides its own form
+             context, so <Form>'s own lock does not reach it. -->
+        <WebsiteThemeOptionSubform
+          v-if="canReadThemes"
+          v-model="themeOptions"
+          :theme="optionTheme(draft.theme)"
+          label="Theme options"
+          help="What the selected theme lets you change without touching code. An option
+                left empty keeps the theme's own value."
+          :readonly="!canUpdate || saving"
+          :error="fieldErrors.theme_options"
+        />
+
+        <!-- The page served at the root of the site. Nullable: a freshly
+             provisioned system has no content yet. -->
+        <Field
+          name="homepage"
+          widget="many2one"
+          label="Homepage"
+          :options="{
+            fetch: searchWebsitePages,
+            record: homepage,
+            relationDisplay: displayPage,
+            permission: 'totem.websitepage.read',
+          }"
+          help="Page rendered at the root of the website."
+        />
+
+        <!-- A relation to the media store, picked from the same modal the
+             rich text editor opens: a dropdown of filenames is not a way to
+             choose a picture. The value is the media's id, so this stays an
+             ordinary <Field>. Hidden without the media scope -- see
+             canReadMedias. -->
+        <Field
+          v-if="canReadMedias"
+          name="cover_media"
+          widget="media_image"
+          label="Cover Image"
+          :options="{
+            record: coverMedia,
+            browseImages: browseWebsiteMedias,
+            browsePermission: 'totem.websitemedia.read',
+            uploadImage: uploadWebsiteMedia,
+            uploadPermission: 'totem.websitemedia.create',
+            maxUploadBytes: 5 * 1024 * 1024,
+          }"
+          help="Image a theme may show on the homepage. Only themes declaring the
+                cover-media feature use it; the others ignore it."
+        />
+
+        <!-- `name` is label enough for the generic display, so no
+             relationDisplay here. -->
+        <Field
+          name="menu"
+          widget="many2one"
+          label="Main menu"
+          :options="{
+            fetch: searchWebsiteMenus,
+            record: menu,
+            permission: 'totem.websitemenu.read',
+          }"
+          help="Parent item whose children make up the site's main menu."
+        />
+
+        <Field
+          name="meta_authors"
+          widget="string"
+          label="Meta author"
+          :options="{ maxLength: 256 }"
+          help="Value of the <meta name=&quot;author&quot;> tag."
+        />
+
+        <Field
+          name="meta_description"
+          widget="text"
+          label="Meta description"
+          :options="{ rows: 3 }"
+          help="Value of the <meta name=&quot;description&quot;> tag, used by search engines."
+        />
+
+        <!-- `allowWidget` here, matching HtmlField(allow_widget=True) on
+             Website.footer: like Page.content, this column accepts a
+             <t-widget> marker, so the field may offer to keep one. -->
+        <Field
+          name="footer"
+          widget="html"
+          label="Footer"
+          :options="{
+            rows: 8,
+            allowWidget: true,
+            fetchWidgets: fetchWebsiteWidgets,
+            allowColumns: true,
+            widgetPermission: 'totem.websitewidget.read',
+            uploadImage: uploadWebsiteMedia,
+            uploadPermission: 'totem.websitemedia.create',
+            maxUploadBytes: 5 * 1024 * 1024,
+            browseImages: browseWebsiteMedias,
+            browsePermission: 'totem.websitemedia.read',
+          }"
+          help="Shown at the bottom of every page of the site."
+        />
+
+        <Field
+          name="side_bar_content"
+          widget="html"
+          label="Sidebar Content"
+          :options="{
+            rows: 8,
+            allowWidget: true,
+            fetchWidgets: fetchWebsiteWidgets,
+            widgetPermission: 'totem.websitewidget.read',
+            uploadImage: uploadWebsiteMedia,
+            uploadPermission: 'totem.websitemedia.create',
+            maxUploadBytes: 5 * 1024 * 1024,
+            browseImages: browseWebsiteMedias,
+            browsePermission: 'totem.websitemedia.read',
+          }"
+          help="Shown on page with side bar layout."
+        />
+      </template>
+
+      <template #actions="{ dirty }">
+        <!-- `externalDirty` is OR-ed in everywhere `dirty` is read: the theme
+             options live outside the draft, so <Form>'s own dirtiness cannot
+             see them, and without this an edit confined to the sub-form would
+             leave Save disabled. -->
+        <Button
+          label="Discard"
+          severity="secondary"
+          text
+          :disabled="saving || (!dirty && !externalDirty)"
+          @click="discard"
+        />
+        <Button
+          type="submit"
+          label="Save"
+          icon="pi pi-check"
+          :loading="saving"
+          :disabled="!dirty && !externalDirty"
+        />
+      </template>
+    </FormView>
   </section>
 </template>
-
-<style scoped>
-/* As wide as the page form, and for the same reason: it carries a rich text
-   editor, whose toolbar needs the room. */
-.website-form {
-  max-width: 64rem;
-}
-
-.website-form__skeleton {
-  display: grid;
-  gap: 1rem;
-}
-</style>
