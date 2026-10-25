@@ -1,19 +1,12 @@
 <script setup lang="ts">
-import Button from 'primevue/button'
-import Card from 'primevue/card'
-import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
-import { useConfirm } from 'primevue/useconfirm'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 
-import { ApiError } from '@/api/client'
-import { can } from '@/auth/permissions'
 import { MAX_COLOR_INDEX } from '@/components/colors'
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
 import { toNumberOrNull } from '@/components/form/fields/values'
-import Form from '@/components/form/Form.vue'
+import FormView from '@/components/form/FormView.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import {
   createAccountCategory,
@@ -49,10 +42,6 @@ const emit = defineEmits<{
   /** The heading for whoever frames this form -- a page's <h1>, a Dialog's header. */
   title: [title: string]
 }>()
-
-const confirm = useConfirm()
-
-const canDelete = computed(() => can('totem.accountcategory.delete'))
 
 /** `FieldValue` is wider than the payload accepts. */
 function text(value: FieldValue): string | null {
@@ -109,174 +98,65 @@ const form = useResourceForm<AccountCategoryDetail>({
   update: (id, changed) => updateAccountCategory(id, updatePayload(changed)),
   notFoundMessage: 'This category no longer exists.',
   onSaved: (category, mode) => emit('saved', category, mode),
+  remove: (id) => deleteAccountCategory(id),
+  onDeleted: () => emit('deleted'),
+  deleteErrorMessage: 'This category could not be deleted.',
 })
 
-const { isNew, data, loading, loadError, saving, error, fieldErrors } = form
+const { isNew, data } = form
 
 const title = computed(() =>
   isNew.value ? 'New category' : (text(data.value?.name ?? null) ?? 'Category'),
 )
-const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
-
-watch(title, (value) => emit('title', value), { immediate: true })
-
-const deleting = ref(false)
-const deleteError = ref<string | null>(null)
-
-async function remove(): Promise<void> {
-  const id = props.id ?? ''
-  if (!id) return
-
-  deleting.value = true
-  deleteError.value = null
-  try {
-    await deleteAccountCategory(id)
-    emit('deleted')
-  } catch (caught) {
-    deleteError.value =
-      caught instanceof ApiError ? caught.message : 'This category could not be deleted.'
-  } finally {
-    deleting.value = false
-  }
-}
-
-function askDelete(): void {
-  confirm.require({
-    header: 'Delete this category?',
-    message: `“${title.value}” will be removed. Its movements are kept, uncategorised.`,
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
-    acceptProps: { label: 'Delete', severity: 'danger' },
-    accept: () => {
-      void remove()
-    },
-  })
-}
 </script>
 
 <template>
-  <Message v-if="loadError" severity="error" :closable="false" class="page__message">
-    <div class="form__error">
-      <span>{{ loadError }}</span>
-      <Button label="Back" size="small" severity="danger" outlined @click="emit('cancel')" />
-    </div>
-  </Message>
+  <FormView
+    :form="form"
+    :title="title"
+    :skeleton="3"
+    delete-permission="totem.accountcategory.delete"
+    delete-header="Delete this category?"
+    :delete-message="`“${title}” will be removed. Its movements are kept, uncategorised.`"
+    @cancel="emit('cancel')"
+    @title="emit('title', $event)"
+  >
+    <!-- Unique among the general categories, or among one account's
+         own: a duplicate comes back as a field error, shown in place. -->
+    <Field
+      name="name"
+      widget="string"
+      label="Name"
+      required
+      :options="{ maxLength: 100, placeholder: 'Rent' }"
+    />
 
-  <Message v-if="deleteError" severity="error" :closable="false" class="page__message">
-    {{ deleteError }}
-  </Message>
+    <!-- An index into the shared palette: `max` mirrors the backend's
+         check constraint. -->
+    <Field
+      name="color"
+      widget="color"
+      label="Colour"
+      required
+      :options="{ max: MAX_COLOR_INDEX }"
+    />
 
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    {{ error }}
-  </Message>
-
-  <Card v-if="!loadError" class="category-form">
-    <template #content>
-      <div v-if="loading" class="category-form__skeleton">
-        <Skeleton v-for="n in 3" :key="n" height="3.2rem" />
-      </div>
-
-      <Form
-        v-else-if="data"
-        :data="data"
-        :save-label="saveLabel"
-        :saving="saving"
-        :errors="fieldErrors"
-        @save="form.save"
-      >
-        <template #default>
-          <!-- Unique among the general categories, or among one account's
-               own: a duplicate comes back as a field error, shown in place. -->
-          <Field
-            name="name"
-            widget="string"
-            label="Name"
-            required
-            :options="{ maxLength: 100, placeholder: 'Rent' }"
-          />
-
-          <!-- An index into the shared palette: `max` mirrors the backend's
-               check constraint. -->
-          <Field
-            name="color"
-            widget="color"
-            label="Colour"
-            required
-            :options="{ max: MAX_COLOR_INDEX }"
-          />
-
-          <Field
-            name="account"
-            widget="many2one"
-            label="Account"
-            :readonly="!isNew"
-            :options="{
-              fetch: searchAccounts,
-              record: account,
-              relationDisplay: displayAccount,
-              permission: 'totem.account.read',
-            }"
-            :help="
-              isNew
-                ? 'Leave empty for a general category, usable on every account.'
-                : 'Set at creation, it cannot be changed.'
-            "
-          />
-        </template>
-
-        <template #actions="{ dirty }">
-          <!-- Left-aligned, away from Save: a destructive action does not
-               sit next to the button the user reaches for. -->
-          <Button
-            v-if="!isNew && canDelete"
-            label="Delete"
-            icon="pi pi-trash"
-            severity="danger"
-            text
-            class="form__delete"
-            :loading="deleting"
-            :disabled="saving"
-            @click="askDelete"
-          />
-          <Button
-            label="Cancel"
-            severity="secondary"
-            text
-            :disabled="saving"
-            @click="emit('cancel')"
-          />
-          <Button
-            type="submit"
-            :label="saveLabel"
-            icon="pi pi-check"
-            :loading="saving"
-            :disabled="!isNew && !dirty"
-          />
-        </template>
-      </Form>
-    </template>
-  </Card>
+    <Field
+      name="account"
+      widget="many2one"
+      label="Account"
+      :readonly="!isNew"
+      :options="{
+        fetch: searchAccounts,
+        record: account,
+        relationDisplay: displayAccount,
+        permission: 'totem.account.read',
+      }"
+      :help="
+        isNew
+          ? 'Leave empty for a general category, usable on every account.'
+          : 'Set at creation, it cannot be changed.'
+      "
+    />
+  </FormView>
 </template>
-
-<style scoped>
-/* A full-width form is unreadable: the fields themselves are short. */
-.category-form {
-  max-width: 36rem;
-}
-
-.category-form__skeleton {
-  display: grid;
-  gap: 1rem;
-}
-
-.form__delete {
-  margin-right: auto;
-}
-
-.form__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-</style>

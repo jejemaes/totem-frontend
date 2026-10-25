@@ -1,18 +1,11 @@
 <script setup lang="ts">
-import Button from 'primevue/button'
-import Card from 'primevue/card'
-import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
-import { useConfirm } from 'primevue/useconfirm'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 
-import { ApiError } from '@/api/client'
-import { can } from '@/auth/permissions'
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
 import { toIsoDate, toNumberOrNull } from '@/components/form/fields/values'
-import Form from '@/components/form/Form.vue'
+import FormView from '@/components/form/FormView.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import {
   searchApplicableCategories,
@@ -55,10 +48,6 @@ const emit = defineEmits<{
   /** The heading for whoever frames this form -- a page's <h1>, a Dialog's header. */
   title: [title: string]
 }>()
-
-const confirm = useConfirm()
-
-const canDelete = computed(() => can('totem.accountmovement.delete'))
 
 /** `FieldValue` is wider than the payload accepts. */
 function text(value: FieldValue): string | null {
@@ -138,181 +127,72 @@ const form = useResourceForm<AccountMovementDetail>({
   update: (id, changed) => updateAccountMovement(id, updatePayload(changed)),
   notFoundMessage: 'This movement no longer exists.',
   onSaved: (movement, mode) => emit('saved', movement, mode),
+  remove: (id) => deleteAccountMovement(id),
+  onDeleted: () => emit('deleted'),
+  deleteErrorMessage: 'This movement could not be deleted.',
 })
 
-const { isNew, data, loading, loadError, saving, error, fieldErrors } = form
+const { isNew, data } = form
 
 const title = computed(() => {
   if (isNew.value) return 'New movement'
   return text(data.value?.name ?? null) ?? 'Movement'
 })
-const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
-
-watch(title, (value) => emit('title', value), { immediate: true })
-
-const deleting = ref(false)
-const deleteError = ref<string | null>(null)
-
-async function remove(): Promise<void> {
-  const id = props.id ?? ''
-  if (!id) return
-
-  deleting.value = true
-  deleteError.value = null
-  try {
-    await deleteAccountMovement(id)
-    emit('deleted')
-  } catch (caught) {
-    deleteError.value =
-      caught instanceof ApiError ? caught.message : 'This movement could not be deleted.'
-  } finally {
-    deleting.value = false
-  }
-}
-
-function askDelete(): void {
-  confirm.require({
-    header: 'Delete this movement?',
-    message: `“${title.value}” will be removed, and the account balance with it.`,
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
-    acceptProps: { label: 'Delete', severity: 'danger' },
-    accept: () => {
-      void remove()
-    },
-  })
-}
 </script>
 
 <template>
-  <Message v-if="loadError" severity="error" :closable="false" class="page__message">
-    <div class="form__error">
-      <span>{{ loadError }}</span>
-      <Button label="Back" size="small" severity="danger" outlined @click="emit('cancel')" />
-    </div>
-  </Message>
+  <FormView
+    :form="form"
+    :title="title"
+    :skeleton="6"
+    delete-permission="totem.accountmovement.delete"
+    delete-header="Delete this movement?"
+    :delete-message="`“${title}” will be removed, and the account balance with it.`"
+    @cancel="emit('cancel')"
+    @title="emit('title', $event)"
+  >
+    <Field
+      name="name"
+      widget="string"
+      label="Name"
+      required
+      :options="{ maxLength: 255, placeholder: 'Office rent' }"
+    />
 
-  <Message v-if="deleteError" severity="error" :closable="false" class="page__message">
-    {{ deleteError }}
-  </Message>
+    <Field name="date" widget="date" label="Date" required />
 
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    {{ error }}
-  </Message>
+    <!-- ONE signed amount: the backend has no direction column, and a
+         split control would be a second copy of the sign to keep in
+         step. Two decimals, like the DecimalField behind it. -->
+    <Field
+      name="amount"
+      widget="float"
+      label="Amount"
+      required
+      :options="{ maxFractionDigits: 2, placeholder: '-120.00' }"
+      help="Negative for an expense, positive for a revenue. Never zero."
+    />
 
-  <Card v-if="!loadError" class="movement-form">
-    <template #content>
-      <div v-if="loading" class="movement-form__skeleton">
-        <Skeleton v-for="n in 6" :key="n" height="3.2rem" />
-      </div>
+    <Field
+      name="category"
+      widget="many2one"
+      label="Category"
+      :options="{
+        fetch: searchCategories,
+        record: category,
+        permission: 'totem.accountcategory.read',
+      }"
+      help="The general categories and this account's own."
+    />
 
-      <Form
-        v-else-if="data"
-        :data="data"
-        :save-label="saveLabel"
-        :saving="saving"
-        :errors="fieldErrors"
-        @save="form.save"
-      >
-        <template #default>
-          <Field
-            name="name"
-            widget="string"
-            label="Name"
-            required
-            :options="{ maxLength: 255, placeholder: 'Office rent' }"
-          />
+    <Field
+      name="reference"
+      widget="string"
+      label="Reference"
+      :options="{ maxLength: 100, placeholder: 'INV-2026-0042' }"
+      help="An invoice or order number."
+    />
 
-          <Field name="date" widget="date" label="Date" required />
-
-          <!-- ONE signed amount: the backend has no direction column, and a
-               split control would be a second copy of the sign to keep in
-               step. Two decimals, like the DecimalField behind it. -->
-          <Field
-            name="amount"
-            widget="float"
-            label="Amount"
-            required
-            :options="{ maxFractionDigits: 2, placeholder: '-120.00' }"
-            help="Negative for an expense, positive for a revenue. Never zero."
-          />
-
-          <Field
-            name="category"
-            widget="many2one"
-            label="Category"
-            :options="{
-              fetch: searchCategories,
-              record: category,
-              permission: 'totem.accountcategory.read',
-            }"
-            help="The general categories and this account's own."
-          />
-
-          <Field
-            name="reference"
-            widget="string"
-            label="Reference"
-            :options="{ maxLength: 100, placeholder: 'INV-2026-0042' }"
-            help="An invoice or order number."
-          />
-
-          <Field name="description" widget="text" label="Description" />
-        </template>
-
-        <template #actions="{ dirty }">
-          <!-- Left-aligned, away from Save: a destructive action does not
-               sit next to the button the user reaches for. -->
-          <Button
-            v-if="!isNew && canDelete"
-            label="Delete"
-            icon="pi pi-trash"
-            severity="danger"
-            text
-            class="form__delete"
-            :loading="deleting"
-            :disabled="saving"
-            @click="askDelete"
-          />
-          <Button
-            label="Cancel"
-            severity="secondary"
-            text
-            :disabled="saving"
-            @click="emit('cancel')"
-          />
-          <Button
-            type="submit"
-            :label="saveLabel"
-            icon="pi pi-check"
-            :loading="saving"
-            :disabled="!isNew && !dirty"
-          />
-        </template>
-      </Form>
-    </template>
-  </Card>
+    <Field name="description" widget="text" label="Description" />
+  </FormView>
 </template>
-
-<style scoped>
-/* A full-width form is unreadable: the fields themselves are short. */
-.movement-form {
-  max-width: 36rem;
-}
-
-.movement-form__skeleton {
-  display: grid;
-  gap: 1rem;
-}
-
-.form__delete {
-  margin-right: auto;
-}
-
-.form__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-</style>

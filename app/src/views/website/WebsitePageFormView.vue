@@ -1,18 +1,12 @@
 <script setup lang="ts">
-import Button from 'primevue/button'
-import Card from 'primevue/card'
-import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
-import { useConfirm } from 'primevue/useconfirm'
-import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef } from 'vue'
 
-import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import { htmlOrNull } from '@/components/form/fields/html'
 import type { FieldValue } from '@/components/form/fields/types'
-import Form from '@/components/form/Form.vue'
+import FormView from '@/components/form/FormView.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import { displayUser, searchUsers, type UserRef } from '@/resources/users'
 import { browseWebsiteMedias, uploadWebsiteMedia } from '@/resources/websiteMedias'
@@ -56,10 +50,6 @@ const emit = defineEmits<{
   /** The heading for whoever frames this form -- a page's <h1>, a Dialog's header. */
   title: [title: string]
 }>()
-
-const confirm = useConfirm()
-
-const canDelete = computed(() => can('totem.websitepage.delete'))
 
 /*
  * The layout picker is shown only to a user holding the theme scope.
@@ -152,9 +142,15 @@ const form = useResourceForm<WebsitePageDetail>({
   update: (id, changed) => updateWebsitePage(id, updatePayload(changed)),
   notFoundMessage: 'This page no longer exists.',
   onSaved: (page, mode) => emit('saved', page, mode),
+  // A page a menu item points at cannot be removed: that FK is
+  // `on_delete=PROTECT`. The refusal is shown as-is rather than translated:
+  // the backend names the reason better than a generic message would.
+  remove: (id) => deleteWebsitePage(id),
+  onDeleted: () => emit('deleted'),
+  deleteErrorMessage: 'This page could not be deleted.',
 })
 
-const { isNew, data, loading, loadError, saving, error, fieldErrors } = form
+const { isNew, data } = form
 
 /**
  * The record behind the current layout, for `options.record`.
@@ -224,237 +220,120 @@ const title = computed(() => {
   if (isNew.value) return 'New page'
   return text(data.value?.title ?? null) ?? 'Page'
 })
-const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
-
-watch(title, (value) => emit('title', value), { immediate: true })
-
-const deleting = ref(false)
-const deleteError = ref<string | null>(null)
-
-/**
- * A page a menu item points at cannot be removed: that FK is
- * `on_delete=PROTECT`. The refusal is shown as-is rather than translated: the
- * backend names the reason better than a generic message would.
- */
-async function remove(): Promise<void> {
-  const id = props.id ?? ''
-  if (!id) return
-
-  deleting.value = true
-  deleteError.value = null
-  try {
-    await deleteWebsitePage(id)
-    emit('deleted')
-  } catch (caught) {
-    deleteError.value =
-      caught instanceof ApiError ? caught.message : 'This page could not be deleted.'
-  } finally {
-    deleting.value = false
-  }
-}
-
-function askDelete(): void {
-  confirm.require({
-    header: 'Delete this page?',
-    message: `“${title.value}” will be removed from the website.`,
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
-    acceptProps: { label: 'Delete', severity: 'danger' },
-    accept: () => {
-      void remove()
-    },
-  })
-}
 </script>
 
 <template>
-  <Message v-if="loadError" severity="error" :closable="false" class="page__message">
-    <div class="form__error">
-      <span>{{ loadError }}</span>
-      <Button label="Back" size="small" severity="danger" outlined @click="emit('cancel')" />
-    </div>
-  </Message>
+  <FormView
+    :form="form"
+    :title="title"
+    width="wide"
+    :skeleton="6"
+    delete-permission="totem.websitepage.delete"
+    delete-header="Delete this page?"
+    :delete-message="`“${title}” will be removed from the website.`"
+    @cancel="emit('cancel')"
+    @title="emit('title', $event)"
+  >
+    <Field
+      name="title"
+      widget="string"
+      label="Title"
+      required
+      :options="{ maxLength: 256, placeholder: 'About us' }"
+    />
 
-  <Message v-if="deleteError" severity="error" :closable="false" class="page__message">
-    {{ deleteError }}
-  </Message>
+    <!-- Required by the create schema and unique across the instance: a
+         clash comes back as a field error here. -->
+    <Field
+      name="slug"
+      widget="string"
+      label="Slug"
+      required
+      :options="{ maxLength: 256, placeholder: 'about-us' }"
+      help="URL part: letters, digits, hyphens and underscores."
+    />
 
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    {{ error }}
-  </Message>
+    <!-- A relation: the draft holds the id, `record` is the nested
+         author the GET already returned, so read-only mode costs no
+         request. -->
+    <Field
+      name="user"
+      widget="many2one"
+      label="Author"
+      :options="{
+        fetch: searchUsers,
+        record: user,
+        relationDisplay: displayUser,
+        permission: 'totem.user.read',
+      }"
+    />
 
-  <Card v-if="!loadError" class="page-form">
-    <template #content>
-      <div v-if="loading" class="page-form__skeleton">
-        <Skeleton v-for="n in 6" :key="n" height="3.2rem" />
-      </div>
+    <Field name="is_published" widget="boolean" label="Published" required />
 
-      <Form
-        v-else-if="data"
-        :data="data"
-        :save-label="saveLabel"
-        :saving="saving"
-        :errors="fieldErrors"
-        @save="form.save"
-      >
-        <template #default>
-          <Field
-            name="title"
-            widget="string"
-            label="Title"
-            required
-            :options="{ maxLength: 256, placeholder: 'About us' }"
-          />
+    <!-- A rich text editor, not a textarea.
 
-          <!-- Required by the create schema and unique across the instance: a
-               clash comes back as a field error here. -->
-          <Field
-            name="slug"
-            widget="string"
-            label="Slug"
-            required
-            :options="{ maxLength: 256, placeholder: 'about-us' }"
-            help="URL part: letters, digits, hyphens and underscores."
-          />
+         `allowWidget` matches HtmlField(allow_widget=True) on
+         Page.content -- the website's own footer and sidebar carry the
+         same flag, and the configuration screen sets it for the same
+         reason.
 
-          <!-- A relation: the draft holds the id, `record` is the nested
-               author the GET already returned, so read-only mode costs no
-               request. -->
-          <Field
-            name="user"
-            widget="many2one"
-            label="Author"
-            :options="{
-              fetch: searchUsers,
-              record: user,
-              relationDisplay: displayUser,
-              permission: 'totem.user.read',
-            }"
-          />
+         `allowColumns` mirrors no backend flag: a two-column block is
+         plain <div class="t-row"> HTML that every HtmlField accepts.
+         It is on HERE and not on the footer or the sidebar because a
+         page body is the only one of the three wide enough for it. -->
+    <Field
+      name="content"
+      widget="html"
+      label="Content"
+      required
+      :options="{
+        rows: 14,
+        placeholder: 'Tell them about us…',
+        allowWidget: true,
+        allowColumns: true,
+        fetchWidgets: fetchWebsiteWidgets,
+        widgetPermission: 'totem.websitewidget.read',
+        uploadImage: uploadWebsiteMedia,
+        uploadPermission: 'totem.websitemedia.create',
+        maxUploadBytes: 5 * 1024 * 1024,
+        browseImages: browseWebsiteMedias,
+        browsePermission: 'totem.websitemedia.read',
+      }"
+      help="Rich text. Switch to the source view to edit the HTML directly; the
+            backend validates the tags and attributes it accepts."
+    />
 
-          <Field name="is_published" widget="boolean" label="Published" required />
+    <!-- Owned by the backend: it stamps this whenever the publication
+         state changes, and the write schemas do not accept it. -->
+    <Field
+      name="date_published"
+      widget="datetime"
+      label="Publication date"
+      readonly
+      help="Set by the backend when the publication state changes."
+    />
 
-          <!-- A rich text editor, not a textarea.
-
-               `allowWidget` matches HtmlField(allow_widget=True) on
-               Page.content -- the website's own footer and sidebar carry the
-               same flag, and the configuration screen sets it for the same
-               reason.
-
-               `allowColumns` mirrors no backend flag: a two-column block is
-               plain <div class="t-row"> HTML that every HtmlField accepts.
-               It is on HERE and not on the footer or the sidebar because a
-               page body is the only one of the three wide enough for it. -->
-          <Field
-            name="content"
-            widget="html"
-            label="Content"
-            required
-            :options="{
-              rows: 14,
-              placeholder: 'Tell them about us…',
-              allowWidget: true,
-              allowColumns: true,
-              fetchWidgets: fetchWebsiteWidgets,
-              widgetPermission: 'totem.websitewidget.read',
-              uploadImage: uploadWebsiteMedia,
-              uploadPermission: 'totem.websitemedia.create',
-              maxUploadBytes: 5 * 1024 * 1024,
-              browseImages: browseWebsiteMedias,
-              browsePermission: 'totem.websitemedia.read',
-            }"
-            help="Rich text. Switch to the source view to edit the HTML directly; the
-                  backend validates the tags and attributes it accepts."
-          />
-
-          <!-- Owned by the backend: it stamps this whenever the publication
-               state changes, and the write schemas do not accept it. -->
-          <Field
-            name="date_published"
-            widget="datetime"
-            label="Publication date"
-            readonly
-            help="Set by the backend when the publication state changes."
-          />
-
-          <!-- A relation over a vocabulary rather than over a table: the
-               value is a layout id, which is all this needs to be an ordinary
-               many2one. `filter: false` because the route takes no search
-               parameter and the whole vocabulary is a handful of entries, so
-               a filter box would refetch the same list on every keystroke.
-               `required`: the column is NOT NULL, so there is no empty state
-               to offer -- and that also removes the clear button. -->
-          <Field
-            v-if="canReadLayouts"
-            name="layout"
-            widget="many2one"
-            label="Layout"
-            required
-            :options="{
-              fetch: searchWebsiteLayouts,
-              record: layout,
-              relationDisplay: displayLayout,
-              filter: false,
-            }"
-            help="Structure of the page body. A theme that does not implement it falls back
-                  when the page renders, so switching theme cannot invalidate a page."
-          />
-        </template>
-
-        <template #actions="{ dirty }">
-          <!-- Left-aligned, away from Save: a destructive action does not
-               sit next to the button the user reaches for. -->
-          <Button
-            v-if="!isNew && canDelete"
-            label="Delete"
-            icon="pi pi-trash"
-            severity="danger"
-            text
-            class="form__delete"
-            :loading="deleting"
-            :disabled="saving"
-            @click="askDelete"
-          />
-          <Button
-            label="Cancel"
-            severity="secondary"
-            text
-            :disabled="saving"
-            @click="emit('cancel')"
-          />
-          <Button
-            type="submit"
-            :label="saveLabel"
-            icon="pi pi-check"
-            :loading="saving"
-            :disabled="!isNew && !dirty"
-          />
-        </template>
-      </Form>
-    </template>
-  </Card>
+    <!-- A relation over a vocabulary rather than over a table: the
+         value is a layout id, which is all this needs to be an ordinary
+         many2one. `filter: false` because the route takes no search
+         parameter and the whole vocabulary is a handful of entries, so
+         a filter box would refetch the same list on every keystroke.
+         `required`: the column is NOT NULL, so there is no empty state
+         to offer -- and that also removes the clear button. -->
+    <Field
+      v-if="canReadLayouts"
+      name="layout"
+      widget="many2one"
+      label="Layout"
+      required
+      :options="{
+        fetch: searchWebsiteLayouts,
+        record: layout,
+        relationDisplay: displayLayout,
+        filter: false,
+      }"
+      help="Structure of the page body. A theme that does not implement it falls back
+            when the page renders, so switching theme cannot invalidate a page."
+    />
+  </FormView>
 </template>
-
-<style scoped>
-/* Wider than the other forms: this one carries a rich text editor, whose
-   toolbar needs the room and whose tables are unusable in a narrow column. */
-.page-form {
-  max-width: 64rem;
-}
-
-.page-form__skeleton {
-  display: grid;
-  gap: 1rem;
-}
-
-.form__delete {
-  margin-right: auto;
-}
-
-.form__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-</style>

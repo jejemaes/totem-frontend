@@ -35,7 +35,7 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
     api/          client.ts (fetch wrapper), list.ts (pagination contract)
     auth/         oauth.ts, tokenStorage.ts, authStore.ts (Pinia), permissions.ts
     components/   ColorDot.vue, ColorTag.vue, colors.ts
-      form/       Form.vue, context.ts, FieldSwitch, fields/, widget/
+      form/       Form.vue, FormView.vue, context.ts, FieldSwitch, fields/, widget/
       filters/    MultiRecordFilters.vue, filters.ts
       list/       ListView.vue, Field.vue, context.ts, ColumnMenu.vue, DeleteButton.vue, fields/
     composables/  useResourceList.ts, useResourceForm.ts, useFilter.ts, useTheme.ts
@@ -298,21 +298,39 @@ The conversions live in `components/filters/filters.ts`, Vue-free and with a spe
 
 ### Adding a form screen
 
-`useResourceForm({ id, defaults, toForm, fetchOne, create, update, notFoundMessage, onSaved })`
-holds everything that differs between create and edit; the view only declares its `<Field>`s.
+`useResourceForm({ id, defaults, toForm, fetchOne, create, update, remove, notFoundMessage,
+onSaved, onDeleted })` holds everything that differs between create and edit, and
+`<FormView :form="form" :title="title">` (`components/form/FormView.vue`) everything drawn around
+the fields: the load / save / delete banners, the `<Card>` and its skeleton, the Delete / Cancel /
+Create-Save row, the delete confirmation, the save label, and emitting `title`. The view only
+declares its `<Field>`s, its payloads and the composable's options — it imports no `Card`,
+`Message`, `Skeleton`, `Button` or `useConfirm`, and has no CSS for any of that.
+
 `XxxFormView` takes `id: string | null` as a **prop** and passes it as a getter
 (`id: () => props.id`): vue-router reuses the page when only the param changes, and the prop
-follows. `onSaved` only emits `saved(record, mode)` (mode is `'create' | 'edit'`); Cancel and
-"Back" after a failed load emit `cancel`, a delete emits `deleted`, and a `watch` on the computed
-title emits `title` so the page's `<h1>` — or a Dialog's header — can show it. `XxxPage` turns
-those into `router.push`. A Delete button lives in the form's `#actions` row, left-aligned
-(`.form__delete { margin-right: auto }`), not in the page header: it belongs to the view.
+follows. `onSaved` emits `saved(record, mode)` (mode is `'create' | 'edit'`) and `onDeleted` emits
+`deleted`; `<FormView>` emits `cancel` (Cancel, and "Back" / "Close" after a failed load) and
+`title`, which the view forwards explicitly (`@cancel="emit('cancel')"
+@title="emit('title', $event)"`) so the page's `<h1>` — or a Dialog's header — can show it.
+`XxxPage` turns those into `router.push`.
+
+`<FormView>` props worth knowing: `mode="dialog"` drops the card for a form inside a `Dialog`;
+`width` (`narrow` 36rem, `medium` 56rem, `wide` 64rem); `skeleton` rows; `create-label` ("Add");
+`delete-permission` + `delete-header` + `delete-message` — Delete is shown only on an edit, when
+the composable got a `remove` AND the scope is held, left-aligned in the actions row, never in
+the page header; `readonly`; `:cancellable="false"` for a screen with nowhere to go back to;
+`on-save` to wrap `form.save`. Slots: `#default({ draft, dirty })`, `#messages` for banners of
+the caller's own, `#actions({ dirty, saving, isNew, saveLabel })` to replace the buttons row
+(`WebsiteConfigurationPage` is the one user). Save is disabled on an untouched edit, reading
+`form.externalDirty` too — what `hasExternalChanges` reports — so an edit confined to a
+detached widget still enables it.
 
 Payloads are built **key by key** in local `createPayload(values)` / `updatePayload(changed)`
 helpers — never by copying the draft. See *the PATCH asymmetry* below for why that is not
-pedantry. Deletes go through `useConfirm()`; the dialog is mounted once in `AdminLayout`. A list
-row's trash is `<DeleteButton label="Delete this X?" :message="..." @confirm="remove(row)">`
-(`components/list/`): it asks and emits, the view still sends the request and shows the refusal.
+pedantry. Deletes go through `useConfirm()` — inside `<FormView>` for a form — and the dialog is
+mounted once in `AdminLayout`. A list row's trash is
+`<DeleteButton label="Delete this X?" :message="..." @confirm="remove(row)">` (`components/list/`):
+it asks and emits, the view still sends the request and shows the refusal.
 
 `<Form>` works on a **copy** of `data`, keeps a baseline, and emits `save: [values, changed]` — a
 create sends `values`, an update sends `changed`. It watches `props.data` on identity, never

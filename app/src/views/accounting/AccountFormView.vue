@@ -1,18 +1,11 @@
 <script setup lang="ts">
-import Button from 'primevue/button'
-import Card from 'primevue/card'
-import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
-import { useConfirm } from 'primevue/useconfirm'
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 
-import { ApiError } from '@/api/client'
-import { can } from '@/auth/permissions'
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
 import { toNumberOrNull } from '@/components/form/fields/values'
-import Form from '@/components/form/Form.vue'
+import FormView from '@/components/form/FormView.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import {
   createAccount,
@@ -47,10 +40,6 @@ const emit = defineEmits<{
   /** The heading for whoever frames this form -- a page's <h1>, a Dialog's header. */
   title: [title: string]
 }>()
-
-const confirm = useConfirm()
-
-const canDelete = computed(() => can('totem.account.delete'))
 
 /** `FieldValue` is wider than the payload accepts. */
 function text(value: FieldValue): string | null {
@@ -111,9 +100,14 @@ const form = useResourceForm<AccountDetail>({
   update: (id, changed) => updateAccount(id, updatePayload(changed)),
   notFoundMessage: 'This account no longer exists.',
   onSaved: (account, mode) => emit('saved', account, mode),
+  // An account holding movements cannot be removed (`on_delete=PROTECT`). The
+  // refusal is shown as-is: the backend names the reason better.
+  remove: (id) => deleteAccount(id),
+  onDeleted: () => emit('deleted'),
+  deleteErrorMessage: 'This account could not be deleted.',
 })
 
-const { isNew, data, loading, loadError, saving, error, fieldErrors } = form
+const { isNew, data } = form
 
 const title = computed(() => {
   if (isNew.value) return 'New account'
@@ -122,189 +116,73 @@ const title = computed(() => {
   if (accountCode && name) return `${accountCode} · ${name}`
   return name ?? 'Account'
 })
-const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
-
-watch(title, (value) => emit('title', value), { immediate: true })
-
-const deleting = ref(false)
-const deleteError = ref<string | null>(null)
-
-/**
- * An account holding movements cannot be removed (`on_delete=PROTECT`). The
- * refusal is shown as-is: the backend names the reason better.
- */
-async function remove(): Promise<void> {
-  const id = props.id ?? ''
-  if (!id) return
-
-  deleting.value = true
-  deleteError.value = null
-  try {
-    await deleteAccount(id)
-    emit('deleted')
-  } catch (caught) {
-    deleteError.value =
-      caught instanceof ApiError ? caught.message : 'This account could not be deleted.'
-  } finally {
-    deleting.value = false
-  }
-}
-
-function askDelete(): void {
-  confirm.require({
-    header: 'Delete this account?',
-    message: `“${title.value}” and its own categories will be removed.`,
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
-    acceptProps: { label: 'Delete', severity: 'danger' },
-    accept: () => {
-      void remove()
-    },
-  })
-}
 </script>
 
 <template>
-  <Message v-if="loadError" severity="error" :closable="false" class="page__message">
-    <div class="form__error">
-      <span>{{ loadError }}</span>
-      <Button label="Back" size="small" severity="danger" outlined @click="emit('cancel')" />
-    </div>
-  </Message>
+  <FormView
+    :form="form"
+    :title="title"
+    :skeleton="4"
+    delete-permission="totem.account.delete"
+    delete-header="Delete this account?"
+    :delete-message="`“${title}” and its own categories will be removed.`"
+    @cancel="emit('cancel')"
+    @title="emit('title', $event)"
+  >
+    <Field
+      name="code"
+      widget="string"
+      label="Code"
+      required
+      :options="{ maxLength: 50, placeholder: 'BANK-MAIN' }"
+      help="Upper case letters, digits, '_' and '-' only."
+    />
 
-  <Message v-if="deleteError" severity="error" :closable="false" class="page__message">
-    {{ deleteError }}
-  </Message>
+    <!-- Unique: a duplicate comes back as a field error, shown in place. -->
+    <Field
+      name="name"
+      widget="string"
+      label="Name"
+      required
+      :options="{ maxLength: 255, placeholder: 'Main bank account' }"
+    />
 
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    {{ error }}
-  </Message>
+    <Field name="description" widget="text" label="Description" />
 
-  <Card v-if="!loadError" class="account-form">
-    <template #content>
-      <div v-if="loading" class="account-form__skeleton">
-        <Skeleton v-for="n in 4" :key="n" height="3.2rem" />
-      </div>
+    <Field
+      name="active"
+      widget="boolean"
+      label="Active"
+      required
+      help="An archived account keeps its movements."
+    />
 
-      <Form
-        v-else-if="data"
-        :data="data"
-        :save-label="saveLabel"
-        :saving="saving"
-        :errors="fieldErrors"
-        @save="form.save"
-      >
-        <template #default>
-          <Field
-            name="code"
-            widget="string"
-            label="Code"
-            required
-            :options="{ maxLength: 50, placeholder: 'BANK-MAIN' }"
-            help="Upper case letters, digits, '_' and '-' only."
-          />
-
-          <!-- Unique: a duplicate comes back as a field error, shown in place. -->
-          <Field
-            name="name"
-            widget="string"
-            label="Name"
-            required
-            :options="{ maxLength: 255, placeholder: 'Main bank account' }"
-          />
-
-          <Field name="description" widget="text" label="Description" />
-
-          <Field
-            name="active"
-            widget="boolean"
-            label="Active"
-            required
-            help="An archived account keeps its movements."
-          />
-
-          <!-- Computed by the backend from the movements: shown, never sent. -->
-          <template v-if="!isNew">
-            <Field
-              name="total_debit"
-              widget="float"
-              label="Total debit"
-              readonly
-              :options="{ maxFractionDigits: 2 }"
-              help="The sum of the expenses."
-            />
-            <Field
-              name="total_credit"
-              widget="float"
-              label="Total credit"
-              readonly
-              :options="{ maxFractionDigits: 2 }"
-              help="The sum of the revenues."
-            />
-            <Field
-              name="balance"
-              widget="float"
-              label="Balance"
-              readonly
-              :options="{ maxFractionDigits: 2 }"
-              help="The sum of every movement."
-            />
-          </template>
-        </template>
-
-        <template #actions="{ dirty }">
-          <!-- Left-aligned, away from Save: a destructive action does not
-               sit next to the button the user reaches for. -->
-          <Button
-            v-if="!isNew && canDelete"
-            label="Delete"
-            icon="pi pi-trash"
-            severity="danger"
-            text
-            class="form__delete"
-            :loading="deleting"
-            :disabled="saving"
-            @click="askDelete"
-          />
-          <Button
-            label="Cancel"
-            severity="secondary"
-            text
-            :disabled="saving"
-            @click="emit('cancel')"
-          />
-          <Button
-            type="submit"
-            :label="saveLabel"
-            icon="pi pi-check"
-            :loading="saving"
-            :disabled="!isNew && !dirty"
-          />
-        </template>
-      </Form>
+    <!-- Computed by the backend from the movements: shown, never sent. -->
+    <template v-if="!isNew">
+      <Field
+        name="total_debit"
+        widget="float"
+        label="Total debit"
+        readonly
+        :options="{ maxFractionDigits: 2 }"
+        help="The sum of the expenses."
+      />
+      <Field
+        name="total_credit"
+        widget="float"
+        label="Total credit"
+        readonly
+        :options="{ maxFractionDigits: 2 }"
+        help="The sum of the revenues."
+      />
+      <Field
+        name="balance"
+        widget="float"
+        label="Balance"
+        readonly
+        :options="{ maxFractionDigits: 2 }"
+        help="The sum of every movement."
+      />
     </template>
-  </Card>
+  </FormView>
 </template>
-
-<style scoped>
-/* A full-width form is unreadable: the fields themselves are short. */
-.account-form {
-  max-width: 36rem;
-}
-
-.account-form__skeleton {
-  display: grid;
-  gap: 1rem;
-}
-
-.form__delete {
-  margin-right: auto;
-}
-
-.form__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-</style>

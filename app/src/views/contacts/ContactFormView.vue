@@ -1,14 +1,10 @@
 <script setup lang="ts">
-import Button from 'primevue/button'
-import Card from 'primevue/card'
-import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
-import Form from '@/components/form/Form.vue'
+import FormView from '@/components/form/FormView.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import { searchContactTags } from '@/resources/contactTags'
 import { searchCountries, type CountryRef } from '@/resources/countries'
@@ -27,8 +23,8 @@ import {
  * comes in as the `id` prop and every way out is an event -- the routed page
  * turns those into navigation, a Dialog into closing itself.
  * `useResourceForm` owns everything that differs -- loading the record, POST
- * versus PATCH, the error mapping -- so what is left here is the field list and
- * the two labels that change.
+ * versus PATCH, the error mapping -- and <FormView> everything drawn around the
+ * fields, so what is left here is the field list and the payloads.
  *
  * Simpler than UserFormView: every value lives in the <Form> draft and there is
  * no detached widget to seed or to diff. Both relations are ordinary fields --
@@ -184,7 +180,7 @@ const form = useResourceForm<ContactDetail>({
   onSaved: (contact, mode) => emit('saved', contact, mode),
 })
 
-const { isNew, data, loading, loadError, saving, error, fieldErrors } = form
+const { isNew, data } = form
 
 /** The contact's name titles the page once the record has landed. */
 const title = computed(() => {
@@ -194,153 +190,88 @@ const title = computed(() => {
   const first = text(data.value?.first_name ?? null)
   return first ? `${first} ${last}` : last
 })
-const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
-
-watch(title, (value) => emit('title', value), { immediate: true })
 </script>
 
 <template>
-  <Message v-if="loadError" severity="error" :closable="false" class="page__message">
-    <div class="form__error">
-      <span>{{ loadError }}</span>
-      <Button label="Back" size="small" severity="danger" outlined @click="emit('cancel')" />
-    </div>
-  </Message>
+  <FormView
+    :form="form"
+    :title="title"
+    :skeleton="11"
+    @cancel="emit('cancel')"
+    @title="emit('title', $event)"
+  >
+    <!-- The last name is the only field the model requires. -->
+    <Field
+      name="last_name"
+      widget="string"
+      label="Last name"
+      required
+      :options="{ maxLength: 255, placeholder: 'Doe' }"
+    />
 
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    {{ error }}
-  </Message>
+    <Field
+      name="first_name"
+      widget="string"
+      label="First name"
+      :options="{ maxLength: 255, placeholder: 'Jane' }"
+    />
 
-  <Card v-if="!loadError" class="contact-form">
-    <template #content>
-      <!-- Placeholders with the form's real shape, so the card does not jump
-           when the record lands. -->
-      <div v-if="loading" class="contact-form__skeleton">
-        <Skeleton v-for="n in 11" :key="n" height="3.2rem" />
-      </div>
+    <Field
+      name="email"
+      widget="string"
+      label="Email"
+      :options="{ maxLength: 255, placeholder: 'jane.doe@example.com' }"
+    />
 
-      <Form
-        v-else-if="data"
-        :data="data"
-        :save-label="saveLabel"
-        :saving="saving"
-        :errors="fieldErrors"
-        @save="form.save"
-      >
-        <template #default>
-          <!-- The last name is the only field the model requires. -->
-          <Field
-            name="last_name"
-            widget="string"
-            label="Last name"
-            required
-            :options="{ maxLength: 255, placeholder: 'Doe' }"
-          />
+    <Field name="mobile" widget="string" label="Mobile" :options="{ maxLength: 32 }" />
 
-          <Field
-            name="first_name"
-            widget="string"
-            label="First name"
-            :options="{ maxLength: 255, placeholder: 'Jane' }"
-          />
+    <!-- Stored as a calendar day: no time, no timezone. -->
+    <Field name="birth_date" widget="date" label="Birth date" />
 
-          <Field
-            name="email"
-            widget="string"
-            label="Email"
-            :options="{ maxLength: 255, placeholder: 'jane.doe@example.com' }"
-          />
+    <Field
+      name="number"
+      widget="string"
+      label="Number"
+      :options="{ maxLength: 32, placeholder: '12A' }"
+      help="Street number, not necessarily numeric (12A, 3 bis, …)."
+    />
 
-          <Field name="mobile" widget="string" label="Mobile" :options="{ maxLength: 32 }" />
+    <Field name="street" widget="string" label="Street" :options="{ maxLength: 255 }" />
 
-          <!-- Stored as a calendar day: no time, no timezone. -->
-          <Field name="birth_date" widget="date" label="Birth date" />
+    <Field name="zip" widget="string" label="Zip" :options="{ maxLength: 32 }" />
 
-          <Field
-            name="number"
-            widget="string"
-            label="Number"
-            :options="{ maxLength: 32, placeholder: '12A' }"
-            help="Street number, not necessarily numeric (12A, 3 bis, …)."
-          />
+    <Field name="city" widget="string" label="City" :options="{ maxLength: 255 }" />
 
-          <Field name="street" widget="string" label="Street" :options="{ maxLength: 255 }" />
+    <!-- A relation: the draft holds the ISO code, the dropdown is filled
+         by the countries endpoint and its filter box searches there.
+         `record` is what the field shows when it is read-only -- the
+         nested country the GET already returned, so that mode costs no
+         request. -->
+    <Field
+      name="country"
+      widget="many2one"
+      label="Country"
+      :options="{
+        fetch: searchCountries,
+        record: country,
+        permission: 'totem.country.read',
+      }"
+    />
 
-          <Field name="zip" widget="string" label="Zip" :options="{ maxLength: 32 }" />
-
-          <Field name="city" widget="string" label="City" :options="{ maxLength: 255 }" />
-
-          <!-- A relation: the draft holds the ISO code, the dropdown is filled
-               by the countries endpoint and its filter box searches there.
-               `record` is what the field shows when it is read-only -- the
-               nested country the GET already returned, so that mode costs no
-               request. -->
-          <Field
-            name="country"
-            widget="many2one"
-            label="Country"
-            :options="{
-              fetch: searchCountries,
-              record: country,
-              permission: 'totem.country.read',
-            }"
-          />
-
-          <!-- The other relation, and the only list-valued field of the form:
-               the draft holds the tag ids, the chips are painted from the
-               tags the GET already nested, and /contact-tags/ is not called
-               until the dropdown is opened. -->
-          <Field
-            name="tags"
-            widget="many2many_tags"
-            label="Tags"
-            :options="{
-              fetch: searchContactTags,
-              records: tags,
-              permission: 'totem.contacttag.read',
-              placeholder: 'Add a tag…',
-            }"
-          />
-        </template>
-
-        <template #actions="{ dirty }">
-          <Button
-            label="Cancel"
-            severity="secondary"
-            text
-            :disabled="saving"
-            @click="emit('cancel')"
-          />
-          <!-- Nothing edited means nothing to PATCH, so on an existing record
-               Save has no work to do. A create always has. -->
-          <Button
-            type="submit"
-            :label="saveLabel"
-            icon="pi pi-check"
-            :loading="saving"
-            :disabled="!isNew && !dirty"
-          />
-        </template>
-      </Form>
-    </template>
-  </Card>
+    <!-- The other relation, and the only list-valued field of the form:
+         the draft holds the tag ids, the chips are painted from the
+         tags the GET already nested, and /contact-tags/ is not called
+         until the dropdown is opened. -->
+    <Field
+      name="tags"
+      widget="many2many_tags"
+      label="Tags"
+      :options="{
+        fetch: searchContactTags,
+        records: tags,
+        permission: 'totem.contacttag.read',
+        placeholder: 'Add a tag…',
+      }"
+    />
+  </FormView>
 </template>
-
-<style scoped>
-/* A full-width form is unreadable: the fields themselves are short. */
-.contact-form {
-  max-width: 36rem;
-}
-
-.contact-form__skeleton {
-  display: grid;
-  gap: 1rem;
-}
-
-.form__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-</style>

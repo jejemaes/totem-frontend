@@ -1,16 +1,12 @@
 <script setup lang="ts">
-import Button from 'primevue/button'
-import Card from 'primevue/card'
-import Message from 'primevue/message'
-import Skeleton from 'primevue/skeleton'
-import { computed, watch } from 'vue'
+import { computed } from 'vue'
 
 import { MAX_COLOR_INDEX } from '@/components/colors'
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
 import { toNumberOrNull } from '@/components/form/fields/values'
-import Form from '@/components/form/Form.vue'
+import FormView from '@/components/form/FormView.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import {
   createContactTag,
@@ -90,100 +86,40 @@ const form = useResourceForm<ContactTagDetail>({
   onSaved: (tag, mode) => emit('saved', tag, mode),
 })
 
-const { isNew, data, loading, loadError, saving, error, fieldErrors } = form
+const { isNew, data } = form
 
 const title = computed(() =>
   isNew.value ? 'New tag' : (text(data.value?.name ?? null) ?? 'Tag'),
 )
-const saveLabel = computed(() => (isNew.value ? 'Create' : 'Save'))
-
-watch(title, (value) => emit('title', value), { immediate: true })
 </script>
 
 <template>
-  <Message v-if="loadError" severity="error" :closable="false" class="page__message">
-    <div class="form__error">
-      <span>{{ loadError }}</span>
-      <Button label="Back" size="small" severity="danger" outlined @click="emit('cancel')" />
-    </div>
-  </Message>
+  <FormView
+    :form="form"
+    :title="title"
+    :skeleton="2"
+    @cancel="emit('cancel')"
+    @title="emit('title', $event)"
+  >
+    <!-- Unique across the instance: a duplicate comes back as a field
+         error on this very field, which <Form> shows in place. -->
+    <Field
+      name="name"
+      widget="string"
+      label="Name"
+      required
+      :options="{ maxLength: 255, placeholder: 'Customer' }"
+      help="Must be unique."
+    />
 
-  <Message v-if="error" severity="error" :closable="false" class="page__message">
-    {{ error }}
-  </Message>
-
-  <Card v-if="!loadError" class="tag-form">
-    <template #content>
-      <div v-if="loading" class="tag-form__skeleton">
-        <Skeleton v-for="n in 2" :key="n" height="3.2rem" />
-      </div>
-
-      <Form
-        v-else-if="data"
-        :data="data"
-        :save-label="saveLabel"
-        :saving="saving"
-        :errors="fieldErrors"
-        @save="form.save"
-      >
-        <template #default>
-          <!-- Unique across the instance: a duplicate comes back as a field
-               error on this very field, which <Form> shows in place. -->
-          <Field
-            name="name"
-            widget="string"
-            label="Name"
-            required
-            :options="{ maxLength: 255, placeholder: 'Customer' }"
-            help="Must be unique."
-          />
-
-          <!-- The value is an index into the shared palette, not a CSS
-               colour: `max` mirrors the backend's own check constraint. -->
-          <Field
-            name="color"
-            widget="color"
-            label="Colour"
-            required
-            :options="{ max: MAX_COLOR_INDEX }"
-          />
-        </template>
-
-        <template #actions="{ dirty }">
-          <Button
-            label="Cancel"
-            severity="secondary"
-            text
-            :disabled="saving"
-            @click="emit('cancel')"
-          />
-          <Button
-            type="submit"
-            :label="saveLabel"
-            icon="pi pi-check"
-            :loading="saving"
-            :disabled="!isNew && !dirty"
-          />
-        </template>
-      </Form>
-    </template>
-  </Card>
+    <!-- The value is an index into the shared palette, not a CSS
+         colour: `max` mirrors the backend's own check constraint. -->
+    <Field
+      name="color"
+      widget="color"
+      label="Colour"
+      required
+      :options="{ max: MAX_COLOR_INDEX }"
+    />
+  </FormView>
 </template>
-
-<style scoped>
-.tag-form {
-  max-width: 36rem;
-}
-
-.tag-form__skeleton {
-  display: grid;
-  gap: 1rem;
-}
-
-.form__error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-</style>
