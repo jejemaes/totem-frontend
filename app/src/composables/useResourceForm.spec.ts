@@ -381,3 +381,100 @@ describe('useResourceForm — state outside the draft', () => {
     expect(onSaved).toHaveBeenCalledWith(record, 'edit')
   })
 })
+
+describe('useResourceForm — external dirtiness', () => {
+  it('follows what hasExternalChanges reads', async () => {
+    const edited = ref(false)
+    const { form } = mount({ hasExternalChanges: () => edited.value })
+    await flush()
+
+    expect(form.externalDirty.value).toBe(false)
+    edited.value = true
+    expect(form.externalDirty.value).toBe(true)
+  })
+
+  it('is false when the caller has no outside state', async () => {
+    const { form } = mount()
+    await flush()
+    expect(form.externalDirty.value).toBe(false)
+  })
+})
+
+describe('useResourceForm — delete', () => {
+  const record: Record = { id: '7', name: 'Totem' }
+
+  it('reports whether the resource can be deleted at all', () => {
+    expect(mount().form.canRemove).toBe(false)
+    expect(mount({ remove: vi.fn() }).form.canRemove).toBe(true)
+  })
+
+  it('deletes the record by its id, then calls onDeleted', async () => {
+    const remove = vi.fn(async () => {})
+    const onDeleted = vi.fn()
+    const { form } = mount({ id: '7', fetchOne: async () => record, remove, onDeleted })
+    await flush()
+
+    await form.remove()
+
+    expect(remove).toHaveBeenCalledWith('7')
+    expect(onDeleted).toHaveBeenCalledTimes(1)
+    expect(form.deleting.value).toBe(false)
+  })
+
+  it('does nothing on a create form', async () => {
+    const remove = vi.fn()
+    const { form } = mount({ remove })
+    await flush()
+
+    await form.remove()
+
+    expect(remove).not.toHaveBeenCalled()
+  })
+
+  it('shows a refusal with the backend wording and does not call onDeleted', async () => {
+    const onDeleted = vi.fn()
+    const { form } = mount({
+      id: '7',
+      fetchOne: async () => record,
+      remove: async () => {
+        throw new ApiError('This record is still in use.', 409)
+      },
+      onDeleted,
+    })
+    await flush()
+
+    await form.remove()
+
+    expect(form.deleteError.value).toBe('This record is still in use.')
+    expect(form.deleting.value).toBe(false)
+    expect(onDeleted).not.toHaveBeenCalled()
+  })
+
+  it('uses the caller message for a non-ApiError failure', async () => {
+    const { form } = mount({
+      id: '7',
+      fetchOne: async () => record,
+      remove: async () => {
+        throw new Error('network')
+      },
+      deleteErrorMessage: 'This tag could not be deleted.',
+    })
+    await flush()
+
+    await form.remove()
+
+    expect(form.deleteError.value).toBe('This tag could not be deleted.')
+  })
+
+  it('keeps the spinner on while the request is in flight', async () => {
+    const pending = deferred<void>()
+    const { form } = mount({ id: '7', fetchOne: async () => record, remove: () => pending.promise })
+    await flush()
+
+    const done = form.remove()
+    expect(form.deleting.value).toBe(true)
+    pending.resolve()
+    await done
+    expect(form.deleting.value).toBe(false)
+  })
+})

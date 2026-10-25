@@ -2,8 +2,10 @@
  * Create-or-edit state for a single record behind the generic <Form>.
  *
  * One screen serves both modes: with no id it is a blank create form, with an
- * id it loads the record first and saves with an update. Everything that
- * differs between the two lives here, so the view only declares its fields.
+ * id it loads the record first and saves with an update -- and can delete it.
+ * Everything that differs between the modes lives here, and everything that is
+ * drawn around the fields lives in <FormView>, so the view only declares its
+ * fields and its payloads.
  *
  * NOTE: like `useResourceList` and unlike `useTheme`, every piece of state
  * lives INSIDE the function -- do not hoist any ref to module scope.
@@ -66,8 +68,17 @@ export interface UseResourceFormOptions<T> {
    * without discarding its NavigationFailure.
    */
   onSaved?(record: T, mode: 'create' | 'edit'): void | Promise<unknown>
+  /**
+   * Deletes the record. Absent on a resource that cannot be deleted, which is
+   * what keeps <FormView> from offering a Delete button at all.
+   */
+  remove?(id: string): Promise<void>
+  /** Runs after a successful delete -- typically leaving the screen. */
+  onDeleted?(): void
   /** Message for a non-ApiError failure. */
   saveErrorMessage?: string
+  /** Message for a non-ApiError failure of `remove`. */
+  deleteErrorMessage?: string
   /** Message for a 404 while loading. */
   notFoundMessage?: string
 }
@@ -89,6 +100,17 @@ export interface ResourceForm {
   /** Server errors per field, straight into <Form>'s `errors` prop. */
   fieldErrors: Ref<Record<string, string>>
   /**
+   * What `hasExternalChanges` reports, as a ref: <Form>'s own `dirty` cannot
+   * see a standalone widget, so Save would stay disabled over an edit made
+   * only there.
+   */
+  externalDirty: ComputedRef<boolean>
+  /** True when the caller gave a `remove`: the resource can be deleted at all. */
+  canRemove: boolean
+  deleting: Ref<boolean>
+  /** Banner message for a refused delete -- typically a record still in use. */
+  deleteError: Ref<string | null>
+  /**
    * Hand this to <Form>'s `save` event, which supplies both arguments: the
    * whole draft, and the subset that differs from what the form was seeded
    * with.
@@ -96,6 +118,8 @@ export interface ResourceForm {
   save(values: FormData, changed?: FormData): Promise<void>
   /** Load the record again, discarding any edit in progress. */
   reload(): Promise<void>
+  /** Deletes the record being edited. A no-op on a create form. */
+  remove(): Promise<void>
 }
 
 export function useResourceForm<T>(options: UseResourceFormOptions<T>): ResourceForm {
@@ -109,6 +133,13 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
   const saving = ref(false)
   const error = ref<string | null>(null)
   const fieldErrors = ref<Record<string, string>>({})
+
+  // A computed over a callback is reactive as long as the callback reads refs,
+  // which is what every caller's dirtiness check does.
+  const externalDirty = computed(() => options.hasExternalChanges?.() ?? false)
+
+  const deleting = ref(false)
+  const deleteError = ref<string | null>(null)
 
   // Same race guard as useResourceList: a monotonic ticket gates every state
   // write, and the superseded request is aborted. Clicking quickly from one
@@ -127,6 +158,7 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
 
     error.value = null
     fieldErrors.value = {}
+    deleteError.value = null
 
     // A create form has nothing to fetch: seed it and stop. A fresh copy of
     // `defaults` every time, so a reload really does reset the fields.
@@ -209,6 +241,26 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
     }
   }
 
+  async function remove(): Promise<void> {
+    // Captured before any await, like in `save`.
+    const current = id.value
+    if (!current || !options.remove) return
+
+    deleting.value = true
+    deleteError.value = null
+    try {
+      await options.remove(current)
+      options.onDeleted?.()
+    } catch (caught) {
+      deleteError.value =
+        caught instanceof ApiError
+          ? caught.message
+          : (options.deleteErrorMessage ?? 'Could not delete this record.')
+    } finally {
+      deleting.value = false
+    }
+  }
+
   // `immediate`, and keyed on the id rather than onMounted: it works inside a
   // plain effectScope, and it refetches when the route param changes under a
   // reused component.
@@ -216,5 +268,20 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
 
   onScopeDispose(() => inFlight?.abort())
 
-  return { isNew, data, loading, loadError, saving, error, fieldErrors, save, reload: load }
+  return {
+    isNew,
+    data,
+    loading,
+    loadError,
+    saving,
+    error,
+    fieldErrors,
+    externalDirty,
+    canRemove: Boolean(options.remove),
+    deleting,
+    deleteError,
+    save,
+    reload: load,
+    remove,
+  }
 }
