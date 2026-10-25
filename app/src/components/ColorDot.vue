@@ -24,6 +24,12 @@ defineProps<{
 
 <style scoped>
 .color-dot {
+  /* inline-block, not the span's default inline: an inline box ignores
+     `width` and `height`, so outside a flex row -- straight in a table cell,
+     the list's colour column -- the dot was drawn 0 x 0. A flex row
+     blockifies it anyway, so the dropdowns are unaffected. */
+  display: inline-block;
+  vertical-align: middle;
   width: 1.1rem;
   height: 1.1rem;
   /* `flex: none` so the dot keeps its size in the flex rows it is dropped into
