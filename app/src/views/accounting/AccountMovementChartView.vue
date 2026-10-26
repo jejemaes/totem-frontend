@@ -147,9 +147,9 @@ function fetchGroups(
       sortable
     />
 
-    <Field name="amount_sum" type="measure" label="Balance" sortable />
-    <Field name="debit_sum" type="measure" label="Debits" sortable />
-    <Field name="credit_sum" type="measure" label="Credits" sortable />
+    <Field name="amount_sum" type="measure" label="Total of amount" sortable />
+    <Field name="debit_sum" type="measure" label="Total of debits" sortable />
+    <Field name="credit_sum" type="measure" label="Total of credits" sortable />
     <Field name="count" type="measure" widget="integer" label="Count" sortable />
     <Field name="amount_avg" type="measure" label="Average amount" sortable />
     <Field name="amount_min" type="measure" label="Smallest amount" sortable />
