@@ -21,16 +21,11 @@ import { ApiError } from '@/api/client'
 import type { ListQuery, Page } from '@/api/list'
 import { can } from '@/auth/permissions'
 import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
-import type { FilterFields } from '@/components/filters/filters'
 import DeleteButton from '@/components/list/DeleteButton.vue'
 import Field from '@/components/list/Field.vue'
 import type { ListRow } from '@/components/list/fields/types'
 import ListView from '@/components/list/ListView.vue'
 import { useFilter } from '@/composables/useFilter'
-import {
-  accountCategoryDisplayNames,
-  searchApplicableCategories,
-} from '@/resources/accountCategories'
 import {
   ACCOUNT_MOVEMENT_SORTABLE,
   deleteAccountMovement,
@@ -39,6 +34,8 @@ import {
   type AccountMovementRow,
 } from '@/resources/accountMovements'
 import { amountDirection, formatAmount } from '@/resources/accounts'
+
+import { accountMovementFilterFields } from './accountMovementFilters'
 
 const props = withDefaults(
   defineProps<{
@@ -64,53 +61,8 @@ const emit = defineEmits<{
 const canUpdate = computed(() => can('totem.accountmovement.update'))
 const canDelete = computed(() => can('totem.accountmovement.delete'))
 
-/**
- * The filters this screen offers, keyed by the query parameter the API takes.
- *
- * The category dropdown is narrowed with `applicable_to`, exactly like the
- * form's: offering another account's category would filter on something no
- * movement of this account can carry.
- */
-const FILTER_FIELDS: FilterFields = {
-  search: {
-    type: 'string',
-    label: 'Search',
-    help_text: 'Matches the name or the reference.',
-  },
-  category: {
-    type: 'many2one',
-    label: 'Category',
-    help_text: 'Keep the movements filed under this category.',
-    options: {
-      fetch: searchApplicableCategories(props.accountId),
-      resolve: accountCategoryDisplayNames,
-      permission: 'totem.accountcategory.read',
-    },
-  },
-  direction: {
-    type: 'selection',
-    label: 'Direction',
-    help_text: 'Keep the expenses, or the revenues.',
-    options: {
-      choices: [
-        { value: 'debit', label: 'Debit (expense)' },
-        { value: 'credit', label: 'Credit (revenue)' },
-      ],
-    },
-  },
-  // Calendar days, both INCLUSIVE: the backend compares with gte / lte on a
-  // DateField, so "to 16/10" keeps the 16th.
-  date_from: {
-    type: 'date',
-    label: 'From',
-    help_text: 'Movements on or after this day.',
-  },
-  date_to: {
-    type: 'date',
-    label: 'To',
-    help_text: 'Movements on or before this day.',
-  },
-}
+/** Shared with the chart: see accountMovementFilters.ts. */
+const FILTER_FIELDS = accountMovementFilterFields(props.accountId)
 
 const { filters, setFilters, updateFilters, activeFilters } = useFilter<AccountMovementFilters>(
   FILTER_FIELDS,

@@ -32,13 +32,15 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
   vite.config.ts  tsconfig.json  env.d.ts  index.html
   src/
     main.ts  App.vue  styles/main.css
-    api/          client.ts (fetch wrapper), list.ts (pagination contract)
+    api/          client.ts (fetch wrapper), list.ts (pagination contract), groupBy.ts
     auth/         oauth.ts, tokenStorage.ts, authStore.ts (Pinia), permissions.ts
-    components/   ColorDot.vue, ColorTag.vue, colors.ts
+    components/   ColorDot.vue, ColorTag.vue, colors.ts, ViewSwitcher.vue + viewSwitcher.ts
+      chart/      ChartView.vue, Field.vue, context.ts, prefs.ts, series.ts, fields/
       form/       Form.vue, FormView.vue, context.ts, FieldSwitch, fields/, widget/
       filters/    MultiRecordFilters.vue, filters.ts
       list/       ListView.vue, Field.vue, context.ts, ColumnMenu.vue, DeleteButton.vue, fields/
-    composables/  useResourceList.ts, useResourceForm.ts, useFilter.ts, useTheme.ts
+    composables/  useResourceList.ts, useResourceGroups.ts, useResourceForm.ts, useFilter.ts,
+                  useTheme.ts
     layouts/      AdminLayout.vue, BlankLayout.vue, AppMenu.vue, menu.ts
     plugins/      primevue.ts
     resources/    one module per backend endpoint
@@ -51,7 +53,7 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
 `totem-backend`'s `src/`.
 
 Stack: `vue` 3.5, `vue-router` 4.5, `pinia` 2.3, `primevue` 4.5 (Aura preset) + `primeicons`,
-`@tiptap/*` 3.31 for the rich-text widget, `vitest` 4, `vue-tsc`, `typescript` 5.7, `vite` 6.
+`@tiptap/*` 3.31 for the rich-text widget, `chart.js` 4.5 (drawn through `primevue/chart`), `vitest` 4, `vue-tsc`, `typescript` 5.7, `vite` 6.
 Every version is pinned exactly, with no `^` — keep it that way.
 
 ## Commands
@@ -186,6 +188,7 @@ No decorators, no auto-discovery, no `import.meta.glob`:
 | -------------- | ----------------------------------------------------------- |
 | Widgets        | `WIDGETS` in `form/fields/Field.vue` + the `Widget` union in `form/fields/types.ts` |
 | List cells     | `LIST_WIDGETS` in `list/fields/Cell.vue` + the `ListWidget` union in `list/fields/types.ts` |
+| Chart fields   | the `ChartWidget` union in `chart/fields/types.ts`, read by `chart/fields/labels.ts` |
 | Routes         | the `routes` array in `router/index.ts`                     |
 | Sidebar menu   | the `menu` array in `layouts/menu.ts`                       |
 | Colour palette | `FIELD_COLORS` / `MAX_COLOR_INDEX` in `components/colors.ts` |
@@ -195,8 +198,9 @@ No decorators, no auto-discovery, no `import.meta.glob`:
 A colour is stored as a **palette index 0..15**, mirroring a backend check constraint — growing
 `FIELD_COLORS` is therefore a backend change too.
 
-The only DI mechanism is `provide`/`inject` with a typed `InjectionKey`, and there is exactly one:
-`FORM_CONTEXT`. Pinia is used for auth only.
+The only DI mechanism is `provide`/`inject` with a typed `InjectionKey`: `FORM_CONTEXT`, and its
+two counterparts `LIST_CONTEXT` and `CHART_CONTEXT`, each provided by one component to the
+`<Field>`s of its slot. Pinia is used for auth only.
 
 ## Routing and screens
 
@@ -452,6 +456,37 @@ A cell is not a form widget: it edits nothing and gets the whole row, hence its 
 values); formatting lives in `fields/cells.ts`. A one-off cell is the `<Field>`'s slot; a
 reusable specific one goes in `list/widgets/` (none yet, the folder does not exist).
 
+## The generic chart view
+
+`components/chart/` is `<ListView>`'s counterpart for `POST <resource>/group-by/` (the backend's
+`read_group`): the view declares `<Field type="dimension|measure">`s, `ChartView` draws them.
+
+```vue
+<ChartView :fetch-groups="fetchGroups" :filters="filters" :default-dimensions="['date_month']"
+           :default-measures="['amount_sum']" default-type="bar" storage-key="account-movements"
+           :sync-url="syncUrl">
+  <template #header="{ loading, reload }"><MultiRecordFilters ... /></template>
+  <Field name="date_month" type="dimension" widget="date" :options="{ period: 'month' }" sortable />
+  <Field name="amount_sum" type="measure" label="Balance" sortable />
+</ChartView>
+```
+
+- **Every dimension is joined into ONE X-axis label** (`Rent / Sep 2026`); each measure is a
+  series. Splitting a dimension into series would make the legend depend on the data.
+- **The two tag dropdowns keep the click order** -- PrimeVue's MultiSelect appends a pick -- which
+  is why "select all" is off. The last chip cannot be removed: a group-by needs one of each.
+- **The choice lives in `localStorage`** under `totem.chart.<storageKey>` and is re-checked against
+  the declarations by `prefs.ts`: an undeclared name, a 4th dimension or an ordering on something
+  not picked would each be a 422.
+- **`?view_type=list|chart` is owned by the PAGE**, through the router-free `ViewSwitcher`, and
+  the view is mounted with `v-if` from the route. Both views of a resource share ONE filter
+  declaration (`views/accounting/accountMovementFilters.ts`), so a switch keeps the filters.
+- `useResourceGroups` writes only the filter keys to the URL and preserves the rest (`view_type`,
+  the list's `page`). It exposes `shown`, the selection the groups answer: labels are built from
+  it, not from the dropdowns, which run ahead while a request is in flight.
+- Colours are read from the theme's CSS variables (`CHART_COLOR_VARIABLES`), never a hex.
+- `primevue/chart` imports `chart.js/auto` dynamically: chart.js is a lazy chunk of its own.
+
 ## The API and its error contract
 
 `app/src/api/client.ts` — `apiFetch`, `postJson`, `patchJson`, `apiDelete`, `ApiError`,
@@ -553,6 +588,8 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | every field                    | `fields/values.ts`      |
 | `ListView.vue`                 | `list/columns.ts`, `list/selection.ts`, `list/resequence.ts`, `list/delayedFlag.ts` |
 | every list cell                | `list/fields/cells.ts`  |
+| `ChartView.vue`                | `chart/prefs.ts`, `chart/series.ts`, `chart/fields/labels.ts`, `api/groupBy.ts` |
+| `ViewSwitcher.vue`             | `viewSwitcher.ts`       |
 
 Follow that split for anything new: if a bug would stay invisible until a user hits it, its logic
 belongs in a sibling `.ts` with a `.spec.ts`. Specs sit next to their module and import it
