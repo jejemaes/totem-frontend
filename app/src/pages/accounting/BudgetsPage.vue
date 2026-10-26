@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /*
  * /accounting/budgets: the page chrome around BudgetListView, and the ONE place
- * that knows what opening a row means here -- a route push.
+ * that knows what opening a row -- or its chart -- means here: a route push.
  */
 import Button from 'primevue/button'
 import { computed, ref } from 'vue'
@@ -24,6 +24,12 @@ function openRecord(id: string): void {
   // sort and filters.
   void router.push({ name: 'accounting-budget-edit', params: { id }, query: route.query })
 }
+
+function openChart(id: string): void {
+  // The query is NOT carried: this list's `?name=` filter would be read by the
+  // chart page as a filter on the positions' name.
+  void router.push({ name: 'accounting-budget-chart', params: { id } })
+}
 </script>
 
 <template>
@@ -41,6 +47,6 @@ function openRecord(id: string): void {
       </RouterLink>
     </header>
 
-    <BudgetListView sync-url @open="openRecord" @loaded="total = $event" />
+    <BudgetListView sync-url @open="openRecord" @chart="openChart" @loaded="total = $event" />
   </section>
 </template>

@@ -50,6 +50,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   /** The edit button of a row: what that means is up to the caller. */
   open: [id: string]
+  /** The chart button of a row: its positions, charted. Up to the caller too. */
+  chart: [id: string]
   /** Every settled response, so the caller can show the count in its header. */
   loaded: [total: number]
 }>()
@@ -200,6 +202,15 @@ defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.reso
     </Field>
 
     <template #actions="{ row }">
+      <!-- No permission check: reading the budget is what shows this list. -->
+      <Button
+        icon="pi pi-chart-bar"
+        text
+        rounded
+        severity="secondary"
+        aria-label="Chart"
+        @click="emit('chart', row.id)"
+      />
       <Button
         v-if="canUpdate"
         icon="pi pi-pencil"

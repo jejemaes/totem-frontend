@@ -18,6 +18,7 @@
  */
 
 import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
+import { fetchGroups, type GroupPage, type GroupQuery } from '@/api/groupBy'
 import { fetchAllPages } from '@/api/list'
 
 import type { AccountCategoryRef } from './accountCategories'
@@ -147,4 +148,44 @@ export function updateBudgetPosition(
 /** Its lines go with it: `BudgetLine.position` is `on_delete=CASCADE`. */
 export function deleteBudgetPosition(budgetId: string, id: string): Promise<void> {
   return apiDelete(`${positionsPath(budgetId)}${encodeURIComponent(id)}/`)
+}
+
+/**
+ * What `POST .../positions/group-by/` groups by, as the service declares them
+ * (`BudgetPositionService.group_by_dimensions`). `category` comes back nested
+ * as the list renders it.
+ *
+ * Within ONE budget a category holds one position at most, so a group is a
+ * position and the sums are its own totals; they only add up across budgets.
+ */
+export const BUDGET_POSITION_DIMENSIONS = ['category'] as const
+
+/** Its measures: decimal STRINGS for the sums, floats for the averages, null over nothing. */
+export const BUDGET_POSITION_MEASURES = [
+  'count',
+  'total_planned_sum',
+  'total_planned_avg',
+  'total_practical_sum',
+  'total_practical_avg',
+] as const
+
+export type BudgetPositionDimension = (typeof BUDGET_POSITION_DIMENSIONS)[number]
+export type BudgetPositionMeasure = (typeof BUDGET_POSITION_MEASURES)[number]
+
+/**
+ * The positions' `list_filter_schema`. A `type` and not an `interface`: only
+ * type aliases get the implicit index signature `ListFilters` needs.
+ */
+export type BudgetPositionFilters = {
+  /** Matches the name -- the category's -- case-insensitive. */
+  name?: string | null
+}
+
+/** The budget is in the PATH: the groups cannot reach another budget's positions. */
+export function groupBudgetPositions(
+  budgetId: string,
+  query: GroupQuery<BudgetPositionFilters>,
+  signal?: AbortSignal,
+): Promise<GroupPage> {
+  return fetchGroups(`${positionsPath(budgetId)}group-by/`, query, signal)
 }
