@@ -10,6 +10,7 @@ import AccountMovementPage from '@/pages/accounting/AccountMovementPage.vue'
 import AccountMovementsPage from '@/pages/accounting/AccountMovementsPage.vue'
 import AccountPage from '@/pages/accounting/AccountPage.vue'
 import AccountsPage from '@/pages/accounting/AccountsPage.vue'
+import BudgetChartPage from '@/pages/accounting/BudgetChartPage.vue'
 import BudgetPage from '@/pages/accounting/BudgetPage.vue'
 import BudgetsPage from '@/pages/accounting/BudgetsPage.vue'
 import ContactPage from '@/pages/contacts/ContactPage.vue'
@@ -217,6 +218,14 @@ export const router = createRouter({
             title: 'Edit budget',
             permissions: ['totem.budget.read', 'totem.budget.update'],
           },
+        },
+        // A sibling of the edit route, not a child: nested, it would keep the
+        // budget form mounted around the chart.
+        {
+          path: 'accounting/budgets/:id/chart',
+          name: 'accounting-budget-chart',
+          component: BudgetChartPage,
+          meta: { title: 'Budget chart', permissions: ['totem.budget.read'] },
         },
         // The site's own settings: ONE route, not the list / new / :id shape
         // of the resources below. The row is a singleton addressed as
