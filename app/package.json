@@ -23,6 +23,7 @@
     "@tiptap/pm": "3.31.3",
     "@tiptap/starter-kit": "3.31.3",
     "@tiptap/vue-3": "3.31.3",
+    "chart.js": "4.5.0",
     "pinia": "2.3.1",
     "primeicons": "7.0.0",
     "primevue": "4.5.5",

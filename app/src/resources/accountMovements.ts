@@ -12,6 +12,7 @@
  */
 
 import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
+import { fetchGroups, type GroupPage, type GroupQuery } from '@/api/groupBy'
 import { fetchList, type ListQuery, type Page } from '@/api/list'
 
 import type { AccountCategoryRef } from './accountCategories'
@@ -72,6 +73,50 @@ export function listAccountMovements(
     ACCOUNT_MOVEMENT_LIST_FIELDS,
     signal,
   )
+}
+
+/**
+ * What `POST /accounting/movements/group-by/` groups by, as the service
+ * declares them (`AccountMovementService.group_by_dimensions`). `account` and
+ * `category` come back nested as the list renders them; a `date_*` is the
+ * first day of its period, `YYYY-MM-DD`.
+ */
+export const ACCOUNT_MOVEMENT_DIMENSIONS = [
+  'account',
+  'category',
+  'date_day',
+  'date_week',
+  'date_month',
+  'date_quarter',
+  'date_year',
+] as const
+
+/**
+ * Its measures. Sums are decimal STRINGS (`"-40.00"`), `amount_avg` and
+ * `amount_share` are floats, `count` an integer -- and any of them null over a
+ * group with nothing to aggregate (`credit_sum` of a month of expenses).
+ * `amount_share` is the share of each category in its period, 0-100.
+ */
+export const ACCOUNT_MOVEMENT_MEASURES = [
+  'count',
+  'amount_sum',
+  'amount_avg',
+  'amount_min',
+  'amount_max',
+  'debit_sum',
+  'credit_sum',
+  'amount_share',
+] as const
+
+export type AccountMovementDimension = (typeof ACCOUNT_MOVEMENT_DIMENSIONS)[number]
+export type AccountMovementMeasure = (typeof ACCOUNT_MOVEMENT_MEASURES)[number]
+
+/** The same filters as the list: the backend takes its `list_filter_schema`. */
+export function groupAccountMovements(
+  query: GroupQuery<AccountMovementFilters>,
+  signal?: AbortSignal,
+): Promise<GroupPage> {
+  return fetchGroups('/accounting/movements/group-by/', query, signal)
 }
 
 /** What GET /accounting/movements/{id}/ returns. */
