@@ -5,7 +5,8 @@
  * client generated from /api/v1/openapi.json once the admin screens land.
  */
 
-import { getTokens } from '@/auth/tokenStorage'
+import { isExpiring, refreshSession } from '@/auth/refresh'
+import { getTokens, type StoredTokens } from '@/auth/tokenStorage'
 
 const API_BASE = '/api/v1'
 
@@ -96,18 +97,7 @@ export function parseApiError(body: unknown, status: number): ParsedApiError {
   return { message: `Error ${status}` }
 }
 
-/**
- * Note the trailing slash on every path: the backend requires it.
- *
- * There is no refresh-on-401 yet. A 401 simply surfaces to the caller, which
- * ends the session. Automatic refresh is blocked on a backend bug anyway --
- * REFRESH_TOKEN_EXPIRE_SECONDS (5h) is shorter than
- * ACCESS_TOKEN_EXPIRE_SECONDS (10h), so a refresh token is always dead by the
- * time the access token expires.
- */
-export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const tokens = getTokens()
-
+function send(path: string, init: RequestInit, tokens: StoredTokens | null): Promise<Response> {
   const headers = new Headers(init.headers)
   headers.set('Accept', 'application/json')
   if (tokens) headers.set('Authorization', `Bearer ${tokens.accessToken}`)
@@ -120,7 +110,30 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers })
+  // Sent twice at most, which is fine for every body this client builds: a
+  // string or a FormData can be read again, unlike a stream.
+  return fetch(`${API_BASE}${path}`, { ...init, headers })
+}
+
+/**
+ * Note the trailing slash on every path: the backend requires it.
+ *
+ * The session is kept alive here, the one place every request goes through: an
+ * access token about to expire is rotated BEFORE the request, and a 401 is
+ * answered by one rotation and one retry. A second 401 is final -- retrying in
+ * a loop would hammer the backend for a user it has disabled. When the rotation
+ * is refused, `refreshSession` clears the tokens, the auth store follows, and
+ * the 401 surfaces to the caller as before.
+ */
+export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  let tokens = getTokens()
+  if (tokens && isExpiring(tokens, Date.now())) tokens = await refreshSession(tokens)
+
+  let response = await send(path, init, tokens)
+  if (response.status === 401 && tokens) {
+    tokens = await refreshSession(tokens)
+    if (tokens) response = await send(path, init, tokens)
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => null)

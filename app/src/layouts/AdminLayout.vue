@@ -3,8 +3,8 @@ import Button from 'primevue/button'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Menu from 'primevue/menu'
 import type { MenuItem as PrimeMenuItem } from 'primevue/menuitem'
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/auth/authStore'
 import TotemMark from '@/components/TotemMark.vue'
@@ -14,20 +14,29 @@ import AppMenu from './AppMenu.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 const { theme, toggle } = useTheme()
 
 // Collapsed on small screens; the CSS turns the sidebar into an overlay there.
 const sidebarOpen = ref(true)
+
+// The session can end under a mounted page: a refresh token refused by the
+// backend, or a sign-out in another tab. The guard only runs on navigation, so
+// without this the page would stay on screen, failing every request with a 401.
+watch(
+  () => auth.isAuthenticated,
+  (signedIn) => {
+    if (!signedIn) router.replace({ name: 'login', query: { redirect: route.fullPath } })
+  },
+)
 
 const userMenu = ref<InstanceType<typeof Menu> | null>(null)
 const userMenuItems: PrimeMenuItem[] = [
   {
     label: 'Se déconnecter',
     icon: 'pi pi-sign-out',
-    command: async () => {
-      await auth.logout()
-      await router.push({ name: 'login' })
-    },
+    // The watcher above does the navigation, as for any other end of session.
+    command: () => auth.logout(),
   },
 ]
 </script>

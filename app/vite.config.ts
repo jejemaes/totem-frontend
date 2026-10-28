@@ -60,13 +60,11 @@ export default defineConfig(({ mode }) => {
       },
       // In production totem-proxy serves this app under /tabou/ on the tenant
       // domain and routes every other path to the tenant backend, so the app
-      // calls /api and /o with relative URLs and there is no CORS. The dev
-      // server has to reproduce that same-origin arrangement itself.
+      // calls /api with relative URLs and there is no CORS. The dev server has
+      // to reproduce that same-origin arrangement itself.
       proxy: {
         '/api': { target: backend, changeOrigin: true },
-        '/o': { target: backend, changeOrigin: true },
-        // The Django-rendered pages (/admin, the OAuth authorize view) pull
-        // their assets from /static.
+        // The Django-rendered pages (/admin) pull their assets from /static.
         '/admin': { target: backend, changeOrigin: true },
         '/static': { target: backend, changeOrigin: true },
         // Not `backend`: see the comment on `media` above. This is also what

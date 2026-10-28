@@ -11,7 +11,7 @@ export interface MenuItem {
   label: string
   icon: string
   to: string
-  /** OAuth scope required to see this entry. */
+  /** Scope required to see this entry. */
   permission?: string
 }
 
