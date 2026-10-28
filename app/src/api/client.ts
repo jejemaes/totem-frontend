@@ -173,17 +173,3 @@ export function apiDelete(path: string): Promise<void> {
   return apiFetch<void>(path, { method: 'DELETE' })
 }
 
-/** Subset of the profile returned by GET /api/v1/users/me/. */
-export interface UserProfile {
-  id: string
-  /** The ORM field is `username`; the API exposes and expects `login`. */
-  login: string
-  email: string | null
-  first_name: string | null
-  last_name: string | null
-  language: string | null
-}
-
-export function fetchProfile(): Promise<UserProfile> {
-  return apiFetch<UserProfile>('/users/me/')
-}

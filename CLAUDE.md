@@ -329,6 +329,12 @@ the caller's own, `#actions({ dirty, saving, isNew, saveLabel })` to replace the
 `form.externalDirty` too — what `hasExternalChanges` reports — so an edit confined to a
 detached widget still enables it.
 
+A **singleton** record (one row, addressed by alias, no create or delete) passes a constant `id`
+(`'current'`, `'me'`), rejects in `create` (unreachable), sets `:cancellable="false"`, and on save
+re-seeds `form.data` from the PATCH response — the new object is what resets `<Form>`'s baseline.
+Copy `views/settings/ProfileView.vue` (`/profile`, `resources/profile.ts` over `/users/me/`,
+reached from the user menu, no permission needed); `WebsiteConfigurationPage` is the larger one.
+
 Payloads are built **key by key** in local `createPayload(values)` / `updatePayload(changed)`
 helpers — never by copying the draft. See *the PATCH asymmetry* below for why that is not
 pedantry. Deletes go through `useConfirm()` — inside `<FormView>` for a form — and the dialog is

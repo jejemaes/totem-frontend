@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { ApiError, fetchProfile, type UserProfile } from '@/api/client'
+import { ApiError } from '@/api/client'
+import { fetchProfile, type UserProfile } from '@/resources/profile'
 
 import { requestToken, revokeToken } from './tokenApi'
 import { clearTokens, getTokens, onTokensChange, setTokens } from './tokenStorage'
