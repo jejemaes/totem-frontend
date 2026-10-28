@@ -24,6 +24,7 @@ import FormDemoPage from '@/pages/FormDemoPage.vue'
 import LoginPage from '@/pages/LoginPage.vue'
 import NotFoundPage from '@/pages/NotFoundPage.vue'
 import PublicPage from '@/pages/PublicPage.vue'
+import ProfilePage from '@/pages/settings/ProfilePage.vue'
 import UserPage from '@/pages/settings/UserPage.vue'
 import UsersPage from '@/pages/settings/UsersPage.vue'
 import WebsiteConfigurationPage from '@/pages/website/WebsiteConfigurationPage.vue'
@@ -286,6 +287,16 @@ export const router = createRouter({
             title: 'Edit page',
             permissions: ['totem.websitepage.read', 'totem.websitepage.update'],
           },
+        },
+        // No `permissions`: `/users/me/` asks for a session and nothing more,
+        // so every account reaches its own profile. Not `settings/users/me`,
+        // which would sit beside `settings/users/:id` and read as one of the
+        // `totem.user.*` screens.
+        {
+          path: 'profile',
+          name: 'profile',
+          component: ProfilePage,
+          meta: { title: 'My profile' },
         },
         {
           path: 'settings/users',

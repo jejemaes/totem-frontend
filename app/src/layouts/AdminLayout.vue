@@ -38,6 +38,11 @@ const userMenuItems: PrimeMenuItem[] = [
     // The watcher above does the navigation, as for any other end of session.
     command: () => auth.logout(),
   },
+  {
+    label: 'My Profile',
+    icon: 'pi pi-user',
+    command: () => router.push({ name: 'profile' }),
+  },
 ]
 </script>
 
