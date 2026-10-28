@@ -9,11 +9,6 @@
  */
 interface ImportMetaEnv {
   readonly VITE_APP_TITLE: string
-  /**
-   * Public OAuth client id, registered in the backend's OAuthApp table.
-   * Public by construction: it ships inside the bundle.
-   */
-  readonly VITE_OAUTH_CLIENT_ID: string
 }
 
 interface ImportMeta {

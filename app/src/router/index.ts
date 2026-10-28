@@ -45,7 +45,7 @@ declare module 'vue-router' {
      * one more branch in the guard -- nothing else moves.
      */
     auth?: 'required' | 'none' | 'guest-only'
-    /** OAuth scopes required on top of a valid session. All of them must be held. */
+    /** Scopes required on top of a valid session. All of them must be held. */
     permissions?: string[]
     title?: string
   }

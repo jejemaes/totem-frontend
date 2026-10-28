@@ -5,7 +5,7 @@ Frontend VueJs App for Totem Saas.
 Interface d'administration du SaaS Totem : SPA Vue 3 + TypeScript, servie par nginx et routée
 par nom de domaine via [`totem-proxy`](../totem-proxy).
 
-> **État actuel :** chaîne de déploiement validée, authentification OAuth2, mise en page
+> **État actuel :** chaîne de déploiement validée, authentification JWT, mise en page
 > d'administration (PrimeVue), et les écrans de liste et de création/édition pour les
 > utilisateurs, les contacts et le contenu du site web.
 
@@ -15,7 +15,7 @@ par nom de domaine via [`totem-proxy`](../totem-proxy).
 | ------------------ | ------------------------- | ----------------------------------------------- |
 | `/`                | public                    | Page ouverte à tous                             |
 | `/diagnostic`      | public                    | Domaine, préfixe et mode de build résolus       |
-| `/login`           | visiteurs uniquement      | Connexion OAuth2 ; redirige si déjà authentifié |
+| `/login`           | visiteurs uniquement      | Connexion ; redirige si déjà authentifié        |
 | `/form-demo`       | public                    | Terrain d'essai de `<Form>` et `<Field>`        |
 | `/dashboard`       | authentifié               | Point d'arrivée après connexion                 |
 | `/contacts`        | `totem.contact.read`      | Liste des contacts                              |
@@ -38,9 +38,10 @@ le cas échéant, `meta.permissions`. Une garde unique dans
 
 ## Permissions
 
-Les permissions **sont** les scopes OAuth : le backend dérive le `scope` du jeton de l'union des
-permissions des rôles de l'utilisateur. Les jetons étant opaques, le `scope` renvoyé à la connexion
-est la seule source — il n'y a rien à décoder côté client.
+Les permissions **sont** les scopes du jeton : le backend dérive le `scope` de l'union des
+permissions des rôles de l'utilisateur, et le recalcule à chaque renouvellement. Le `scope` renvoyé
+à la connexion puis à chaque renouvellement est la source utilisée — le JWT n'est pas décodé côté
+client.
 
 Deux effets, complémentaires :
 
@@ -69,25 +70,23 @@ Puis se déconnecter et se reconnecter.
 
 ## Authentification
 
-Flux OAuth2 *resource owner password* sur `/o/token/`. Le jeton est **opaque** (non décodable côté
-client) et stocké dans `localStorage`, entièrement derrière
+Le backend émet ses propres jetons sur `POST /api/v1/auth/token/` (identifiant et mot de passe) :
+un jeton d'accès JWT de courte durée (15 min par défaut) et un jeton de rafraîchissement (14 jours)
+à **usage unique**. La paire est stockée dans `localStorage`, entièrement derrière
 [`app/src/auth/tokenStorage.ts`](app/src/auth/tokenStorage.ts).
 
+Le renouvellement est automatique : le client API renouvelle la paire juste avant l'expiration du
+jeton d'accès, et une seule fois après un 401. Comme un jeton de rafraîchissement réutilisé est
+traité par le backend comme un rejeu — qui révoque toute la session —,
+[`app/src/auth/refresh.ts`](app/src/auth/refresh.ts) garantit qu'il n'est dépensé qu'une fois, y
+compris entre plusieurs onglets. La déconnexion révoque la session côté serveur
+(`/api/v1/auth/token/revoke/`) et se propage aux autres onglets.
+
 Détenir un jeton n'est pas la même chose qu'avoir une session : la garde appelle `ensureSession()`,
-qui valide le jeton auprès du backend une fois par session. Un jeton expiré ou révoqué provoque donc
-une redirection vers la connexion plutôt qu'une page qui échoue à chaque requête.
+qui valide la session auprès du backend une fois par session. Une session expirée ou révoquée
+provoque donc une redirection vers la connexion plutôt qu'une page qui échoue à chaque requête.
 
-En développement, le compte de test est `admin` / `admin`. Si la connexion renvoie
-« Client OAuth inconnu du backend », c'est que la base backend n'a pas été initialisée :
-
-```bash
-cd ../totem-backend && docker compose exec django ./manage.py populate --env local --size small
-```
-
-> **Pas encore de rafraîchissement automatique du jeton.** Le backend configure
-> `REFRESH_TOKEN_EXPIRE_SECONDS` (5 h) plus court que `ACCESS_TOKEN_EXPIRE_SECONDS` (10 h) : le
-> jeton de rafraîchissement meurt donc toujours avant celui qu'il doit renouveler. À corriger côté
-> backend avant d'implémenter le renouvellement.
+En développement, le compte de test est `admin` / `admin`.
 
 ## Prérequis
 

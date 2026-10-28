@@ -3,8 +3,8 @@ import { computed, ref } from 'vue'
 
 import { ApiError, fetchProfile, type UserProfile } from '@/api/client'
 
-import { requestToken, revokeToken } from './oauth'
-import { clearTokens, getTokens, setTokens } from './tokenStorage'
+import { requestToken, revokeToken } from './tokenApi'
+import { clearTokens, getTokens, onTokensChange, setTokens } from './tokenStorage'
 
 export const useAuthStore = defineStore('auth', () => {
   // Seeded from storage so a page reload does not log the user out.
@@ -13,39 +13,48 @@ export const useAuthStore = defineStore('auth', () => {
   /** Guards against re-checking a token we have already validated this session. */
   const sessionChecked = ref(false)
 
+  // A MIRROR of the storage, not its owner: the API client rotates the pair on
+  // its own, and another tab can rotate it or sign out. Without this the scopes
+  // would freeze at login and a sign-out elsewhere would go unnoticed here.
+  onTokensChange((next) => {
+    tokens.value = next
+    if (!next) {
+      profile.value = null
+      sessionChecked.value = false
+    }
+  })
+
   const isAuthenticated = computed(() => tokens.value !== null)
 
   /**
-   * Scopes granted by the token, i.e. the user's permissions. Not used to gate
-   * anything yet -- the admin screens will read it.
+   * Scopes granted by the token, i.e. the user's permissions. Recomputed by the
+   * backend from the live roles on every rotation, so a role change shows up
+   * here within one access token lifetime, without a re-login.
    */
   const scopes = computed(() => new Set((tokens.value?.scope ?? '').split(' ').filter(Boolean)))
 
   async function login(username: string, password: string): Promise<void> {
-    const received = await requestToken(username, password)
-    setTokens(received)
-    tokens.value = received
+    setTokens(await requestToken(username, password))
     profile.value = await fetchProfile()
     sessionChecked.value = true
   }
 
-  /** Clears the local session. `notifyServer` is false when the token is already dead. */
+  /** Clears the local session. `notifyServer` is false when the session is already dead. */
   async function logout(notifyServer = true): Promise<void> {
-    const token = tokens.value?.accessToken
+    const refreshToken = tokens.value?.refreshToken
     clearTokens()
-    tokens.value = null
-    profile.value = null
-    sessionChecked.value = false
-    if (notifyServer && token) await revokeToken(token)
+    if (notifyServer && refreshToken) await revokeToken(refreshToken)
   }
 
   /**
-   * Confirms the stored token is still accepted by the backend, by fetching the
-   * profile once per session.
+   * Confirms the stored session is still accepted by the backend, by fetching
+   * the profile once per session.
    *
-   * Holding a token is not the same as having a session: it can be expired, or
-   * revoked server-side when a user's rights change. Without this the router
-   * would happily open a protected page that then fails every request.
+   * Holding a token is not the same as having a session: the refresh token can
+   * be expired, or revoked server-side when the account is disabled or signed
+   * out elsewhere. Without this the router would happily open a protected page
+   * that then fails every request. An expired ACCESS token is not a problem
+   * here: the API client rotates it before sending.
    */
   async function ensureSession(): Promise<boolean> {
     if (!tokens.value) return false

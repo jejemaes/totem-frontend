@@ -16,7 +16,7 @@ Sibling repositories, checked out next to this one:
 
 | Path               | Role                                                          |
 | ------------------ | ------------------------------------------------------------- |
-| `../totem-backend` | Django API (`/api/v1`), OAuth2 provider (`/o`), media nginx   |
+| `../totem-backend` | Django API (`/api/v1`, JWT auth under `/auth/`), media nginx  |
 | `../totem-proxy`   | OpenResty; resolves the tenant from `Host`, splits front/back |
 
 ## Repository layout
@@ -33,7 +33,7 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
   src/
     main.ts  App.vue  styles/main.css
     api/          client.ts (fetch wrapper), list.ts (pagination contract), groupBy.ts
-    auth/         oauth.ts, tokenStorage.ts, authStore.ts (Pinia), permissions.ts
+    auth/         tokenApi.ts, refresh.ts, tokenStorage.ts, authStore.ts (Pinia), permissions.ts
     components/   ColorDot.vue, ColorTag.vue, colors.ts, ViewSwitcher.vue + viewSwitcher.ts
       chart/      ChartView.vue, Field.vue, context.ts, prefs.ts, series.ts, fields/
       form/       Form.vue, FormView.vue, context.ts, FieldSwitch, fields/, widget/
@@ -498,7 +498,9 @@ reusable specific one goes in `list/widgets/` (none yet, the folder does not exi
 - `ApiError.fields` carries per-field messages from a 422, keyed by the **public** API name
   (`login`, never the ORM's `username`). Errors with no field land under `NON_FIELD` and are shown
   by the parent's banner, not by `<Form>`.
-- **There is no refresh-on-401** — a 401 surfaces to the caller. See *Known open items*.
+- **The session is kept alive here**: an access token within 30 s of its expiry is rotated
+  before the request, and a 401 gets one rotation and one retry. A second 401, or a refused
+  rotation, surfaces to the caller. See *Auth and permissions*.
 
 `app/src/api/list.ts` — `Page<T>` (`{count, next, previous, results}`), `ListQuery`, the parameter
 names (`page`, `page_size`, `ordering`, `fields`), `MAX_PAGE_SIZE = 199` (the schema says
@@ -523,24 +525,36 @@ client-side. Per-resource type naming: `XxxRow`, `XxxDetail`, `XxxRef`, `XxxFilt
 
 ## Auth and permissions
 
-OAuth2 resource-owner-password against `POST /o/token/`. The token is **opaque** — nothing to
-decode client-side — and lives in `localStorage` entirely behind `auth/tokenStorage.ts`.
-`oauth.ts` uses plain `fetch` rather than the API client on purpose, so a failed login cannot
-recursively trigger session teardown; it also distinguishes `invalid_grant` (bad credentials) from
-`invalid_client` (the OAuth app is missing from the DB — a deployment problem).
+The backend's own JWT endpoints, `POST /api/v1/auth/token/` (`{username, password}`),
+`/token/refresh/` and `/token/revoke/` (`{refresh_token}`) — no `client_id`, no `grant_type`. The
+pair is an access JWT (15 min by default) and a refresh token (14 days) that is **single use**:
+presenting a spent one is a replay, and the backend revokes the whole session. The pair lives in
+`localStorage` entirely behind `auth/tokenStorage.ts`, which notifies `onTokensChange` subscribers
+on every write — this tab's or, through the `storage` event, another one's. `tokenApi.ts` uses
+plain `fetch` rather than the API client on purpose, so a failed login or refresh cannot recurse
+into the refresh logic. Every refusal is a 401 with no reason given (an enumeration oracle
+otherwise).
+
+**Never call `exchangeRefreshToken` directly — go through `refreshSession(spent)`** in
+`auth/refresh.ts`. It shares one in-flight rotation per tab, runs under a Web Lock
+(`navigator.locks`) across tabs, and re-reads storage inside the lock to ADOPT a pair another tab
+already rotated instead of replaying the spent token. A 4xx clears the tokens; a network error or
+5xx keeps them and rethrows. `apiFetch` calls it; `AdminLayout` watches `isAuthenticated` and
+sends the user to `/login` when the session ends under a mounted page.
 
 Holding a token is not the same as having a session: the guard calls `ensureSession()`, which
-validates the token against `GET /api/v1/users/me/` once per session. A 401 there means a silent
+validates the session against `GET /api/v1/users/me/` once per session. A 401 there means a silent
 logout; a network error or 5xx is rethrown and must **not** log the user out.
 
-**Permissions are the OAuth scopes** (`totem.contact.read`, `totem.user.update`, …), read from the
-token response at login and exposed by `auth/permissions.ts` (`can`, `canAny`, `canAll`). They act
+**Permissions are the token's scopes** (`totem.contact.read`, `totem.user.update`, …), read from
+the token response at login and at every rotation, and exposed by `auth/permissions.ts` (`can`, `canAny`, `canAll`). They act
 in two places, both purely cosmetic: `layouts/menu.ts` hides entries whose permission is missing
 (and drops a section left empty), and the guard sends an authenticated-but-unauthorised user to
 `/403` rather than `/login`, which would be a dead end.
 
-**This is not a security boundary** — the backend checks the same scopes on every request. And
-because the scope is read at login, **a role change requires a re-login** to show up.
+**This is not a security boundary** — the backend checks the same scopes on every request. The
+backend recomputes the scopes from the live roles on every rotation, so a role change shows up
+within one access token lifetime, without a re-login.
 
 Dev credentials: `admin` / `admin`.
 
@@ -552,8 +566,7 @@ branding, feature flags) may ever live there — it would be frozen for all doma
 must come from the backend at runtime.
 
 `default.env` holds the committed dev defaults; `.env` is gitignored. `app/env.d.ts` declares the
-only two variables the bundle reads: `VITE_APP_TITLE` and `VITE_OAUTH_CLIENT_ID` (a public
-identifier by construction — it ships in the JS).
+only variable the bundle reads: `VITE_APP_TITLE`.
 
 `base` is `/tabou/`, a name inherited from another project, and it is **frozen at build time**
 (Vite rewrites every asset URL) — which is why it is a build arg in `docker-compose.yml` and not
@@ -561,7 +574,7 @@ an environment variable. `/tabou/diagnostic` prints the prefix actually baked in
 
 In production `totem-proxy` serves this app under `/tabou/` on the tenant domain and routes every
 other path to the tenant backend — hence relative URLs and no CORS. The dev server reproduces that
-same-origin arrangement itself: `/api`, `/o`, `/admin`, `/static` → `totem-backend:8000`, and
+same-origin arrangement itself: `/api`, `/admin`, `/static` → `totem-backend:8000`, and
 `/media` → `totem-backend-nginx:80`. That last one is not a typo: Django's only `/media/` route
 refuses any URL without a `signature` param and answers with an HTML 403, so proxying an
 `<img src="/media/public/…">` to Django just breaks, with nothing useful in the console.
@@ -667,8 +680,6 @@ have had. Read `git log -1` for the standard before writing one.
   that stack, or `docker network create totem-saas-network`.
 - A blank page behind the proxy with 404s on `/assets/…` → the baked-in base path does not match
   what the proxy serves. Check `VITE_BASE_PATH` and rebuild.
-- Login failing with "unknown OAuth client" → the backend's `oauth_oauthapp` table is empty; it
-  needs `manage.py populate` (the owner runs it).
 - A change to the proxy's `domain` table looks ignored → 30 s Lua cache,
   `curl -X POST http://localhost:9999/_saas/flush-cache`.
 - HMR not reacting → only on Docker Desktop or WSL2 with the repo on `/mnt/c`; set
@@ -682,10 +693,7 @@ From `README.md`'s "Prochaines étapes", plus the follow-up of the pages/views s
 
 1. Map 422 responses onto the user form's fields.
 2. Replace the hand-written API client with one generated from `/api/v1/openapi.json`.
-3. Automatic token refresh — **blocked on the backend**, which sets `REFRESH_TOKEN_EXPIRE_SECONDS`
-   (5 h) shorter than `ACCESS_TOKEN_EXPIRE_SECONDS` (10 h), so the refresh token always dies before
-   the token it should renew. Fix that first.
-4. Views in a modal: the first consumers exist -- `BudgetBalanceView` opens
+3. Views in a modal: the first consumers exist -- `BudgetBalanceView` opens
    `BudgetLineListView` and `BudgetPositionFormView` in a `Dialog`, and `BudgetLineListView` opens
    `BudgetLineFormView` in its own, each remounted per open through a `:key` (copy that). Row selection across pages now exists in `ListView`
    (`mode="selection"`); still open: a many2many field opening it in a Dialog.

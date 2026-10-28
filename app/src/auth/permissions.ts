@@ -1,10 +1,12 @@
 /**
  * Permission helpers.
  *
- * Permissions ARE the OAuth scopes: the backend derives the token's `scope`
- * from the union of the user's roles' permissions (see totem-backend
- * src/oauth/scopes.py). Tokens are opaque, so the scope string from the token
- * response is the only source -- there is nothing to decode client-side.
+ * Permissions ARE the token's scopes: the backend derives `scope` from the
+ * union of the user's roles' permissions (see totem-backend
+ * src/user/access_rights.py), again on every rotation. The access token is a
+ * JWT that carries them too, but the `scope` of the token response is the
+ * source used here -- decoding the JWT would mean trusting a format the client
+ * does not need to know.
  *
  * This gating is a UX affordance, not a security boundary. The backend checks
  * the same scopes on every request; hiding a button the user cannot use just
