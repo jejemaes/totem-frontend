@@ -16,6 +16,7 @@ import {
   createBudget,
   deleteBudget,
   fetchBudget,
+  fetchBudgetDefaults,
   updateBudget,
   type BudgetCreatePayload,
   type BudgetDetail,
@@ -123,6 +124,7 @@ const form = useResourceForm<BudgetDetail>({
     update_date: budget.update_date,
   }),
   fetchOne: fetchBudget,
+  fetchDefaults: fetchBudgetDefaults,
   onLoaded: (budget) => {
     account.value = budget?.account ?? null
     user.value = budget?.user ?? null

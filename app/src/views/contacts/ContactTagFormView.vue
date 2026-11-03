@@ -11,6 +11,7 @@ import { useResourceForm } from '@/composables/useResourceForm'
 import {
   createContactTag,
   fetchContactTag,
+  fetchContactTagDefaults,
   updateContactTag,
   type ContactTagCreatePayload,
   type ContactTagDetail,
@@ -80,6 +81,7 @@ const form = useResourceForm<ContactTagDetail>({
   defaults: { name: null, color: 0 },
   toForm: (tag) => ({ name: tag.name, color: tag.color }),
   fetchOne: fetchContactTag,
+  fetchDefaults: fetchContactTagDefaults,
   create: (values) => createContactTag(createPayload(values)),
   update: (id, changed) => updateContactTag(id, updatePayload(changed)),
   notFoundMessage: 'This tag no longer exists.',

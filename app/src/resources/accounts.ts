@@ -6,7 +6,7 @@
  * read-only: neither schema accepts them on write.
  */
 
-import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
+import { apiDelete, apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
 import {
   fetchAllPages,
   fetchDisplayNames,
@@ -205,6 +205,11 @@ export interface AccountCreatePayload {
 
 export function createAccount(payload: AccountCreatePayload): Promise<AccountDetail> {
   return postJson<AccountDetail>('/accounting/accounts/', payload)
+}
+
+/** The values a new one starts with: see `fetchDefaultValues`. */
+export function fetchAccountDefaults(signal?: AbortSignal): Promise<Partial<AccountDetail>> {
+  return fetchDefaultValues<AccountDetail>('/accounting/accounts/', signal)
 }
 
 /**

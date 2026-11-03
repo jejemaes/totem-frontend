@@ -11,6 +11,7 @@ import { useResourceForm } from '@/composables/useResourceForm'
 import {
   createUser,
   fetchUser,
+  fetchUserDefaults,
   updateUser,
   type UserCreatePayload,
   type UserDetail,
@@ -137,6 +138,7 @@ const form = useResourceForm<UserDetail>({
     language: language(user.language),
   }),
   fetchOne: fetchUser,
+  fetchDefaults: fetchUserDefaults,
   // <Form> re-seeds its draft when `data` changes identity; nothing would
   // re-seed a value living outside it. This is that, for the roles widget --
   // without it, walking from one user to the next keeps the previous account's

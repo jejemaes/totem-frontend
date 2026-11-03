@@ -21,6 +21,7 @@ import {
   createWebsitePage,
   deleteWebsitePage,
   fetchWebsitePage,
+  fetchWebsitePageDefaults,
   updateWebsitePage,
   type WebsitePageCreatePayload,
   type WebsitePageDetail,
@@ -135,6 +136,7 @@ const form = useResourceForm<WebsitePageDetail>({
     layout: page.layout,
   }),
   fetchOne: fetchWebsitePage,
+  fetchDefaults: fetchWebsitePageDefaults,
   onLoaded: (page) => {
     user.value = page?.user ?? null
   },

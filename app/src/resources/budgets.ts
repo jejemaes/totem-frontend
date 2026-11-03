@@ -12,7 +12,7 @@
  * and budgetLines.ts.
  */
 
-import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
+import { apiDelete, apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
 import { fetchList, type ListQuery, type Page } from '@/api/list'
 
 import type { AccountRef, Amount } from './accounts'
@@ -125,6 +125,11 @@ export interface BudgetCreatePayload {
 
 export function createBudget(payload: BudgetCreatePayload): Promise<BudgetDetail> {
   return postJson<BudgetDetail>('/accounting/budget/', payload)
+}
+
+/** The values a new one starts with: see `fetchDefaultValues`. */
+export function fetchBudgetDefaults(signal?: AbortSignal): Promise<Partial<BudgetDetail>> {
+  return fetchDefaultValues<BudgetDetail>('/accounting/budget/', signal)
 }
 
 /**

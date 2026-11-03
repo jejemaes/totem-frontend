@@ -173,3 +173,24 @@ export function apiDelete(path: string): Promise<void> {
   return apiFetch<void>(path, { method: 'DELETE' })
 }
 
+
+/**
+ * GET `<collection>/default-values/`: what a creation on that collection starts
+ * with, for a create form to be seeded from.
+ *
+ * Keyed by the PUBLIC names of the creation body, and with `exclude_unset`: a
+ * field with no default -- a required one -- is ABSENT, not null. A relation
+ * comes back nested (`{id, ...}`), as the creation's own response renders it,
+ * which is why a resource types the answer as a `Partial` of its detail.
+ *
+ * No `?fields=` on purpose: a name the creation body does not declare is a 422,
+ * and the keys of a form are not all creation fields (read-only dates, totals).
+ * Asking for everything and letting the form keep its own keys cannot fail
+ * that way.
+ */
+export function fetchDefaultValues<T>(
+  collectionPath: string,
+  signal?: AbortSignal,
+): Promise<Partial<T>> {
+  return apiFetch<Partial<T>>(`${collectionPath}default-values/`, { signal })
+}

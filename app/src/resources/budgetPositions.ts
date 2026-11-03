@@ -17,7 +17,7 @@
  * and so on. `name` and `color` are copied from the category, read-only.
  */
 
-import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
+import { apiDelete, apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
 import { fetchGroups, type GroupPage, type GroupQuery } from '@/api/groupBy'
 import { fetchAllPages } from '@/api/list'
 
@@ -129,6 +129,14 @@ export function createBudgetPosition(
   payload: BudgetPositionCreatePayload,
 ): Promise<BudgetPositionDetail> {
   return postJson<BudgetPositionDetail>(positionsPath(budgetId), payload)
+}
+
+/** The values a new one starts with, under that budget: see `fetchDefaultValues`. */
+export function fetchBudgetPositionDefaults(
+  budgetId: string,
+  signal?: AbortSignal,
+): Promise<Partial<BudgetPositionDetail>> {
+  return fetchDefaultValues<BudgetPositionDetail>(positionsPath(budgetId), signal)
 }
 
 /** A PATCH body, and only the edited keys. Both keys are accepted on update. */

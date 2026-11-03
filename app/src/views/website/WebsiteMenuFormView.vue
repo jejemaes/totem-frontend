@@ -12,6 +12,7 @@ import {
   createWebsiteMenu,
   deleteWebsiteMenu,
   fetchWebsiteMenu,
+  fetchWebsiteMenuDefaults,
   isMenuDescendant,
   menuTargetPayload,
   searchWebsiteMenus,
@@ -114,6 +115,7 @@ const form = useResourceForm<WebsiteMenuDetail>({
     link: menu.link,
   }),
   fetchOne: fetchWebsiteMenu,
+  fetchDefaults: fetchWebsiteMenuDefaults,
   onLoaded: (menu) => {
     parent.value = menu?.parent ?? null
     page.value = menu?.page ?? null

@@ -11,6 +11,7 @@ import { searchCountries, type CountryRef } from '@/resources/countries'
 import {
   createContact,
   fetchContact,
+  fetchContactDefaults,
   updateContact,
   type ContactCreatePayload,
   type ContactDetail,
@@ -170,6 +171,7 @@ const form = useResourceForm<ContactDetail>({
     tags: contact.tags?.map((tag) => tag.id) ?? [],
   }),
   fetchOne: fetchContact,
+  fetchDefaults: fetchContactDefaults,
   onLoaded: (contact) => {
     country.value = contact?.country ?? null
     tags.value = contact?.tags ?? []

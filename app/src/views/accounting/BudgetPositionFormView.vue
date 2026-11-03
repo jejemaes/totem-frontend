@@ -15,6 +15,7 @@ import {
   createBudgetPosition,
   deleteBudgetPosition,
   fetchBudgetPosition,
+  fetchBudgetPositionDefaults,
   updateBudgetPosition,
   type BudgetPositionCreatePayload,
   type BudgetPositionDetail,
@@ -84,6 +85,7 @@ const form = useResourceForm<BudgetPositionDetail>({
     sequence: position.sequence,
   }),
   fetchOne: (id, signal) => fetchBudgetPosition(props.budgetId, id, signal),
+  fetchDefaults: (signal) => fetchBudgetPositionDefaults(props.budgetId, signal),
   onLoaded: (position) => {
     category.value = position?.category ?? null
   },

@@ -11,7 +11,7 @@
  * `account` key at all.
  */
 
-import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
+import { apiDelete, apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
 import {
   fetchAllPages,
   fetchDisplayNames,
@@ -149,6 +149,13 @@ export function createAccountCategory(
   payload: AccountCategoryCreatePayload,
 ): Promise<AccountCategoryDetail> {
   return postJson<AccountCategoryDetail>('/accounting/categories/', payload)
+}
+
+/** The values a new one starts with: see `fetchDefaultValues`. */
+export function fetchAccountCategoryDefaults(
+  signal?: AbortSignal,
+): Promise<Partial<AccountCategoryDetail>> {
+  return fetchDefaultValues<AccountCategoryDetail>('/accounting/categories/', signal)
 }
 
 /**

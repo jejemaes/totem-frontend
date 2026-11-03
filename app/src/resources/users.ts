@@ -1,4 +1,4 @@
-import { apiFetch, patchJson, postJson } from '@/api/client'
+import { apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
 import {
   fetchAllPages,
   fetchDisplayNames,
@@ -123,6 +123,11 @@ export interface UserCreatePayload {
  */
 export function createUser(payload: UserCreatePayload): Promise<UserDetail> {
   return postJson<UserDetail>('/users/', { roles: [], ...payload })
+}
+
+/** The values a new one starts with: see `fetchDefaultValues`. */
+export function fetchUserDefaults(signal?: AbortSignal): Promise<Partial<UserDetail>> {
+  return fetchDefaultValues<UserDetail>('/users/', signal)
 }
 
 /**
