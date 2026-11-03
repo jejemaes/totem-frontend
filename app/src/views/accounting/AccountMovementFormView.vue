@@ -15,6 +15,7 @@ import {
   createAccountMovement,
   deleteAccountMovement,
   fetchAccountMovement,
+  fetchAccountMovementDefaults,
   updateAccountMovement,
   type AccountMovementCreatePayload,
   type AccountMovementDetail,
@@ -120,6 +121,7 @@ const form = useResourceForm<AccountMovementDetail>({
     description: movement.description,
   }),
   fetchOne: fetchAccountMovement,
+  fetchDefaults: fetchAccountMovementDefaults,
   onLoaded: (movement) => {
     category.value = movement?.category ?? null
   },

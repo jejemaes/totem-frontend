@@ -7,7 +7,7 @@
  * while both are READ as the nested objects the GET returns.
  */
 
-import { apiFetch, patchJson, postJson } from '@/api/client'
+import { apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
 import { fetchList, type ListQuery, type Page } from '@/api/list'
 
 import type { CountryRef } from './countries'
@@ -140,6 +140,11 @@ export interface ContactCreatePayload {
  */
 export function createContact(payload: ContactCreatePayload): Promise<ContactDetail> {
   return postJson<ContactDetail>('/contacts/', { tags: [], ...payload })
+}
+
+/** The values a new one starts with: see `fetchDefaultValues`. */
+export function fetchContactDefaults(signal?: AbortSignal): Promise<Partial<ContactDetail>> {
+  return fetchDefaultValues<ContactDetail>('/contacts/', signal)
 }
 
 /**

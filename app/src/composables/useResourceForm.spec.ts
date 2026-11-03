@@ -82,6 +82,97 @@ describe('useResourceForm — create mode', () => {
   })
 })
 
+describe('useResourceForm — server defaults', () => {
+  it('holds the form back until they land, then seeds from them', async () => {
+    const pending = deferred<Partial<Record>>()
+    const { form } = mount({ fetchDefaults: () => pending.promise })
+    await flush()
+
+    // Null, not the static defaults: <Form> would take those as its baseline.
+    expect(form.data.value).toBeNull()
+    expect(form.loading.value).toBe(true)
+
+    pending.resolve({ name: 'server' })
+    await flush()
+
+    expect(form.data.value).toEqual({ name: 'server' })
+    expect(form.loading.value).toBe(false)
+  })
+
+  // An absent key is a field with no default; a key the form does not own
+  // (here `id`) would reach the create payload.
+  it('fills only the keys the form owns and the server answered', async () => {
+    const { form } = mount({
+      defaults: { name: null, note: 'static' },
+      fetchDefaults: async () => ({ id: '9', name: 'server' }),
+    })
+    await flush()
+
+    expect(form.data.value).toEqual({ name: 'server', note: 'static' })
+  })
+
+  it('converts them through toForm, like a record', async () => {
+    const { form } = mount({
+      toForm: (record) => ({ name: record.name?.toUpperCase() ?? null }),
+      fetchDefaults: async () => ({ name: 'server' }),
+    })
+    await flush()
+
+    expect(form.data.value).toEqual({ name: 'SERVER' })
+  })
+
+  it('hands them to onLoaded', async () => {
+    const onLoaded = vi.fn()
+    mount({ onLoaded, fetchDefaults: async () => ({ name: 'server' }) })
+    await flush()
+
+    expect(onLoaded).toHaveBeenCalledWith({ name: 'server' })
+  })
+
+  it('falls back to the static defaults when they fail, without a load error', async () => {
+    const onLoaded = vi.fn()
+    const { form } = mount({
+      onLoaded,
+      fetchDefaults: async () => {
+        throw new ApiError('Forbidden', 403)
+      },
+    })
+    await flush()
+
+    expect(form.data.value).toEqual(DEFAULTS)
+    expect(form.loadError.value).toBeNull()
+    expect(form.loading.value).toBe(false)
+    expect(onLoaded).toHaveBeenCalledWith(null)
+  })
+
+  it('is never called on an edit', async () => {
+    const fetchDefaults = vi.fn()
+    mount({ id: '7', fetchOne: async () => ({ id: '7', name: 'Totem' }), fetchDefaults })
+    await flush()
+
+    expect(fetchDefaults).not.toHaveBeenCalled()
+  })
+
+  it('does not let a late answer paint over the record opened since', async () => {
+    const pending = deferred<Partial<Record>>()
+    const id = ref<string | null>(null)
+    const { form } = mount({
+      id,
+      fetchOne: async () => ({ id: '7', name: 'Totem' }),
+      fetchDefaults: () => pending.promise,
+    })
+    await flush()
+
+    id.value = '7'
+    await flush()
+    pending.resolve({ name: 'server' })
+    await flush()
+
+    expect(form.data.value).toEqual({ name: 'Totem' })
+    expect(form.loading.value).toBe(false)
+  })
+})
+
 describe('useResourceForm — edit mode', () => {
   it('loads the record and narrows it through toForm', async () => {
     const fetchOne = vi.fn(async () => ({ id: '7', name: 'Totem' }))

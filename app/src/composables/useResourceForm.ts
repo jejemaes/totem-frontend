@@ -30,10 +30,32 @@ export interface UseResourceFormOptions<T> {
    * changes, and the record has to be refetched when it does.
    */
   id: Reactive<string | null>
-  /** Values for a blank form. One key per <Field> the view declares. */
+  /**
+   * Values for a blank form. One key per <Field> the view declares.
+   *
+   * Still needed with `fetchDefaults`: its keys are the ONLY ones the fetched
+   * defaults may fill, and its values are what the form falls back to when a
+   * field has no server default, or when that request fails.
+   */
   defaults: FormData
-  /** Narrows a fetched record down to the keys the form owns. */
+  /**
+   * Narrows a fetched record down to the keys the form owns.
+   *
+   * Also applied to what `fetchDefaults` returns, which is a PARTIAL record: a
+   * field with no default is absent. It must therefore not throw on a missing
+   * key -- reach relations through `?.` -- and whatever it computes for an
+   * absent key is discarded anyway.
+   */
   toForm(record: T): FormData
+  /**
+   * Loads the values a creation starts with (`GET .../default-values/`), to seed
+   * a create form with. Never called on an edit.
+   *
+   * Without it the form starts from `defaults` alone -- copies of the model's
+   * defaults that drift from it, and blind to the ones only the server knows
+   * (the acting user as a budget's or a page's owner).
+   */
+  fetchDefaults?(signal: AbortSignal): Promise<Partial<T>>
   /** Loads the record being edited. Only needed when `id` can be non-null. */
   fetchOne?(id: string, signal: AbortSignal): Promise<T>
   create(values: FormData): Promise<T>
@@ -44,8 +66,10 @@ export interface UseResourceFormOptions<T> {
    */
   update(id: string, changed: FormData): Promise<T>
   /**
-   * Runs when a record has been loaded, and with `null` on a create form once
-   * the defaults are seeded.
+   * Runs when a record has been loaded, and on a create form once the defaults
+   * are seeded: with what `fetchDefaults` returned -- so a many2one can label
+   * its default without a request of its own -- or with `null` when there is
+   * no such callback or it failed.
    *
    * For state living OUTSIDE the <Form> draft -- the value of a standalone
    * widget, which is not a <Field> and therefore registers nothing. Nothing
@@ -53,7 +77,7 @@ export interface UseResourceFormOptions<T> {
    * component, so without this hook such a widget keeps showing the previous
    * record's value.
    */
-  onLoaded?(record: T | null): void
+  onLoaded?(record: T | Partial<T> | null): void
   /**
    * True when that outside state was edited.
    *
@@ -151,6 +175,50 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
       to `onSaved`. */
   let loaded: T | null = null
 
+  /**
+   * Seeds a create form from the server's defaults, over the static ones.
+   *
+   * `data` stays null meanwhile, as for an edit: <Form> takes its baseline when
+   * it mounts, so seeding it with the static defaults first and the fetched
+   * ones after would leave those fields reading as edited -- or, rendered
+   * before the request lands, under the user's own typing.
+   *
+   * A failure is NOT a load error: a create form has nothing it cannot do
+   * without them, so it falls back to `defaults`, and whatever really stops
+   * the creation (a missing `create` scope, a 403 here too) is reported by the
+   * save.
+   */
+  async function seedDefaults(
+    ticket: number,
+    controller: AbortController,
+    fetchDefaults: (signal: AbortSignal) => Promise<Partial<T>>,
+  ): Promise<void> {
+    loading.value = true
+    data.value = null
+    let fetched: Partial<T> | null = null
+    try {
+      fetched = await fetchDefaults(controller.signal)
+    } catch {
+      if (ticket !== seq || controller.signal.aborted) return
+    }
+    if (ticket !== seq) return
+
+    const seeded: FormData = { ...options.defaults }
+    if (fetched) {
+      // Through `toForm`, so a default gets the conversions a record gets (a
+      // decimal string to a number, a nested relation to its id); then ONLY the
+      // keys the server answered and the form owns -- an absent key is a field
+      // with no default, and keeps the static one.
+      const converted = options.toForm(fetched as T)
+      for (const key of Object.keys(fetched)) {
+        if (key in seeded && key in converted) seeded[key] = converted[key]
+      }
+    }
+    data.value = seeded
+    loading.value = false
+    options.onLoaded?.(fetched)
+  }
+
   async function load(): Promise<void> {
     const ticket = ++seq
     inFlight?.abort()
@@ -160,11 +228,15 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
     fieldErrors.value = {}
     deleteError.value = null
 
-    // A create form has nothing to fetch: seed it and stop. A fresh copy of
-    // `defaults` every time, so a reload really does reset the fields.
     if (!id.value || !options.fetchOne) {
       loaded = null
       loadError.value = null
+      if (!id.value && options.fetchDefaults) {
+        await seedDefaults(ticket, controller, options.fetchDefaults)
+        return
+      }
+      // Nothing to fetch: seed it and stop. A fresh copy of `defaults` every
+      // time, so a reload really does reset the fields.
       loading.value = false
       data.value = { ...options.defaults }
       options.onLoaded?.(null)

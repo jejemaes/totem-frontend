@@ -11,7 +11,7 @@
  * account, and the list is scoped by the `account` filter.
  */
 
-import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
+import { apiDelete, apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
 import { fetchGroups, type GroupPage, type GroupQuery } from '@/api/groupBy'
 import { fetchList, type ListQuery, type Page } from '@/api/list'
 
@@ -159,6 +159,13 @@ export function createAccountMovement(
   payload: AccountMovementCreatePayload,
 ): Promise<AccountMovementDetail> {
   return postJson<AccountMovementDetail>('/accounting/movements/', payload)
+}
+
+/** The values a new one starts with: see `fetchDefaultValues`. */
+export function fetchAccountMovementDefaults(
+  signal?: AbortSignal,
+): Promise<Partial<AccountMovementDetail>> {
+  return fetchDefaultValues<AccountMovementDetail>('/accounting/movements/', signal)
 }
 
 /**

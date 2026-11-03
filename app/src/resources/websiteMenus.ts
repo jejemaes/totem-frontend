@@ -9,7 +9,7 @@
  * detail routes too.
  */
 
-import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
+import { apiDelete, apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
 import {
   fetchAllPages,
   fetchDisplayNames,
@@ -182,6 +182,13 @@ export function createWebsiteMenu(
   payload: WebsiteMenuCreatePayload,
 ): Promise<WebsiteMenuDetail> {
   return postJson<WebsiteMenuDetail>('/website/menus/', payload)
+}
+
+/** The values a new one starts with: see `fetchDefaultValues`. */
+export function fetchWebsiteMenuDefaults(
+  signal?: AbortSignal,
+): Promise<Partial<WebsiteMenuDetail>> {
+  return fetchDefaultValues<WebsiteMenuDetail>('/website/menus/', signal)
 }
 
 /**

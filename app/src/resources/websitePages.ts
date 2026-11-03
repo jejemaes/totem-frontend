@@ -8,7 +8,7 @@
  * `/website-pages/`. The trailing slash is required, on the detail routes too.
  */
 
-import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
+import { apiDelete, apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
 import {
   fetchAllPages,
   fetchDisplayNames,
@@ -218,6 +218,13 @@ export function createWebsitePage(
   payload: WebsitePageCreatePayload,
 ): Promise<WebsitePageDetail> {
   return postJson<WebsitePageDetail>('/website/pages/', payload)
+}
+
+/** The values a new one starts with: see `fetchDefaultValues`. */
+export function fetchWebsitePageDefaults(
+  signal?: AbortSignal,
+): Promise<Partial<WebsitePageDetail>> {
+  return fetchDefaultValues<WebsitePageDetail>('/website/pages/', signal)
 }
 
 /**

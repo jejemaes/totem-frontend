@@ -6,7 +6,7 @@
  * `totem.contacttag.*` scope.
  */
 
-import { apiFetch, patchJson, postJson } from '@/api/client'
+import { apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
 import {
   fetchAllPages,
   fetchDisplayNames,
@@ -125,6 +125,11 @@ export interface ContactTagCreatePayload {
     palette entry. */
 export function createContactTag(payload: ContactTagCreatePayload): Promise<ContactTagDetail> {
   return postJson<ContactTagDetail>('/contact-tags/', payload)
+}
+
+/** The values a new one starts with: see `fetchDefaultValues`. */
+export function fetchContactTagDefaults(signal?: AbortSignal): Promise<Partial<ContactTagDetail>> {
+  return fetchDefaultValues<ContactTagDetail>('/contact-tags/', signal)
 }
 
 /**

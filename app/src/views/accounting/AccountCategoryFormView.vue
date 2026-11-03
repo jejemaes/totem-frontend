@@ -12,6 +12,7 @@ import {
   createAccountCategory,
   deleteAccountCategory,
   fetchAccountCategory,
+  fetchAccountCategoryDefaults,
   updateAccountCategory,
   type AccountCategoryCreatePayload,
   type AccountCategoryDetail,
@@ -91,6 +92,7 @@ const form = useResourceForm<AccountCategoryDetail>({
     account: category.account?.id ?? null,
   }),
   fetchOne: fetchAccountCategory,
+  fetchDefaults: fetchAccountCategoryDefaults,
   onLoaded: (category) => {
     account.value = category?.account ?? null
   },

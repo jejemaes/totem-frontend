@@ -12,7 +12,7 @@
  * budget's `total_planned_amount`, so any write here makes both stale.
  */
 
-import { apiDelete, apiFetch, patchJson, postJson } from '@/api/client'
+import { apiDelete, apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
 import { fetchList, type ListQuery, type Page } from '@/api/list'
 
 import type { Amount } from './accounts'
@@ -95,6 +95,14 @@ export function createBudgetLine(
   payload: BudgetLineCreatePayload,
 ): Promise<BudgetLineDetail> {
   return postJson<BudgetLineDetail>(linesPath(budgetId), payload)
+}
+
+/** The values a new one starts with, under that budget: see `fetchDefaultValues`. */
+export function fetchBudgetLineDefaults(
+  budgetId: string,
+  signal?: AbortSignal,
+): Promise<Partial<BudgetLineDetail>> {
+  return fetchDefaultValues<BudgetLineDetail>(linesPath(budgetId), signal)
 }
 
 /**
