@@ -14,6 +14,7 @@ import IntegerField from './IntegerField.vue'
 import ManyToManyTagsField from './ManyToManyTagsField.vue'
 import ManyToOneField from './ManyToOneField.vue'
 import MediaImageField from './MediaImageField.vue'
+import PasswordField from './PasswordField.vue'
 import SelectionField from './SelectionField.vue'
 import TextField from './TextField.vue'
 import type { FieldProps, FieldValue, Widget } from './types'
@@ -59,6 +60,7 @@ const WIDGETS: Record<Widget, Component> = {
    * rule costs more than it saves.
    */
   media_image: MediaImageField,
+  password: PasswordField,
   /*
    * The only lazily-loaded widget. TipTap and prosemirror are ~130 kB gzipped,
    * router/index.ts imports every view statically, and one screen uses this --
