@@ -349,6 +349,15 @@ re-seeds `form.data` from the PATCH response — the new object is what resets `
 Copy `views/settings/ProfileView.vue` (`/profile`, `resources/profile.ts` over `/users/me/`,
 reached from the user menu, no permission needed); `WebsiteConfigurationPage` is the larger one.
 
+A form with **no record** (an action: change a password) is the create branch of
+`useResourceForm` with a constant `id: () => null` and an unreachable `update`, inside
+`<FormView mode="dialog">` -- that is what brings the banners and the 422 routing for free.
+`views/settings/ProfilePasswordView.vue` (own password, `POST /users/me/password/`) and
+`UserPasswordView.vue` (`POST /users/{id}/password/`, scope `totem.user.password` -- NOT implied
+by `totem.user.update`) are the two; kept apart on purpose, so the current-password field cannot
+vanish on the wrong screen. A check `<Form>` cannot express (a `pattern`, a confirmation) runs in
+the view's `on-save` and is written to `form.fieldErrors` as a new object.
+
 Payloads are built **key by key** in local `createPayload(values)` / `updatePayload(changed)`
 helpers — never by copying the draft. See *the PATCH asymmetry* below for why that is not
 pedantry. Deletes go through `useConfirm()` — inside `<FormView>` for a form — and the dialog is
@@ -367,7 +376,7 @@ the buttons (submit is `:disabled="!isNew && !dirty"`). Fields declare themselve
 ### Where field types are registered — two places, both in `form/fields/`
 
 1. The `Widget` union in `types.ts`: `string`, `boolean`, `text`, `integer`, `float`, `selection`,
-   `date`, `datetime`, `color`, `many2one`, `many2many_tags`, `html`.
+   `date`, `datetime`, `color`, `many2one`, `many2many_tags`, `media_image`, `html`, `password`.
 2. The `WIDGETS: Record<Widget, Component>` map in `Field.vue` — *"the one and only widget →
    component registry"*. The `Record<Widget, …>` type is deliberate: adding a member to the union
    without its component becomes a compile error rather than a blank field at runtime. An unknown
@@ -614,6 +623,7 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | `ManyToOneField.vue`           | `many2one.ts`           |
 | `ManyToManyTagsField.vue`      | `many2many.ts`          |
 | `HtmlField.vue`                | `html.ts`               |
+| `PasswordField.vue`            | `password.ts`           |
 | `FieldSwitch.vue`              | `fieldSwitch.ts`        |
 | `UserRolesSelectionWidget.vue` | `userRolesSelection.ts` |
 | `MultiRecordFilters.vue`       | `filters/filters.ts`    |

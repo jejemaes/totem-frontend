@@ -10,7 +10,7 @@
  * no list, no create and no delete.
  */
 
-import { apiFetch, patchJson } from '@/api/client'
+import { apiFetch, patchJson, postJson } from '@/api/client'
 
 import type { UserLanguage } from './users'
 
@@ -47,4 +47,22 @@ export function fetchProfile(signal?: AbortSignal): Promise<UserProfile> {
 /** Answers the updated profile, the same shape a read returns. */
 export function updateProfile(payload: ProfileUpdatePayload): Promise<UserProfile> {
   return patchJson<UserProfile>('/users/me/', payload)
+}
+
+/**
+ * Body of POST /users/me/password/. The current password is what proves the
+ * owner is typing, not whoever found the session unlocked -- a wrong one is a
+ * 422 under `old_password`.
+ */
+export interface ProfilePasswordChangePayload {
+  old_password: string
+  new_password: string
+}
+
+/**
+ * Answers 204, with no body. The tokens are left alone: the backend writes the
+ * hash without touching the session, so the caller stays signed in.
+ */
+export function changeMyPassword(payload: ProfilePasswordChangePayload): Promise<void> {
+  return postJson<void>('/users/me/password/', payload)
 }

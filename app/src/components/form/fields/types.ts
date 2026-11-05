@@ -36,6 +36,7 @@ export type Widget =
   | 'many2many_tags'
   | 'media_image'
   | 'html'
+  | 'password'
 
 /**
  * What a field can hold -- deliberately narrow: exactly what the widgets in
@@ -80,6 +81,20 @@ export interface FieldOptions {
   rows?: number
   /** CharField */
   maxLength?: number
+  /**
+   * PasswordField: a regular expression the value is expected to match, as a
+   * source string. OFF when absent. Shown under the field as you type, NOT
+   * enforced by <Form> -- a caller that must refuse a mismatch runs
+   * `patternError` (password.ts) before sending. The backend stays the
+   * authority.
+   */
+  pattern?: string
+  /** PasswordField: the message for a value that does not match `pattern`. */
+  patternMessage?: string
+  /** PasswordField: the input's `autocomplete` -- `current-password` or
+      `new-password`, so a password manager knows which one to fill or save.
+      Defaults to `off`. */
+  autocomplete?: string
   /** IntegerField / FloatField */
   min?: number
   /** IntegerField / FloatField; ColorIntegerField: the highest palette index. */

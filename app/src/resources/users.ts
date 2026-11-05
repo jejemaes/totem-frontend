@@ -179,6 +179,35 @@ export function updateUser(id: string, payload: UserUpdatePayload): Promise<User
 }
 
 /**
+ * What a new password is expected to look like, as a `pattern` for
+ * PasswordField: eight characters or more, not all digits.
+ *
+ * The two of the backend's AUTH_PASSWORD_VALIDATORS a regex can mirror --
+ * MinimumLengthValidator (default 8) and NumericPasswordValidator. The other
+ * two, CommonPassword and UserAttributeSimilarity, need a dictionary and the
+ * account, so they stay the backend's: their 422 lands under `new_password`
+ * like any other refusal. Change the backend's settings and this goes stale --
+ * which is why it is a hint, never the authority.
+ */
+export const PASSWORD_PATTERN = '^(?!\\d+$).{8,}$'
+
+export const PASSWORD_PATTERN_MESSAGE = 'At least 8 characters, and not only digits.'
+
+/**
+ * Body of POST /users/{id}/password/. No current password: the administrator
+ * does not know it, and the `totem.user.password` scope is the proof.
+ */
+export interface UserPasswordSetPayload {
+  new_password: string
+}
+
+/** Answers 204, with no body. Needs `totem.user.password` -- NOT implied by
+    `totem.user.update`, which a role can hold without it. */
+export function setUserPassword(id: string, payload: UserPasswordSetPayload): Promise<void> {
+  return postJson<void>(`/users/${encodeURIComponent(id)}/password/`, payload)
+}
+
+/**
  * A user as another resource nests it: exactly the two keys the backend sends
  * for an author, and no more.
  *

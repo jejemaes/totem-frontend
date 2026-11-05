@@ -48,6 +48,7 @@ const data = ref<FormData>({
   published: null,
   status: 'draft',
   reference: 'REF-001',
+  secret: null,
   body: '<h2>About us</h2><p>A <strong>reception kiosk</strong> in the main hall.</p>',
   // Deliberately carries a marker AND a <section>, neither of which the editor
   // schema knows without `allowWidget`: this field must therefore open in
@@ -297,6 +298,9 @@ const DEFINITION = `<Form :data="data" @save="onSave">
            { value: 'done',  label: 'Done' },
          ] }" />
   <Field name="reference"   widget="string"    label="Reference" readonly />
+  <Field name="secret"      widget="password"  label="Secret"
+         :options="{ pattern: '^(?!\\\\d+$).{8,}$',
+                     patternMessage: 'At least 8 characters, and not only digits.' }" />
   <Field name="body"        widget="html"      label="Body" required
          :options="{ rows: 8, allowWidget: true, allowColumns: true,
                      fetchWidgets: demoWidgets,
@@ -388,6 +392,13 @@ const DEFINITION = `<Form :data="data" @save="onSave">
 
             <Field name="reference" widget="string" label="Reference" readonly
                    help="Locked, but still present in the payload." />
+
+            <Field name="secret" widget="password" label="Secret"
+                   :options="{ pattern: '^(?!\\d+$).{8,}$',
+                               patternMessage: 'At least 8 characters, and not only digits.' }"
+                   help="Masked, with an eye to reveal it. The pattern is checked as you type
+                         -- try 12345678 -- but NOT enforced on save: Form knows `required`
+                         only." />
 
             <Field name="body" widget="html" label="Body" required
                    :options="{ rows: 8, allowWidget: true, allowColumns: true,
