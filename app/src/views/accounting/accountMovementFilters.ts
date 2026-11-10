@@ -33,8 +33,13 @@ export function accountMovementFilterFields(accountId: string): FilterFields {
     },
     category: {
       type: 'many2one',
+      // Several at once: the backend's `category` is a MultiValue -- and the
+      // chart's group-by body gets them as a list.
+      widget: 'many2many_tags',
       label: 'Category',
-      help_text: 'Keep the movements filed under this category.',
+      help_text: 'Keep the movements filed under these categories.',
+      allowNull: true,
+      nullLabel: 'Uncategorized',
       options: {
         fetch: searchApplicableCategories(accountId),
         resolve: accountCategoryDisplayNames,

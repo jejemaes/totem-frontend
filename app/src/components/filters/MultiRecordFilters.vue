@@ -15,6 +15,8 @@ import {
   DEFAULT_SEARCH_KEY,
   dialogFilterEntries,
   filterFormData,
+  filterWidget,
+  filterWidgetOptions,
   type ActiveFilter,
   type FilterFields,
   type FilterValues,
@@ -83,8 +85,20 @@ function onSearch(next: string | undefined): void {
   emit('patch', { [props.searchKey]: next ?? '' })
 }
 
-/** Everything the dialog offers: the search box's own field excluded. */
-const dialogFields = computed(() => dialogFilterEntries(props.fields, props.searchKey))
+/**
+ * Everything the dialog offers: the search box's own field excluded, each with
+ * its control and its options -- built here, once per declaration, rather than
+ * in the template, where every render would hand the widget a new options
+ * object (and a wrapped `fetch` it would take for another loader).
+ */
+const dialogFields = computed(() =>
+  dialogFilterEntries(props.fields, props.searchKey).map(([name, field]) => ({
+    name,
+    field,
+    widget: filterWidget(field),
+    options: filterWidgetOptions(field),
+  })),
+)
 
 const visible = ref(false)
 
@@ -179,13 +193,13 @@ function apply(values: FormData): void {
       <Form :data="draft" @save="apply">
         <template #default>
           <Field
-            v-for="[name, field] in dialogFields"
-            :key="name"
-            :name="name"
-            :widget="field.type"
-            :label="field.label"
-            :help="field.help_text"
-            :options="field.options"
+            v-for="entry in dialogFields"
+            :key="entry.name"
+            :name="entry.name"
+            :widget="entry.widget"
+            :label="entry.field.label"
+            :help="entry.field.help_text"
+            :options="entry.options"
           />
         </template>
 

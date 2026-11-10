@@ -85,4 +85,19 @@ describe('useFilter', () => {
     updateFilters({ login: '' })
     expect(activeFilters.value).toHaveLength(0)
   })
+
+  it('hands out a filter object that parses a raw write, as a URL restore makes one', () => {
+    const scope = effectScope()
+    let filter!: RecordFilters<Record<string, string | string[] | null>>
+    scope.run(() => {
+      filter = useFilter(
+        { category: { type: 'many2one', widget: 'many2many_tags', label: 'Category' } },
+        { syncUrl: false },
+      )
+    })
+    // What useResourceList writes when it restores `?category=a,b`.
+    filter.filters.category = 'a,b'
+    expect(filter.filters.category).toEqual(['a', 'b'])
+    expect(filter.activeFilters.value[0]?.display).toBe('2 selected')
+  })
 })

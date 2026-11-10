@@ -61,8 +61,13 @@ const FILTER_FIELDS: FilterFields = {
   },
   account: {
     type: 'many2one',
+    // Several at once: the backend's `account` is a MultiValue, `null` being
+    // the general categories.
+    widget: 'many2many_tags',
     label: 'Account',
-    help_text: 'Keep the categories owned by this account. General ones are left out.',
+    help_text: 'Keep the categories owned by these accounts, or the general ones.',
+    allowNull: true,
+    nullLabel: 'General',
     options: {
       fetch: searchAccounts,
       resolve: accountDisplayNames,

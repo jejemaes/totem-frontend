@@ -85,10 +85,10 @@ export type WebsiteMenuFilters = {
   /** Matches the name OR the link, case-insensitive. */
   search?: string
   name?: string
-  /** The id of the direct parent. */
-  parent?: string
-  /** The id of the target page. */
-  target_page?: string
+  /** Ids of the direct parents, `'null'` for the top level: a backend `MultiValue`. */
+  parent?: string | string[]
+  /** Ids of the target pages, `'null'` for none: a backend `MultiValue`. */
+  target_page?: string | string[]
 }
 
 export function listWebsiteMenus(

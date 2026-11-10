@@ -81,8 +81,8 @@ export type ContactFilters = {
   search?: string
   email?: string
   city?: string
-  /** ISO 3166-1 alpha-2 code. */
-  country?: string
+  /** ISO 3166-1 alpha-2 codes, `'null'` for no country: a backend `MultiValue`. */
+  country?: string | string[]
   /** Id of a tag the contact must carry. */
   tag?: string
 }

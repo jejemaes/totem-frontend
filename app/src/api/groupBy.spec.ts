@@ -31,4 +31,13 @@ describe('groupByBody', () => {
     })
     expect(body.filters).toEqual({ direction: 'debit', active: 'false' })
   })
+
+  it('keeps a multi-valued filter a LIST, where a query string joins it', () => {
+    const body = groupByBody({
+      dimensions: ['a'],
+      measures: ['b'],
+      filters: { category: ['x', 2, 'null'], account: [], direction: 'debit' },
+    })
+    expect(body.filters).toEqual({ category: ['x', '2', 'null'], direction: 'debit' })
+  })
 })
