@@ -81,10 +81,10 @@ export const BUDGET_SORTABLE = [
 export type BudgetFilters = {
   /** Matches the name, case-insensitive. */
   name?: string
-  /** The id of the account. */
-  account?: string
-  /** The id (a UUID) of the user in charge. */
-  user?: string
+  /** Account ids: a backend `MultiValue`, without `null` (a budget always has one). */
+  account?: string | string[]
+  /** Ids (UUIDs) of the users in charge, `'null'` for nobody: a backend `MultiValue`. */
+  user?: string | string[]
   active?: boolean
 }
 

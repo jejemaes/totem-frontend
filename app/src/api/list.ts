@@ -16,7 +16,20 @@ export interface Page<T> {
   results: T[]
 }
 
-export type FilterValue = string | number | boolean | null | undefined
+/**
+ * A list is a MULTI-VALUED filter -- the backend's `MultiValue` fields
+ * (core/api/filters.py), which take `?account=a,b,null`. Its items are kept as
+ * a list up to the last moment because the two wires disagree on its shape:
+ * a query string joins them (normaliseFilters), a group-by body keeps the list
+ * (groupBy.ts).
+ */
+export type FilterValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | readonly (string | number)[]
 export type ListFilters = Record<string, FilterValue>
 
 export interface ListQuery<F extends ListFilters = ListFilters> {
@@ -50,14 +63,32 @@ export function orderingFrom(field: string | null | undefined, order: 1 | -1): s
 }
 
 /**
+ * The items of a multi-valued filter, stringified and trimmed, the blanks
+ * dropped. An empty result means "no filter", as an absent parameter does --
+ * the backend reads `?account=` the same way.
+ */
+export function filterListItems(value: readonly (string | number)[]): string[] {
+  return value.map((item) => String(item).trim()).filter((item) => item !== '')
+}
+
+/**
  * Drops what must never be sent (`?login=` would filter on the empty string),
  * and stringifies what remains. `false` and `0` are meaningful values and
  * survive -- which is why this cannot be a plain truthiness test.
+ *
+ * A list is JOINED with commas: the form the backend's `MultiValue` documents,
+ * and one parameter rather than a repeated one, so `readListQuery` -- which
+ * keeps the first of repeated values -- restores it whole.
  */
 export function normaliseFilters(filters?: ListFilters): Record<string, string> {
   const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(filters ?? {})) {
     if (value === null || value === undefined) continue
+    if (Array.isArray(value)) {
+      const items = filterListItems(value)
+      if (items.length) out[key] = items.join(',')
+      continue
+    }
     if (typeof value === 'string') {
       const trimmed = value.trim()
       if (trimmed === '') continue

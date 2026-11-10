@@ -15,7 +15,7 @@
  */
 
 import { apiFetch } from './client'
-import { normaliseFilters, type ListFilters } from './list'
+import { filterListItems, normaliseFilters, type ListFilters } from './list'
 
 /** One group: the keys asked for -- the dimensions, then the measures -- and nothing else. */
 export type Group = Record<string, unknown>
@@ -51,22 +51,43 @@ export interface GroupByBody {
   group_by_fields: string[]
   measures: string[]
   ordering: string[]
-  /** Stringified, blanks dropped: the same normalisation as a list's query string. */
-  filters: Record<string, string>
+  /** Stringified, blanks dropped, as a list's query string -- but a multi-valued
+      filter stays a LIST of strings. */
+  filters: Record<string, string | string[]>
   limit: number
 }
 
 /**
- * The query -> the body. The filters go through `normaliseFilters` exactly as
- * a list's do: `?search=` with an empty box must not filter on the empty
- * string, and `false` must survive.
+ * The filters as the body carries them: `normaliseFilters`, except that a
+ * multi-valued one is sent as a JSON list rather than joined.
+ *
+ * The backend's `MultiValue` would take the joined string too (it splits each
+ * string item on commas, in a body as in a query string). The list is chosen
+ * because a body is JSON and has lists: a comma-joined string there is a query
+ * string's limitation carried over for nothing. The `null` token is a string
+ * item like any other -- the backend splits it out of either form.
+ */
+export function bodyFilters(filters?: ListFilters): Record<string, string | string[]> {
+  const out: Record<string, string | string[]> = normaliseFilters(filters)
+  for (const [key, value] of Object.entries(filters ?? {})) {
+    if (!Array.isArray(value)) continue
+    const items = filterListItems(value)
+    if (items.length) out[key] = items
+  }
+  return out
+}
+
+/**
+ * The query -> the body. The filters go through `bodyFilters`, so through the
+ * same rules as a list's: `?search=` with an empty box must not filter on the
+ * empty string, and `false` must survive.
  */
 export function groupByBody(query: GroupQuery): GroupByBody {
   return {
     group_by_fields: [...query.dimensions],
     measures: [...query.measures],
     ordering: query.ordering ? [query.ordering] : [],
-    filters: normaliseFilters(query.filters),
+    filters: bodyFilters(query.filters),
     limit: MAX_GROUPS,
   }
 }

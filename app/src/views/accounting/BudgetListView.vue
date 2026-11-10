@@ -75,8 +75,11 @@ const FILTER_FIELDS: FilterFields = {
   },
   account: {
     type: 'many2one',
+    // Several at once: the backend's `account` is a MultiValue. No "empty"
+    // entry: a budget always has an account, and the field refuses `null`.
+    widget: 'many2many_tags',
     label: 'Account',
-    help_text: 'Keep the budgets of this account.',
+    help_text: 'Keep the budgets of these accounts.',
     options: {
       fetch: searchAccounts,
       // What labels an account restored from the URL: a filter has no nested
@@ -88,8 +91,11 @@ const FILTER_FIELDS: FilterFields = {
   },
   user: {
     type: 'many2one',
+    widget: 'many2many_tags',
     label: 'User',
-    help_text: 'Keep the budgets this user is in charge of.',
+    help_text: 'Keep the budgets these users are in charge of.',
+    allowNull: true,
+    nullLabel: 'Nobody',
     options: {
       fetch: searchUsers,
       resolve: userDisplayNames,

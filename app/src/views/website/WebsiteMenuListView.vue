@@ -70,8 +70,12 @@ const FILTER_FIELDS: FilterFields = {
   },
   parent: {
     type: 'many2one',
+    // Several at once: the backend's `parent` and `target_page` are MultiValues.
+    widget: 'many2many_tags',
     label: 'Parent',
-    help_text: 'Keep the direct children of one menu item.',
+    help_text: 'Keep the direct children of these menu items.',
+    allowNull: true,
+    nullLabel: 'Top level',
     // The same loader the menu form's own parent field uses: the endpoint and
     // its `?fields=` list belong to the resource module, not here. `resolve`
     // labels a parent restored from the URL, which arrives as a bare id.
@@ -83,8 +87,11 @@ const FILTER_FIELDS: FilterFields = {
   },
   target_page: {
     type: 'many2one',
+    widget: 'many2many_tags',
     label: 'Target page',
-    help_text: 'Keep the items pointing at one page.',
+    help_text: 'Keep the items pointing at these pages.',
+    allowNull: true,
+    nullLabel: 'No page',
     options: {
       fetch: searchWebsitePages,
       resolve: websitePageDisplayNames,

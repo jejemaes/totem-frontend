@@ -291,11 +291,25 @@ Two rules worth not rediscovering:
 - **`useFilter` reads the URL, `useResourceList` writes it.** Page, page size, ordering and the
   filters share one query string and must be replaced in one `router.replace`; two writers would
   each preserve a stale copy of the other's keys. `useResourceList` then re-hydrates those keys
-  from the same query string as RAW STRINGS, which is safe only because every consumer parses
-  (`parseFilterValue`) — a boolean restored from a link arrives as `"false"`, a non-empty string.
+  from the same query string as RAW STRINGS. `useFilter` therefore hands out a `filterStore`: one
+  accessor per declared key whose SETTER runs `parseFilterValue`, so a boolean restored from a
+  link as `"false"` — a non-empty string — or a list restored as `"a,b"` is typed again the
+  moment it is written, whoever writes it.
 - **Every declared key is present in `filters`, holding `null` when unset.** `useResourceList`
   reads `Object.keys(filters)` once, at creation, to know which parameters it owns; a key added
   later would never reach the URL and never be cleared from it.
+
+**Multi-valued filters** mirror the backend's `MultiValue` fields (`core/api/filters.py`):
+`type` stays the type of ONE value, and `widget: 'many2many_tags'` makes the filter a list of them
+-- over a many2one (its `fetch` / `resolve` reused) or a selection (served from its `choices`).
+The state holds stringified items and is `null`, never `[]`, when nothing is picked; the dialog's
+form gets `[]`. A list request and the URL join them (`?category=a,b,null`, `normaliseFilters`),
+a group-by body keeps the list (`bodyFilters`). `allowNull` + `nullLabel` add an "empty" entry on
+a many2one or a selection, whose value is the backend's own token `NULL_FILTER_VALUE = 'null'` --
+a string, because `null` already means "unset". OFF by default, unlike the backend's
+`allow_null`: never set it on a field declared `allow_null=False` (a 422). Both capabilities are
+built in `filterWidgetOptions`, so no widget knows about them. Not for a to-many lookup
+(`tags__id`): the backend does not support one yet.
 
 The conversions live in `components/filters/filters.ts`, Vue-free and with a spec, for the same reason
 `fields/values.ts` does.

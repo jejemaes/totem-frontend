@@ -73,8 +73,12 @@ const FILTER_FIELDS: FilterFields = {
   },
   country: {
     type: 'many2one',
+    // Several at once: the backend's `country` is a MultiValue.
+    widget: 'many2many_tags',
     label: 'Country',
-    help_text: 'Keep the contacts of one country.',
+    help_text: 'Keep the contacts of these countries.',
+    allowNull: true,
+    nullLabel: 'No country',
     // The same loader the contact form's own country field uses: the endpoint,
     // its `?fields=` list and the name of its search parameter all belong to
     // the resource module, not here. `resolve` labels a country restored from

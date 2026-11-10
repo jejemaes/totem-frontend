@@ -55,7 +55,8 @@ export type AccountMovementFilters = {
   /** Matches the name OR the reference, case-insensitive. */
   search?: string
   account?: string
-  category?: string
+  /** Category ids, `'null'` for the uncategorized movements: a backend `MultiValue`. */
+  category?: string | string[]
   /** Inclusive bounds, both calendar days `YYYY-MM-DD`. */
   date_from?: string
   date_to?: string

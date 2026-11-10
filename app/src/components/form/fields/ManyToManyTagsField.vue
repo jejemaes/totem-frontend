@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Message from 'primevue/message'
 import MultiSelect from 'primevue/multiselect'
-import { computed, onScopeDispose, ref, shallowRef, useId } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef, useId, watch } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
@@ -276,6 +276,46 @@ function onHide(): void {
   pending = undefined
 }
 
+// ---------------------------------------------------------------- resolving
+
+/*
+ * The labels of ids nothing else describes, through `options.resolve`: a
+ * filter restored from a URL holds ids and no `records`, and would otherwise
+ * show them bare until the dropdown is first opened.
+ *
+ * ManyToOneField's mechanism, for several ids: its own ticket and controller
+ * (a search starting must not abort the labels), re-run whenever the set of
+ * unlabelled ids changes, and asking ONLY for those -- an id a fetch or
+ * `options.records` already names costs nothing. Absent, nothing changes.
+ */
+let resolveSeq = 0
+let resolving: AbortController | undefined
+
+async function resolveLabels(missing: (string | number)[]): Promise<void> {
+  const resolver = props.options?.resolve
+  const ticket = ++resolveSeq
+  resolving?.abort()
+  resolving = undefined
+  // No permission means the read is a guaranteed 403, exactly as for `load`.
+  if (!resolver || !allowed.value || !missing.length) return
+
+  const controller = (resolving = new AbortController())
+  try {
+    const rows = await resolver(missing.map(String), controller.signal)
+    if (ticket !== resolveSeq) return
+    seen.value = new Map([...seen.value, ...rows.map((row) => [String(row.id), row] as const)])
+  } catch {
+    // Silent on purpose, as in ManyToOneField: the chips keep showing the ids,
+    // which is still the truth, and the value is untouched.
+  }
+}
+
+watch(
+  () => unresolved.value.map(String).join(','),
+  () => void resolveLabels(unresolved.value),
+  { immediate: true },
+)
+
 /**
  * The one and only emit -- and always a NEW array.
  *
@@ -290,6 +330,7 @@ function onSelect(next: unknown): void {
 onScopeDispose(() => {
   if (pending) clearTimeout(pending)
   inFlight?.abort()
+  resolving?.abort()
 })
 </script>
 

@@ -51,6 +51,14 @@ describe('normaliseFilters', () => {
   it('trims strings', () => {
     expect(normaliseFilters({ search: '  ad  ' })).toEqual({ search: 'ad' })
   })
+
+  it('joins a multi-valued filter with commas, as the backend MultiValue reads it', () => {
+    expect(normaliseFilters({ category: ['a', 2, ' null '] })).toEqual({ category: 'a,2,null' })
+  })
+
+  it('drops a multi-valued filter with nothing left in it', () => {
+    expect(normaliseFilters({ category: [], account: ['', '  '] })).toEqual({})
+  })
 })
 
 describe('listParams', () => {

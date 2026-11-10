@@ -65,8 +65,9 @@ export const ACCOUNT_CATEGORY_SORTABLE = ['name', 'color'] as const
 export type AccountCategoryFilters = {
   /** Matches the name, case-insensitive. */
   search?: string
-  /** The id of the OWNING account: general categories are left out. */
-  account?: string
+  /** Ids of the OWNING accounts, `'null'` for the general categories: a backend
+      `MultiValue`. */
+  account?: string | string[]
   /** The id of an account: the general categories AND that account's own. */
   applicable_to?: string
 }

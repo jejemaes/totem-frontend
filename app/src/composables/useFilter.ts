@@ -40,6 +40,7 @@ import {
   activeFilterEntries,
   blankFilters,
   DEFAULT_SEARCH_KEY,
+  filterStore,
   filtersFromQuery,
   parseFilterValue,
   type ActiveFilter,
@@ -112,6 +113,11 @@ export function useFilter<F extends ListFilters = FilterValues>(
 
   const activeFilters = computed(() => activeFilterEntries(fields, values, searchKey))
 
+  // What is handed out: the same values, behind setters that parse. The list
+  // and the chart write their URL restore into it as raw strings -- see
+  // filterStore for why that must not reach a group-by body unparsed.
+  const store = filterStore(fields, values)
+
   return {
     /*
      * The one assertion in here, and it is the resource's own Filters type.
@@ -121,7 +127,7 @@ export function useFilter<F extends ListFilters = FilterValues>(
      * name. Declaring a filter the endpoint does not accept is a 422 no
      * signature would have caught either.
      */
-    filters: values as F,
+    filters: store as F,
     setFilters,
     updateFilters,
     activeFilters,

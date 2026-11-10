@@ -101,6 +101,8 @@ export interface FieldOptions {
   /**
    * ManyToOneField: labels a value that came with no `record` -- one request,
    * fired on mount and on each new value, ONLY when nothing else labels it.
+   * ManyToManyTagsField: the same, for the ids no `records` entry nor fetch
+   * names, in one request.
    *
    * Absent, the field shows the bare id until its dropdown is first opened.
    * That is fine on a form, which passes `record`, and wrong on a filter, which

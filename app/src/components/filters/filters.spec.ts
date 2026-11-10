@@ -6,10 +6,15 @@ import {
   dialogFilterEntries,
   filterDisplay,
   filterFormData,
+  filterStore,
   filtersFromQuery,
+  filterWidget,
+  filterWidgetOptions,
   isFilterActive,
   normaliseFilterValues,
+  NULL_FILTER_VALUE,
   parseFilterValue,
+  type FilterField,
   type FilterFields,
 } from './filters'
 
@@ -193,5 +198,154 @@ describe('dialogFilterEntries', () => {
 
   it('is empty when the search is all a list declares, which hides the button', () => {
     expect(dialogFilterEntries({ search: FIELDS.search! }, 'search')).toEqual([])
+  })
+})
+
+// ------------------------------------------------------------- multi-valued
+
+const CATEGORY: FilterField = {
+  type: 'many2one',
+  widget: 'many2many_tags',
+  label: 'Category',
+  allowNull: true,
+  nullLabel: 'Uncategorized',
+  options: {
+    fetch: async () => [{ id: 'a', name: 'Rent' }],
+    resolve: async (ids) => ids.map((id) => ({ id, name: `Label ${id}` })),
+  },
+}
+
+const SEATS: FilterField = { type: 'integer', widget: 'many2many_tags', label: 'Seats' }
+
+const STATUS: FilterField = {
+  type: 'selection',
+  widget: 'many2many_tags',
+  label: 'Status',
+  allowNull: true,
+  options: { choices: [{ value: 1, label: 'Draft' }, { value: 2, label: 'Done' }] },
+}
+
+describe('multi-valued filters', () => {
+  it('are drawn with their widget, and with their type when they name none', () => {
+    expect(filterWidget(CATEGORY)).toBe('many2many_tags')
+    expect(filterWidget(FIELDS.level!)).toBe('selection')
+  })
+
+  it('read a list from the form, stringified and deduplicated', () => {
+    expect(parseFilterValue(SEATS, [1, '2', 1, 'x'])).toEqual(['1', '2'])
+  })
+
+  it('read the comma-joined string a URL carries', () => {
+    // useResourceList restores every filter as that raw string.
+    expect(parseFilterValue(CATEGORY, 'a, b,,null')).toEqual(['a', 'b', 'null'])
+  })
+
+  it('are unset, not an empty list, when nothing is picked', () => {
+    expect(parseFilterValue(CATEGORY, [])).toBeNull()
+    expect(parseFilterValue(CATEGORY, '')).toBeNull()
+  })
+
+  it('keep the null token only when the filter offers it', () => {
+    expect(parseFilterValue(SEATS, 'null,3')).toEqual(['3'])
+    expect(parseFilterValue({ ...CATEGORY, allowNull: false }, ['null', 'a'])).toEqual(['a'])
+  })
+
+  it('validate a selection item against the choices', () => {
+    expect(parseFilterValue(STATUS, '2,9,null')).toEqual(['2', NULL_FILTER_VALUE])
+  })
+
+  it('reach the form as [] when unset, the form invariant for a list', () => {
+    expect(filterFormData({ category: CATEGORY }, {})).toEqual({ category: [] })
+  })
+
+  it('round-trip through a query string', () => {
+    expect(filtersFromQuery({ category: CATEGORY }, { category: 'a,null' })).toEqual({
+      category: ['a', 'null'],
+    })
+  })
+
+  it('are counted, not listed, when active', () => {
+    expect(filterDisplay(CATEGORY, ['a', 'b'])).toBe('2 selected')
+    expect(filterDisplay(CATEGORY, ['null'])).toBe('Uncategorized')
+    expect(filterDisplay(STATUS, '1')).toBe('Draft')
+  })
+})
+
+describe('the null token on a single-valued filter', () => {
+  const single: FilterField = { ...CATEGORY, widget: undefined }
+
+  it('is kept as a value of its own', () => {
+    expect(parseFilterValue(single, 'null')).toBe(NULL_FILTER_VALUE)
+    expect(filterDisplay(single, 'null')).toBe('Uncategorized')
+  })
+
+  it('is a choice of a selection, in front of the declared ones', () => {
+    const choices = filterWidgetOptions({ ...STATUS, widget: undefined }).choices
+    expect(choices?.[0]).toEqual({ value: 'null', label: 'None' })
+    expect(choices).toHaveLength(3)
+  })
+})
+
+describe('filterWidgetOptions', () => {
+  it('puts the empty entry in front of a relation\'s candidates, when it matches', async () => {
+    const options = filterWidgetOptions(CATEGORY)
+    expect((await options.fetch!(null)).map((row) => row.id)).toEqual(['null', 'a'])
+    expect((await options.fetch!('uncat')).map((row) => row.id)).toEqual(['null', 'a'])
+    expect((await options.fetch!('rent')).map((row) => row.id)).toEqual(['a'])
+  })
+
+  it('labels the null token locally, and asks the endpoint for the rest only', async () => {
+    const asked: string[][] = []
+    const options = filterWidgetOptions({
+      ...CATEGORY,
+      options: {
+        ...CATEGORY.options,
+        resolve: async (ids) => {
+          asked.push(ids)
+          return ids.map((id) => ({ id }))
+        },
+      },
+    })
+    expect((await options.resolve!(['null', 'a'])).map((row) => row.id)).toEqual(['null', 'a'])
+    expect(await options.resolve!(['null'])).toEqual([{ id: 'null', name: 'Uncategorized' }])
+    expect(asked).toEqual([['a']])
+  })
+
+  it('labels the empty entry even through a display that reads other keys', () => {
+    // A user's display reads `login`, which the empty entry does not carry.
+    const options = filterWidgetOptions({
+      ...CATEGORY,
+      options: { ...CATEGORY.options, relationDisplay: (record) => String(record.login) },
+    })
+    expect(options.relationDisplay!({ id: 'null' })).toBe('Uncategorized')
+    expect(options.relationDisplay!({ id: 'u1', login: 'ada' })).toBe('ada')
+  })
+
+  it('leaves a relation without allowNull untouched', () => {
+    const plain = { ...CATEGORY, allowNull: false }
+    expect(filterWidgetOptions(plain).fetch).toBe(CATEGORY.options!.fetch)
+  })
+
+  it('serves a multi-valued selection\'s choices through fetch and resolve', async () => {
+    const options = filterWidgetOptions(STATUS)
+    expect(await options.fetch!('do')).toEqual([{ id: '2', name: 'Done' }])
+    expect((await options.fetch!(null)).map((row) => row.id)).toEqual(['null', '1', '2'])
+    expect(await options.resolve!(['1'])).toEqual([{ id: '1', name: 'Draft' }])
+  })
+})
+
+describe('filterStore', () => {
+  it('parses what is written into it, whoever writes it', () => {
+    const values = blankFilters({ category: CATEGORY, seats: FIELDS.seats! })
+    const store = filterStore({ category: CATEGORY, seats: FIELDS.seats! }, values)
+    store.category = 'a,null'
+    store.seats = '3'
+    expect(values).toEqual({ category: ['a', 'null'], seats: 3 })
+  })
+
+  it('lists every declared key, as useResourceList expects', () => {
+    const store = filterStore({ category: CATEGORY }, blankFilters({ category: CATEGORY }))
+    expect(Object.keys(store)).toEqual(['category'])
+    expect(JSON.stringify(store)).toBe('{"category":null}')
   })
 })
