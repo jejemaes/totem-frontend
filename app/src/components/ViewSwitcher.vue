@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /*
- * List or chart: which view of a resource a page shows.
+ * List, cards or chart: which view of a resource a page shows.
  *
  * A plain v-model and nothing else -- no router. The PAGE owns `?view_type=`,
  * reads it, and mounts ONE view with `v-if`: only the mounted one writes the
@@ -28,6 +28,7 @@ const emit = defineEmits<{
 
 const LABELS: Record<ViewType, { icon: string; label: string }> = {
   list: { icon: 'pi pi-list', label: 'List' },
+  card: { icon: 'pi pi-th-large', label: 'Cards' },
   chart: { icon: 'pi pi-chart-bar', label: 'Chart' },
 }
 

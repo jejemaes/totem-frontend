@@ -9,9 +9,15 @@
 
 import type { QueryLike } from '@/api/list'
 
-export type ViewType = 'list' | 'chart'
+export type ViewType = 'list' | 'card' | 'chart'
 
-export const VIEW_TYPES: readonly ViewType[] = ['list', 'chart']
+/**
+ * Every view type, in the switcher's order. NOT a page's default: each page
+ * passes the views it actually has, to the switcher AND to viewTypeFromQuery --
+ * a page falling back to this list would accept `?view_type=card` with no card
+ * view to mount.
+ */
+export const VIEW_TYPES: readonly ViewType[] = ['list', 'card', 'chart']
 
 /** The query-string key. Shared by every page, so a link reads the same everywhere. */
 export const VIEW_TYPE_KEY = 'view_type'

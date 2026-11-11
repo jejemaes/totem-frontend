@@ -38,7 +38,10 @@ const total = ref<number | null>(null)
 /** The chart's count, kept apart: a number of groups is not a number of movements. */
 const groupCount = ref<number | null>(null)
 
-const viewType = computed<ViewType>(() => viewTypeFromQuery(route.query))
+/** The views this page has: a `?view_type=card` link falls back to the list. */
+const VIEWS: readonly ViewType[] = ['list', 'chart']
+
+const viewType = computed<ViewType>(() => viewTypeFromQuery(route.query, VIEWS))
 
 function setViewType(view: ViewType): void {
   // `replace`, like every other key of this query string: a switch is not a
@@ -111,7 +114,7 @@ function openRecord(id: string): void {
       </div>
 
       <div class="movements__actions">
-        <ViewSwitcher :model-value="viewType" @update:model-value="setViewType" />
+        <ViewSwitcher :model-value="viewType" :views="VIEWS" @update:model-value="setViewType" />
 
         <RouterLink
           v-if="canCreate"
