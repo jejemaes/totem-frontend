@@ -35,6 +35,7 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
     api/          client.ts (fetch wrapper), list.ts (pagination contract), groupBy.ts
     auth/         tokenApi.ts, refresh.ts, tokenStorage.ts, authStore.ts (Pinia), permissions.ts
     components/   ColorDot.vue, ColorTag.vue, colors.ts, ViewSwitcher.vue + viewSwitcher.ts
+      card/       CardView.vue, Field.vue, CardRecord.vue, context.ts, cardView.ts, fields/
       chart/      ChartView.vue, Field.vue, context.ts, prefs.ts, series.ts, fields/
       form/       Form.vue, FormView.vue, context.ts, FieldSwitch, fields/, widget/
       filters/    MultiRecordFilters.vue, filters.ts
@@ -189,6 +190,7 @@ No decorators, no auto-discovery, no `import.meta.glob`:
 | Widgets        | `WIDGETS` in `form/fields/Field.vue` + the `Widget` union in `form/fields/types.ts` |
 | List cells     | `LIST_WIDGETS` in `list/fields/Cell.vue` + the `ListWidget` union in `list/fields/types.ts` |
 | Chart fields   | the `ChartWidget` union in `chart/fields/types.ts`, read by `chart/fields/labels.ts` |
+| Card fields    | `CARD_WIDGETS` in `card/fields/CardWidget.vue` + the `CardWidget` union in `card/fields/types.ts` |
 | Routes         | the `routes` array in `router/index.ts`                     |
 | Sidebar menu   | the `menu` array in `layouts/menu.ts`                       |
 | Colour palette | `FIELD_COLORS` / `MAX_COLOR_INDEX` in `components/colors.ts` |
@@ -199,8 +201,8 @@ A colour is stored as a **palette index 0..15**, mirroring a backend check const
 `FIELD_COLORS` is therefore a backend change too.
 
 The only DI mechanism is `provide`/`inject` with a typed `InjectionKey`: `FORM_CONTEXT`, and its
-two counterparts `LIST_CONTEXT` and `CHART_CONTEXT`, each provided by one component to the
-`<Field>`s of its slot. Pinia is used for auth only.
+counterparts `LIST_CONTEXT`, `CHART_CONTEXT` and `CARD_CONTEXT`, each provided by one component to
+the `<Field>`s of its slot -- plus `CARD_RECORD`, provided per card by `CardRecord.vue`. Pinia is used for auth only.
 
 ## Routing and screens
 
@@ -485,6 +487,48 @@ A cell is not a form widget: it edits nothing and gets the whole row, hence its 
 values); formatting lives in `fields/cells.ts`. A one-off cell is the `<Field>`'s slot; a
 reusable specific one goes in `list/widgets/` (none yet, the folder does not exist).
 
+## The generic card view
+
+`components/card/` draws the same server-side records as `<ListView>` as a grid of PrimeVue
+`<Card>`s, under a `primevue/paginator`. Same props (`fetch-page`, `filters`, `sort-field`,
+`page-size` -- 12 by default --, `paginator`, `sync-url`, `mode`, `v-model:selection`,
+`extra-fields`), the same `#header` for `<MultiRecordFilters>`, the same `loaded` and
+`selection-rows`. The card's slots are `#cover` (PrimeVue's `header`), `#title`, `#subtitle`,
+`#content`, `#footer`, each handed `{ data }`.
+
+```vue
+<CardView :fetch-page="listDocs" :filters="filters" :menu="MENU" :extra-fields="['state']"
+          @click="open">
+  <template #title><Field name="name" /></template>
+  <template #content><Field name="summary" widget="text" :options="{ truncate: 200 }" /></template>
+  <template #footer="{ data }">
+    <Field name="tags" widget="many2many_tags" />
+    <Tag v-if="data.state === 'published'" value="Published" />
+  </template>
+</CardView>
+```
+
+- **A card `<Field>` RENDERS** (`card/Field.vue`), unlike a list one: it sits in a per-record slot
+  among the view's own markup. It still declares its keys through `CARD_CONTEXT`.
+- **`?fields=` comes from the skeleton cards.** The first render draws placeholder records; every
+  `<Field>` mounted there declares its keys, and the first request leaves in `onMounted` with them.
+  The set is then FROZEN -- following fields that mount card by card would reload under the user.
+  So a `<Field>` behind a `v-if` on the record, and any key a slot reads itself
+  (`data.state`), go in `extra-fields`; in dev the former warns once.
+- **The checkbox and the "⋮" sit over the cover** when the view gives a `#cover`, around the
+  title otherwise -- one `CardControls.vue` drawn in either spot.
+- **`menu`** is a `CardMenuItem[]` (`label`, `icon` as a `pi pi-…` class, `command(record)`,
+  `condition(record)`, `separator`): one popup `<Menu>` for every card, built per record by
+  `cardMenuItems`, which also drops orphaned separators. A card whose entries are all hidden has
+  no "⋮".
+- **`@click`** is a PROP (`onClick`), so CardView knows a listener exists: only then is a card a
+  `role="button"`. A click landing on a button, link, input or the menu is left to it
+  (`isInteractiveTarget`) -- a footer button needs no `.stop`. In selection mode a card click
+  toggles the record, through `list/selection.ts`.
+- Card fields are their own registry, but read through `list/fields/cells.ts` (re-exported by
+  `card/fields/cardFields.ts`): a value must display the same in a row and on a card. Only the
+  card-specific `truncateText` (`options.truncate`, cut at a word) lives there.
+
 ## The generic chart view
 
 `components/chart/` is `<ListView>`'s counterpart for `POST <resource>/group-by/` (the backend's
@@ -633,6 +677,8 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | every list cell                | `list/fields/cells.ts`  |
 | `ChartView.vue`                | `chart/prefs.ts`, `chart/series.ts`, `chart/fields/labels.ts`, `api/groupBy.ts` |
 | `ViewSwitcher.vue`             | `viewSwitcher.ts`       |
+| `CardView.vue`                 | `card/cardView.ts`      |
+| every card field               | `card/fields/cardFields.ts` (+ `list/fields/cells.ts`) |
 
 Follow that split for anything new: if a bug would stay invisible until a user hits it, its logic
 belongs in a sibling `.ts` with a `.spec.ts`. Specs sit next to their module and import it
