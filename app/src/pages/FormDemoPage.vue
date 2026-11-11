@@ -14,6 +14,7 @@ import type { RelationFetch, RelationResolve } from '@/components/form/fields/ma
 import FieldSwitch from '@/components/form/FieldSwitch.vue'
 import Field from '@/components/form/fields/Field.vue'
 import Form from '@/components/form/Form.vue'
+import CardViewDemo from '@/views/demo/CardViewDemo.vue'
 import ChartViewDemo from '@/views/demo/ChartViewDemo.vue'
 import ListViewDemo from '@/views/demo/ListViewDemo.vue'
 
@@ -465,6 +466,13 @@ const DEFINITION = `<Form :data="data" @save="onSave">
         <template #title>List view</template>
         <template #content>
           <ListViewDemo />
+        </template>
+      </Card>
+
+      <Card class="cards__wide">
+        <template #title>Card view</template>
+        <template #content>
+          <CardViewDemo />
         </template>
       </Card>
 

@@ -242,6 +242,10 @@ export interface FieldOptions {
   /** HtmlField: which groups of buttons to show, in this order. Defaults to all
       of them. */
   toolbar?: HtmlToolbarGroup[]
+  /** Card `text` field: the most characters shown, cut at a word and ended
+      with an ellipsis. Absent: the whole text. Display only -- a form never
+      reads it. */
+  truncate?: number
   [key: string]: unknown
 }
 
