@@ -52,6 +52,11 @@ export type UserRow = {
   last_name: string | null
   is_active: boolean
   roles: UserRoleRef[] | null
+  /**
+   * Not in USER_LIST_FIELDS: only the card view asks for it. Read it through
+   * avatarUrl, never straight into an `<img src>` -- see there.
+   */
+  avatar?: string | null
 }
 
 /**
@@ -290,4 +295,29 @@ export function initials(user: UserRow): string {
       .join('')
   }
   return user.login.slice(0, 2).toUpperCase()
+}
+
+/** "Last First", the order a directory is read in; the login when no name is set. */
+export function lastFirstName(user: UserRow): string {
+  return [user.last_name, user.first_name].filter(Boolean).join(' ') || user.login
+}
+
+/**
+ * The avatar as something an `<img src>` can load, or null.
+ *
+ * `avatar` is a PRIVATE ImageField, and its serialisation depends on the route:
+ * a retrieve maps the file to its URL, but the LIST route reads the model's
+ * `__dict__` and answers the bare stored path (`user.User/<pk>/avatar.png`) --
+ * the asymmetry documented in totem-backend's website/schemas/medias.py. Put
+ * in an `<img>`, that path resolves against the page and draws a broken image.
+ *
+ * So only an absolute URL, or a root-relative one (`/media/...?signature=`, the
+ * dev proxy's and production's same-origin form), is accepted; anything else
+ * is null, and the caller draws the initials. Once the list route answers a
+ * signed URL, avatars appear with no change here.
+ */
+export function avatarUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const url = value.trim()
+  return /^(https?:\/\/|\/(?!\/))/i.test(url) ? url : null
 }

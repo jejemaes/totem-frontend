@@ -21,5 +21,10 @@ describe('viewTypeFromQuery', () => {
 
   it('never answers a view the page does not offer', () => {
     expect(viewTypeFromQuery({ view_type: 'chart' }, ['list'])).toBe('list')
+    expect(viewTypeFromQuery({ view_type: 'card' }, ['list', 'chart'])).toBe('list')
+  })
+
+  it('reads the card view on a page that has one', () => {
+    expect(viewTypeFromQuery({ view_type: 'card' }, ['list', 'card'])).toBe('card')
   })
 })

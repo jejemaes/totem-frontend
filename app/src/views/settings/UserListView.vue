@@ -12,7 +12,6 @@ import { computed, useTemplateRef } from 'vue'
 
 import { can } from '@/auth/permissions'
 import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
-import type { FilterFields } from '@/components/filters/filters'
 import Field from '@/components/list/Field.vue'
 import type { ListRow } from '@/components/list/fields/types'
 import ListView from '@/components/list/ListView.vue'
@@ -25,6 +24,8 @@ import {
   type UserFilters,
   type UserRow,
 } from '@/resources/users'
+
+import { USER_FILTER_FIELDS } from './userFilters'
 
 const props = withDefaults(
   defineProps<{
@@ -52,36 +53,8 @@ const emit = defineEmits<{
  */
 const canUpdate = computed(() => can('totem.user.update'))
 
-/**
- * The filters this screen offers. The key of each entry is the query parameter
- * the API takes and the one that ends up in the URL -- one name, so a link is
- * always a faithful description of the request behind it.
- */
-const FILTER_FIELDS: FilterFields = {
-  search: {
-    type: 'string',
-    label: 'Search',
-    help_text: 'Matches the login or the email.',
-  },
-  login: {
-    type: 'string',
-    label: 'Login',
-    help_text: 'Filter on the login.',
-  },
-  email: {
-    type: 'string',
-    label: 'Email',
-    help_text: 'Filter on the email address.',
-  },
-  is_active: {
-    type: 'boolean',
-    label: 'Active',
-    help_text: 'Keep the active accounts, or the deactivated ones.',
-  },
-}
-
 const { filters, setFilters, updateFilters, activeFilters } = useFilter<UserFilters>(
-  FILTER_FIELDS,
+  USER_FILTER_FIELDS,
   // EXPLICIT: useFilter reads the URL by default.
   { syncUrl: props.syncUrl },
 )
@@ -110,7 +83,7 @@ defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.reso
   >
     <template #header="{ loading, reload }">
       <MultiRecordFilters
-        :fields="FILTER_FIELDS"
+        :fields="USER_FILTER_FIELDS"
         :filters="filters"
         :active-filters="activeFilters"
         :loading="loading"
