@@ -14,6 +14,7 @@ import {
 } from 'vue'
 
 import { can } from '@/auth/permissions'
+import { useLeaveConfirmation } from '@/composables/useLeaveConfirmation'
 import type { ResourceForm } from '@/composables/useResourceForm'
 
 import type { FormData } from './context'
@@ -126,6 +127,7 @@ const {
   deleting,
   deleteError,
   saved,
+  deleted,
 } = props.form
 
 /** How long the "Saved." banner stays, in ms: long enough to be read, short
@@ -145,12 +147,29 @@ const canDelete = computed(
 )
 
 /**
- * For the previous / next buttons, which sit outside <Form> and must ask before
- * dropping an edit. `externalDirty` too: an edit confined to a detached widget
- * (the user roles) is just as lost by a move.
+ * Whether leaving now would lose an edit -- read from outside <Form>, where its
+ * slots' `dirty` does not reach. `externalDirty` too: an edit confined to a
+ * detached widget (the user roles) is just as lost by a move.
  */
 const formRef = useTemplateRef<InstanceType<typeof Form>>('formRef')
 const dirty = computed(() => (formRef.value?.dirty ?? false) || externalDirty.value)
+
+/*
+ * "Discard your changes?" on any navigation away from a routed form with an
+ * edit in progress -- the record pager included. Not in a Dialog: its opener
+ * owns the way out, and a route change destroying it is that page's business.
+ *
+ * Two navigations are ours and must NOT ask: the redirect a create starts to
+ * the new record's route (the draft still differs from the blank form it was
+ * typed into, but it is stored), and the way out after a delete (there is no
+ * record left to keep editing). Both flags are set before the navigation
+ * starts.
+ */
+if (props.mode === 'page') {
+  useLeaveConfirmation(
+    () => dirty.value && !deleted.value && !(isNew.value && saved.value === 'create'),
+  )
+}
 
 /**
  * Where the previous / next buttons go: the page's own header, on the title's
@@ -195,7 +214,7 @@ function askDelete(): void {
        while the next record loads -- and on a record that failed to load,
        which the user may simply want to skip. Never in a Dialog. -->
   <Teleport v-if="pageHeader && !isNew" :to="pageHeader">
-    <RecordPager :dirty="dirty" />
+    <RecordPager />
   </Teleport>
 
   <Message v-if="loadError" severity="error" :closable="false" class="page__message">

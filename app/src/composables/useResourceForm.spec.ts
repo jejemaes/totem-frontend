@@ -659,3 +659,48 @@ describe('useResourceForm — staying on the form after a save', () => {
     expect(form.data.value).toEqual({ name: '8' })
   })
 })
+
+describe('useResourceForm — deleted', () => {
+  it('is set before onDeleted runs, so the navigation it starts sees it', async () => {
+    let seen: boolean | undefined
+    const { form } = mount({
+      id: '7',
+      fetchOne: async () => ({ id: '7', name: 'x' }),
+      remove: async () => {},
+      onDeleted: () => {
+        seen = form.deleted.value
+      },
+    })
+    await flush()
+    await form.remove()
+    expect(seen).toBe(true)
+  })
+
+  it('stays false after a refusal', async () => {
+    const { form } = mount({
+      id: '7',
+      fetchOne: async () => ({ id: '7', name: 'x' }),
+      remove: async () => {
+        throw new ApiError('In use', 409)
+      },
+    })
+    await flush()
+    await form.remove()
+    expect(form.deleted.value).toBe(false)
+  })
+
+  it('is cleared by a move to another record', async () => {
+    const id = ref<string | null>('7')
+    const { form } = mount({
+      id,
+      fetchOne: async (key) => ({ id: key, name: key }),
+      remove: async () => {},
+    })
+    await flush()
+    await form.remove()
+
+    id.value = '8'
+    await flush()
+    expect(form.deleted.value).toBe(false)
+  })
+})

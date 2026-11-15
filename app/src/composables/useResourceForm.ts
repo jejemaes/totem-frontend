@@ -145,6 +145,12 @@ export interface ResourceForm {
    */
   saved: Ref<'create' | 'edit' | null>
   /**
+   * True once the record has been deleted, set BEFORE `onDeleted` runs: the
+   * navigation it starts must not ask to discard the edits of a record that no
+   * longer exists. Cleared by a move to another record.
+   */
+  deleted: Ref<boolean>
+  /**
    * Hand this to <Form>'s `save` event, which supplies both arguments: the
    * whole draft, and the subset that differs from what the form was seeded
    * with.
@@ -176,6 +182,7 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
   const deleteError = ref<string | null>(null)
 
   const saved = ref<'create' | 'edit' | null>(null)
+  const deleted = ref(false)
   /** Set by a successful create, consumed by the id change its redirect causes. */
   let keepSavedOnNextId = false
 
@@ -358,6 +365,7 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
     deleteError.value = null
     try {
       await options.remove(current)
+      deleted.value = true
       options.onDeleted?.()
     } catch (caught) {
       deleteError.value =
@@ -377,6 +385,7 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
     () => {
       if (!keepSavedOnNextId) saved.value = null
       keepSavedOnNextId = false
+      deleted.value = false
       void load()
     },
     { immediate: true },
@@ -397,6 +406,7 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
     deleting,
     deleteError,
     saved,
+    deleted,
     save,
     reload: load,
     remove,
