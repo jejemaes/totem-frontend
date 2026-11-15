@@ -344,6 +344,14 @@ drives `<FormView>`'s "Created." / "Saved." banner in `mode="page"`, closable an
 survives the create's redirect. A form in a Dialog
 still closes on `saved`: its opener decides.
 
+**Leaving a dirty form asks "Discard your changes?"** -- a menu entry, Cancel, Back, the record
+pager: `<FormView mode="page">` calls `composables/useLeaveConfirmation.ts`, which registers
+`onBeforeRouteLeave` + `onBeforeRouteUpdate` (the pager reuses the component) and a
+`beforeunload` for a reload or a closed tab. Dirty is `<Form>`'s exposed `dirty` OR
+`externalDirty`. Two navigations of our own skip it: the create's redirect (`isNew` and
+`saved === 'create'`) and the way out after a delete (`form.deleted`, set before `onDeleted`).
+The way to /login never asks: the session is over.
+
 `<FormView>` props worth knowing: `mode="dialog"` drops the card for a form inside a `Dialog`;
 `width` (`narrow` 36rem, `medium` 56rem, `wide` 64rem); `skeleton` rows; `create-label` ("Add");
 `delete-permission` + `delete-header` + `delete-message` — Delete is shown only on an edit, when
@@ -392,8 +400,8 @@ mode) publishes its displayed ids through `usePublishedRecordSet`; the router's 
 stamps them onto the form's history entry when the navigation left that list's path for one of
 those ids; `<FormView mode="page">` teleports `form/RecordPager.vue` into the page's `.page__header`
 (found in `onMounted`; no header, no buttons), which navigates with
-`router.replace` (Back still reaches the list) and asks before dropping unsaved edits -- through
-`<Form>`'s exposed `dirty` plus `externalDirty`. The set carries a per-load `BOOT_ID`, so a typed
+`router.replace` (Back still reaches the list); an edit in progress is the leave guard's
+business, below. The set carries a per-load `BOOT_ID`, so a typed
 URL or an F5 shows no buttons. The rules live in `components/recordSet.ts`. A form route must
 name its param `:id` for this to apply.
 

@@ -11,10 +11,11 @@
  * The one router-aware piece of the form framework, on purpose: the views stay
  * route-free, and this is mounted only in `mode="page"`, never in a Dialog.
  *
- * Never disabled: past the last record comes the first.
+ * Never disabled: past the last record comes the first. An edit in progress
+ * is not its business: <FormView>'s leave guard asks before any navigation,
+ * this one included.
  */
 import Button from 'primevue/button'
-import { useConfirm } from 'primevue/useconfirm'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -26,14 +27,8 @@ import {
   stepRecord,
 } from '@/components/recordSet'
 
-const props = defineProps<{
-  /** Unsaved edits on the record shown: moving asks first. */
-  dirty: boolean
-}>()
-
 const route = useRoute()
 const router = useRouter()
-const confirm = useConfirm()
 
 const id = computed(() => (typeof route.params.id === 'string' ? route.params.id : null))
 
@@ -57,30 +52,15 @@ function step(direction: 1 | -1): void {
   const target = stepRecord(set, id.value, direction)
   if (target === id.value) return
 
-  const go = (): void => {
-    // `replace`, not `push`: Back still lands on the list, on the page, sort and
-    // filters `route.query` carries. `...route.params` keeps the other segments
-    // (a movement's `:accountId`). The set is handed over explicitly rather
-    // than trusting vue-router to carry custom keys into the replaced entry.
-    void router.replace({
-      name: route.name,
-      params: { ...route.params, id: target },
-      query: route.query,
-      state: { [RECORD_SET_STATE_KEY]: recordSetState(set) },
-    })
-  }
-
-  if (!props.dirty) {
-    go()
-    return
-  }
-  confirm.require({
-    header: 'Discard your changes?',
-    message: 'This record has unsaved changes. They will be lost.',
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
-    acceptProps: { label: 'Discard', severity: 'danger' },
-    accept: go,
+  // `replace`, not `push`: Back still lands on the list, on the page, sort and
+  // filters `route.query` carries. `...route.params` keeps the other segments
+  // (a movement's `:accountId`). The set is handed over explicitly rather
+  // than trusting vue-router to carry custom keys into the replaced entry.
+  void router.replace({
+    name: route.name,
+    params: { ...route.params, id: target },
+    query: route.query,
+    state: { [RECORD_SET_STATE_KEY]: recordSetState(set) },
   })
 }
 </script>
