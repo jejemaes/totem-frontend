@@ -17,17 +17,19 @@ const id = computed(() => (route.params.id ? String(route.params.id) : null))
 const listRoute = computed(() => ({ name: 'contacts', query: route.query }))
 const title = ref('')
 
+/*
+ * The form STAYS open after a save: an edit needs nothing here, and a create
+ * moves to the new record's own route, where the next Save is an update.
+ * `replace`, so Back skips the blank create form and lands on the list, with
+ * the query string it came with.
+ */
 function onSaved(contact: ContactDetail, mode: 'create' | 'edit'): void {
-  void router.push(
-    mode === 'create'
-      ? // The backend's `search` matches the first name, the last name or the
-        // email, so the list opens on the row just created. Without it, with
-        // the default last-name-ascending sort and ten rows per page, a new
-        // contact can land on page 3 and the redirect looks like nothing
-        // happened.
-        { name: 'contacts', query: { search: contact.last_name } }
-      : listRoute.value,
-  )
+  if (mode !== 'create') return
+  void router.replace({
+    name: 'contact-edit',
+    params: { id: String(contact.id) },
+    query: route.query,
+  })
 }
 
 function backToList(): void {

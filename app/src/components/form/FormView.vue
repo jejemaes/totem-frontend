@@ -21,9 +21,9 @@ import Form from './Form.vue'
 import RecordPager from './RecordPager.vue'
 
 /*
- * Everything drawn AROUND the fields of a create/edit screen: the load, save and
- * delete banners, the card and its skeleton, the Cancel / Delete / Save row, and
- * the delete confirmation.
+ * Everything drawn AROUND the fields of a create/edit screen: the load, save,
+ * "saved" and delete banners, the card and its skeleton, the Cancel / Delete /
+ * Save row, and the delete confirmation.
  *
  * Every XxxFormView used to carry its own copy of those ~120 lines, and the
  * copies had already started to drift -- a missing `deleteError` banner here, a
@@ -125,7 +125,12 @@ const {
   externalDirty,
   deleting,
   deleteError,
+  saved,
 } = props.form
+
+/** How long the "Saved." banner stays, in ms: long enough to be read, short
+    enough not to linger over the next edit. */
+const SAVED_LIFE = 3000
 
 const saveLabel = computed(() => (isNew.value ? props.createLabel : 'Save'))
 
@@ -213,6 +218,23 @@ function askDelete(): void {
 
   <Message v-if="error" severity="error" :closable="false" class="page__message">
     {{ error }}
+  </Message>
+
+  <!-- A save keeps the user on the form, where Save merely turning disabled
+       again would say nothing. Not in a Dialog: its opener closes it.
+       Gone after 3 s or on its cross; either way `saved` is reset rather than
+       left to Message's own hidden state, which a later save setting `saved`
+       to the same value again would never bring back. -->
+  <Message
+    v-if="saved && mode === 'page'"
+    severity="success"
+    closable
+    :life="SAVED_LIFE"
+    class="page__message"
+    @close="saved = null"
+    @life-end="saved = null"
+  >
+    {{ saved === 'create' ? 'Created.' : 'Saved.' }}
   </Message>
 
   <slot name="messages" />

@@ -34,16 +34,19 @@ const title = ref('')
  */
 const canSetPassword = computed(() => id.value !== null && can('totem.user.password'))
 
+/*
+ * The form STAYS open after a save: an edit needs nothing here, and a create
+ * moves to the new record's own route, where the next Save is an update.
+ * `replace`, so Back skips the blank create form and lands on the list, with
+ * the query string it came with.
+ */
 function onSaved(user: UserDetail, mode: 'create' | 'edit'): void {
-  void router.push(
-    mode === 'create'
-      ? // The backend's `search` matches login OR email, so the list opens on
-        // the row just created. Without it, with the default login-ascending
-        // sort and ten rows per page, a new account can land on page 3 and
-        // the redirect looks like nothing happened.
-        { name: 'settings-users', query: { search: user.login } }
-      : listRoute.value,
-  )
+  if (mode !== 'create') return
+  void router.replace({
+    name: 'settings-user-edit',
+    params: { id: String(user.id) },
+    query: route.query,
+  })
 }
 
 function backToList(): void {

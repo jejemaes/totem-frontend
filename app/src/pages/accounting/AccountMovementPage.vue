@@ -22,18 +22,19 @@ const listRoute = computed(() => ({
 }))
 const title = ref('')
 
+/*
+ * The form STAYS open after a save: an edit needs nothing here, and a create
+ * moves to the new record's own route, where the next Save is an update.
+ * `replace`, so Back skips the blank create form and lands on the list, with
+ * the query string it came with.
+ */
 function onSaved(movement: AccountMovementDetail, mode: 'create' | 'edit'): void {
-  void router.push(
-    mode === 'create'
-      ? // The backend's `search` matches the name, so the list opens on the
-        // row just created instead of wherever the date sort puts it.
-        {
-          name: 'accounting-account-movements',
-          params: { accountId: accountId.value },
-          query: { search: movement.name },
-        }
-      : listRoute.value,
-  )
+  if (mode !== 'create') return
+  void router.replace({
+    name: 'accounting-account-movement-edit',
+    params: { accountId: accountId.value, id: String(movement.id) },
+    query: route.query,
+  })
 }
 
 function backToList(): void {

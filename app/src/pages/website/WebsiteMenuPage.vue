@@ -18,14 +18,19 @@ const id = computed(() => (route.params.id ? String(route.params.id) : null))
 const listRoute = computed(() => ({ name: 'website-menus', query: route.query }))
 const title = ref('')
 
+/*
+ * The form STAYS open after a save: an edit needs nothing here, and a create
+ * moves to the new record's own route, where the next Save is an update.
+ * `replace`, so Back skips the blank create form and lands on the list, with
+ * the query string it came with.
+ */
 function onSaved(menu: WebsiteMenuDetail, mode: 'create' | 'edit'): void {
-  void router.push(
-    mode === 'create'
-      ? // The backend's `search` matches the name, so the list opens on the
-        // row just created instead of wherever the sequence sort puts it.
-        { name: 'website-menus', query: { search: menu.name } }
-      : listRoute.value,
-  )
+  if (mode !== 'create') return
+  void router.replace({
+    name: 'website-menu-edit',
+    params: { id: String(menu.id) },
+    query: route.query,
+  })
 }
 
 function backToList(): void {

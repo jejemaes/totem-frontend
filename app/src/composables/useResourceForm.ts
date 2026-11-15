@@ -87,9 +87,11 @@ export interface UseResourceFormOptions<T> {
    */
   hasExternalChanges?(): boolean
   /**
-   * Runs after a successful save -- typically a redirect. Its resolved value
-   * is ignored, so `router.push` can be returned straight from an arrow
-   * without discarding its NavigationFailure.
+   * Runs after a successful save, once an edit has been re-seeded from the
+   * response -- typically the redirect of a create to the new record's own
+   * route, or the closing of a Dialog. Its resolved value is ignored, so
+   * `router.push` can be returned straight from an arrow without discarding
+   * its NavigationFailure.
    */
   onSaved?(record: T, mode: 'create' | 'edit'): void | Promise<unknown>
   /**
@@ -135,6 +137,14 @@ export interface ResourceForm {
   /** Banner message for a refused delete -- typically a record still in use. */
   deleteError: Ref<string | null>
   /**
+   * What the last save did, for <FormView>'s success banner -- the screen now
+   * STAYS on the form, and a Save that merely turns disabled again says
+   * nothing. Cleared by the next save and by a move to another record, but NOT
+   * by the move a create causes (null to the new id): "Created." has to
+   * survive the redirect to the record's own route.
+   */
+  saved: Ref<'create' | 'edit' | null>
+  /**
    * Hand this to <Form>'s `save` event, which supplies both arguments: the
    * whole draft, and the subset that differs from what the form was seeded
    * with.
@@ -164,6 +174,10 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
 
   const deleting = ref(false)
   const deleteError = ref<string | null>(null)
+
+  const saved = ref<'create' | 'edit' | null>(null)
+  /** Set by a successful create, consumed by the id change its redirect causes. */
+  let keepSavedOnNextId = false
 
   // Same race guard as useResourceList: a monotonic ticket gates every state
   // write, and the superseded request is aborted. Clicking quickly from one
@@ -279,7 +293,11 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
     // `hasExternalChanges` is the escape hatch: the draft can be untouched
     // while a standalone widget outside it was edited, and that edit still has
     // to be sent.
+    saved.value = null
+    keepSavedOnNextId = false
+
     if (current && !Object.keys(changed).length && !options.hasExternalChanges?.()) {
+      saved.value = 'edit'
       if (loaded) await options.onSaved?.(loaded, 'edit')
       return
     }
@@ -292,6 +310,24 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
       const record = current
         ? await options.update(current, changed)
         : await options.create(values)
+      if (current) {
+        // The screen stays on the form: re-seeded from the PATCH RESPONSE
+        // rather than reloaded -- no request, no skeleton flash. The NEW `data`
+        // object is what makes <Form> reset its baseline; without it the
+        // fields stay dirty over values already stored, and Save stays
+        // enabled. `onLoaded` too, so a detached widget re-seeds from what the
+        // backend actually stored. Guarded by the id: a move to another record
+        // during the request must not get this one painted over it.
+        if (current === id.value) {
+          loaded = record
+          data.value = options.toForm(record)
+          options.onLoaded?.(record)
+        }
+        saved.value = 'edit'
+      } else {
+        saved.value = 'create'
+        keepSavedOnNextId = true
+      }
       await options.onSaved?.(record, current ? 'edit' : 'create')
     } catch (caught) {
       if (caught instanceof ApiError) {
@@ -336,7 +372,15 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
   // `immediate`, and keyed on the id rather than onMounted: it works inside a
   // plain effectScope, and it refetches when the route param changes under a
   // reused component.
-  watch(id, () => void load(), { immediate: true })
+  watch(
+    id,
+    () => {
+      if (!keepSavedOnNextId) saved.value = null
+      keepSavedOnNextId = false
+      void load()
+    },
+    { immediate: true },
+  )
 
   onScopeDispose(() => inFlight?.abort())
 
@@ -352,6 +396,7 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
     canRemove: Boolean(options.remove),
     deleting,
     deleteError,
+    saved,
     save,
     reload: load,
     remove,
