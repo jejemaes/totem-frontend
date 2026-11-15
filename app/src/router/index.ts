@@ -19,6 +19,10 @@ import ContactTagPage from '@/pages/contacts/ContactTagPage.vue'
 import ContactTagsPage from '@/pages/contacts/ContactTagsPage.vue'
 import DashboardPage from '@/pages/DashboardPage.vue'
 import DiagnosticPage from '@/pages/DiagnosticPage.vue'
+import DocumentPage from '@/pages/documents/DocumentPage.vue'
+import DocumentsPage from '@/pages/documents/DocumentsPage.vue'
+import DocumentTagCategoriesPage from '@/pages/documents/DocumentTagCategoriesPage.vue'
+import DocumentTagCategoryPage from '@/pages/documents/DocumentTagCategoryPage.vue'
 import ForbiddenPage from '@/pages/ForbiddenPage.vue'
 import FormDemoPage from '@/pages/FormDemoPage.vue'
 import LoginPage from '@/pages/LoginPage.vue'
@@ -227,6 +231,67 @@ export const router = createRouter({
           name: 'accounting-budget-chart',
           component: BudgetChartPage,
           meta: { title: 'Budget chart', permissions: ['totem.budget.read'] },
+        },
+        // Documents. Paths mirror the API's own two-segment prefix
+        // (/document/documents/, /document/tag-categories/), pluralised like
+        // the rest of the SPA.
+        //
+        // TWO create routes, one per document type: the type is chosen before
+        // the form opens and never changes after, so it is the route that
+        // fixes it rather than a field -- see DocumentPage. More segments than
+        // ':id', so neither can be swallowed by it.
+        {
+          path: 'documents/documents',
+          name: 'documents',
+          component: DocumentsPage,
+          meta: { title: 'Documents', permissions: ['totem.document.read'] },
+        },
+        {
+          path: 'documents/documents/file/new',
+          name: 'document-file-create',
+          component: DocumentPage,
+          meta: { title: 'Upload a file', permissions: ['totem.document.create'] },
+        },
+        {
+          path: 'documents/documents/text/new',
+          name: 'document-text-create',
+          component: DocumentPage,
+          meta: { title: 'New text', permissions: ['totem.document.create'] },
+        },
+        {
+          path: 'documents/documents/:id',
+          name: 'document-edit',
+          component: DocumentPage,
+          meta: {
+            title: 'Edit document',
+            permissions: ['totem.document.read', 'totem.document.update'],
+          },
+        },
+        // The tags have no route: they are listed, added, edited and reordered
+        // inside the categories tree, in Dialogs.
+        {
+          path: 'documents/tag-categories',
+          name: 'document-tag-categories',
+          component: DocumentTagCategoriesPage,
+          meta: {
+            title: 'Tag categories',
+            permissions: ['totem.documenttagcategory.read'],
+          },
+        },
+        {
+          path: 'documents/tag-categories/new',
+          name: 'document-tag-category-create',
+          component: DocumentTagCategoryPage,
+          meta: { title: 'New category', permissions: ['totem.documenttagcategory.create'] },
+        },
+        {
+          path: 'documents/tag-categories/:id',
+          name: 'document-tag-category-edit',
+          component: DocumentTagCategoryPage,
+          meta: {
+            title: 'Edit category',
+            permissions: ['totem.documenttagcategory.read', 'totem.documenttagcategory.update'],
+          },
         },
         // The site's own settings: ONE route, not the list / new / :id shape
         // of the resources below. The row is a singleton addressed as
