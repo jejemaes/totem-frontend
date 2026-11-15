@@ -154,12 +154,8 @@ const optionsDirty = computed(
   () => !sameThemeOptions(themeOptions.value, themeOptionsBaseline.value),
 )
 
-/** Cleared on every save, so it can never describe an older one. */
-const saved = ref(false)
-
 /**
- * The record narrowed to the keys the form owns -- named rather than inlined in
- * the options below, because `onSaved` re-seeds with it too.
+ * The record narrowed to the keys the form owns.
  *
  * `theme_options` is dropped here, which is what keeps it out of the draft and
  * therefore out of every payload.
@@ -183,8 +179,10 @@ function toForm(website: WebsiteDetail): FormData {
   }
 }
 
-// Annotated, and it has to be: `onSaved` below calls `form.reload()`, so
-// without an explicit type the inference is circular (TS7022).
+// A save stays here, as on every form: the composable re-seeds the draft from
+// the PATCH response, and `onLoaded` above the state outside it -- from the
+// RESPONSE, the only thing that says what the backend actually stored: it
+// resets the theme options whenever the theme moved.
 const form: ResourceForm = useResourceForm<WebsiteDetail>({
   // A constant: there is one row, and it is addressed by alias. The composable
   // still watches it, which costs one load and never fires again.
@@ -222,23 +220,6 @@ const form: ResourceForm = useResourceForm<WebsiteDetail>({
   create: () => Promise.reject(new Error('The website settings cannot be created.')),
   update: (_id, changed) => updateCurrentWebsite(updatePayload(changed)),
   notFoundMessage: 'The website settings could not be found.',
-  onSaved: (website) => {
-    saved.value = true
-    // Re-seeded from the PATCH RESPONSE rather than reloaded: the route answers
-    // the updated record, so this costs no request and no skeleton flash. What
-    // it is really for is the NEW `data` object -- that identity change is what
-    // makes <Form> reset its baseline. Without it the fields stay dirty over
-    // values the backend has already accepted, and Save stays enabled.
-    form.data.value = toForm(website)
-    menu.value = website.menu
-    homepage.value = website.homepage
-    coverMedia.value = website.cover_media
-    // The options live outside that object, so they need re-seeding of their
-    // own -- and from the RESPONSE, which is the only thing that says what the
-    // backend actually stored: it resets the bag whenever the theme moved.
-    themeOptions.value = { ...website.theme_options }
-    themeOptionsBaseline.value = { ...website.theme_options }
-  },
 })
 
 const { data, loadError, saving, fieldErrors, externalDirty } = form
@@ -318,15 +299,10 @@ function updatePayload(changed: FormData): WebsiteUpdatePayload {
   return body
 }
 
-/** A new save must not leave the previous one's confirmation on screen. */
-function onSave(values: FormData, changed?: FormData): void {
-  saved.value = false
-  void form.save(values, changed)
-}
-
 /** Throws the edits away by reloading -- there is no list to navigate back to. */
 function discard(): void {
-  saved.value = false
+  // The "Saved." banner would otherwise describe a save the reload just undid.
+  form.saved.value = null
   void form.reload()
 }
 </script>
@@ -349,13 +325,8 @@ function discard(): void {
       :skeleton="8"
       :readonly="!canUpdate"
       :cancellable="false"
-      :on-save="onSave"
     >
       <template #messages>
-        <Message v-if="saved" severity="success" :closable="false" class="page__message">
-          Settings saved.
-        </Message>
-
         <Message
           v-if="!loadError && !canUpdate"
           severity="info"

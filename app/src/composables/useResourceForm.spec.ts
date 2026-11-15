@@ -569,3 +569,93 @@ describe('useResourceForm — delete', () => {
     expect(form.deleting.value).toBe(false)
   })
 })
+
+describe('useResourceForm — staying on the form after a save', () => {
+  const record = { id: '7', name: 'before' }
+
+  it('re-seeds from the PATCH response with a new object, and tells onLoaded', async () => {
+    const onLoaded = vi.fn()
+    const update = vi.fn(async () => ({ id: '7', name: 'stored' }))
+    const { form } = mount({ id: '7', fetchOne: async () => record, update, onLoaded })
+    await flush()
+    const before = form.data.value
+
+    await form.save({ name: 'typed' }, { name: 'typed' })
+
+    expect(form.data.value).toEqual({ name: 'stored' })
+    expect(form.data.value).not.toBe(before)
+    expect(onLoaded).toHaveBeenLastCalledWith({ id: '7', name: 'stored' })
+  })
+
+  it('reports an edit, cleared by the next save', async () => {
+    const update = deferred<Record>()
+    const { form } = mount({ id: '7', fetchOne: async () => record, update: () => update.promise })
+    await flush()
+
+    const first = form.save({ name: 'a' }, { name: 'a' })
+    update.resolve({ id: '7', name: 'a' })
+    await first
+    expect(form.saved.value).toBe('edit')
+
+    void form.save({ name: 'b' }, { name: 'b' })
+    expect(form.saved.value).toBeNull()
+  })
+
+  it('reports an edit even when nothing was sent', async () => {
+    const { form } = mount({ id: '7', fetchOne: async () => record })
+    await flush()
+    await form.save({ name: 'before' }, {})
+    expect(form.saved.value).toBe('edit')
+  })
+
+  it('drops the banner on a move to another record', async () => {
+    const id = ref<string | null>('7')
+    const { form } = mount({ id, fetchOne: async (key) => ({ id: key, name: key }) })
+    await flush()
+    await form.save({ name: 'x' }, { name: 'x' })
+
+    id.value = '8'
+    await flush()
+    expect(form.saved.value).toBeNull()
+  })
+
+  it('keeps "created" across the redirect to the new record', async () => {
+    const id = ref<string | null>(null)
+    const { form } = mount({
+      id,
+      fetchOne: async (key) => ({ id: key, name: 'created' }),
+      onSaved: () => {
+        id.value = '1'
+      },
+    })
+    await flush()
+    await form.save({ name: 'x' })
+    await flush()
+
+    expect(form.saved.value).toBe('create')
+    expect(form.data.value).toEqual({ name: 'created' })
+
+    id.value = '2'
+    await flush()
+    expect(form.saved.value).toBeNull()
+  })
+
+  it('does not paint a response over the record moved to meanwhile', async () => {
+    const id = ref<string | null>('7')
+    const update = deferred<Record>()
+    const { form } = mount({
+      id,
+      fetchOne: async (key) => ({ id: key, name: key }),
+      update: () => update.promise,
+    })
+    await flush()
+
+    const saving = form.save({ name: 'x' }, { name: 'x' })
+    id.value = '8'
+    await flush()
+    update.resolve({ id: '7', name: 'x' })
+    await saving
+
+    expect(form.data.value).toEqual({ name: '8' })
+  })
+})

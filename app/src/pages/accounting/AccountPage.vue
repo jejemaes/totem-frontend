@@ -16,14 +16,19 @@ const id = computed(() => (route.params.id ? String(route.params.id) : null))
 const listRoute = computed(() => ({ name: 'accounting-accounts', query: route.query }))
 const title = ref('')
 
+/*
+ * The form STAYS open after a save: an edit needs nothing here, and a create
+ * moves to the new record's own route, where the next Save is an update.
+ * `replace`, so Back skips the blank create form and lands on the list, with
+ * the query string it came with.
+ */
 function onSaved(account: AccountDetail, mode: 'create' | 'edit'): void {
-  void router.push(
-    mode === 'create'
-      ? // `search` matches the code, which is short and exact: the list opens
-        // on the row just created instead of wherever the code sort puts it.
-        { name: 'accounting-accounts', query: { search: account.code } }
-      : listRoute.value,
-  )
+  if (mode !== 'create') return
+  void router.replace({
+    name: 'accounting-account-edit',
+    params: { id: String(account.id) },
+    query: route.query,
+  })
 }
 
 function backToList(): void {

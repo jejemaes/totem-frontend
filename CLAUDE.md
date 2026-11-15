@@ -161,8 +161,8 @@ api/  ──▶  resources/  ──▶  views/  ──▶  pages/  ──▶  ro
   `cancel`, `deleted`, `title`). `can()` and `useConfirm()` are fine: neither needs a route.
 - `pages/` are what the router mounts: the page header (title, count, the **New** button) around
   one or more views, and the translation of their events into navigation — carrying
-  `route.query` so Back lands on the same page/sort/filters, and the create redirect with
-  `?search=` so the new row is on screen. A page holds no `DataTable` and no `<Field>`.
+  `route.query` so Back lands on the same page/sort/filters, and the create redirect to the
+  new record's edit route. A page holds no `DataTable` and no `<Field>`.
 - Several views of one model on one page (a list or cards toggle) mount one at a time with
   `v-if`: only the mounted one has `sync-url`, so the query string still has a single writer.
 
@@ -321,7 +321,7 @@ The conversions live in `components/filters/filters.ts`, Vue-free and with a spe
 `useResourceForm({ id, defaults, toForm, fetchOne, create, update, remove, notFoundMessage,
 onSaved, onDeleted })` holds everything that differs between create and edit, and
 `<FormView :form="form" :title="title">` (`components/form/FormView.vue`) everything drawn around
-the fields: the load / save / delete banners, the `<Card>` and its skeleton, the Delete / Cancel /
+the fields: the load / save / "Saved." / delete banners, the `<Card>` and its skeleton, the Delete / Cancel /
 Create-Save row, the delete confirmation, the save label, and emitting `title`. The view only
 declares its `<Field>`s, its payloads and the composable's options — it imports no `Card`,
 `Message`, `Skeleton`, `Button` or `useConfirm`, and has no CSS for any of that.
@@ -332,7 +332,17 @@ follows. `onSaved` emits `saved(record, mode)` (mode is `'create' | 'edit'`) and
 `deleted`; `<FormView>` emits `cancel` (Cancel, and "Back" / "Close" after a failed load) and
 `title`, which the view forwards explicitly (`@cancel="emit('cancel')"
 @title="emit('title', $event)"`) so the page's `<h1>` — or a Dialog's header — can show it.
-`XxxPage` turns those into `router.push`.
+`XxxPage` turns those into navigation.
+
+**A save never leaves the form.** On an edit, `useResourceForm` re-seeds `data` from the PATCH
+response (the new object is what resets `<Form>`'s baseline) and calls `onLoaded` with it, so a
+detached widget re-seeds too; the page's `onSaved` does nothing. On a create, the page
+`router.replace`s to the new record's edit route, carrying `route.query` -- `replace`, so Back
+skips the blank create form and reaches the list. `form.saved` (`'create' | 'edit' | null`)
+drives `<FormView>`'s "Created." / "Saved." banner in `mode="page"`, closable and gone after 3 s
+(both reset `form.saved`); it is cleared by the next save and by a move to another record, but
+survives the create's redirect. A form in a Dialog
+still closes on `saved`: its opener decides.
 
 `<FormView>` props worth knowing: `mode="dialog"` drops the card for a form inside a `Dialog`;
 `width` (`narrow` 36rem, `medium` 56rem, `wide` 64rem); `skeleton` rows; `create-label` ("Add");
@@ -346,8 +356,8 @@ the caller's own, `#actions({ dirty, saving, isNew, saveLabel })` to replace the
 detached widget still enables it.
 
 A **singleton** record (one row, addressed by alias, no create or delete) passes a constant `id`
-(`'current'`, `'me'`), rejects in `create` (unreachable), sets `:cancellable="false"`, and on save
-re-seeds `form.data` from the PATCH response — the new object is what resets `<Form>`'s baseline.
+(`'current'`, `'me'`), rejects in `create` (unreachable) and sets `:cancellable="false"`; the
+re-seed after a save is the composable's, like on every edit.
 Copy `views/settings/ProfileView.vue` (`/profile`, `resources/profile.ts` over `/users/me/`,
 reached from the user menu, no permission needed); `WebsiteConfigurationPage` is the larger one.
 

@@ -12,7 +12,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import type { DocumentType } from '@/resources/documents'
+import type { DocumentDetail, DocumentType } from '@/resources/documents'
 import DocumentFormView from '@/views/documents/DocumentFormView.vue'
 
 const route = useRoute()
@@ -26,10 +26,21 @@ const listRoute = computed(() => ({ name: 'documents', query: route.query }))
 const title = ref('')
 
 /*
- * Back to the list in either case, with its query string: the list opens on
- * the newest first by default, so a document just created is on screen
- * without a `?search=`.
+ * The form STAYS open after a save: an edit needs nothing here, and a create
+ * moves to the new record's own route, where the next Save is an update.
+ * `replace`, so Back skips the blank create form and lands on the list, with
+ * the query string it came with.
  */
+function onSaved(document: DocumentDetail, mode: 'create' | 'edit'): void {
+  if (mode !== 'create') return
+  void router.replace({
+    name: 'document-edit',
+    params: { id: String(document.id) },
+    query: route.query,
+  })
+}
+
+/** Back to the list, with its query string. */
 function backToList(): void {
   void router.push(listRoute.value)
 }
@@ -46,7 +57,7 @@ function backToList(): void {
     <DocumentFormView
       :id="id"
       :document-type="documentType"
-      @saved="backToList"
+      @saved="onSaved"
       @deleted="backToList"
       @cancel="backToList"
       @title="title = $event"

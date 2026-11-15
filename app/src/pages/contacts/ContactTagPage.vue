@@ -18,12 +18,19 @@ const id = computed(() => (route.params.id ? String(route.params.id) : null))
 const listRoute = computed(() => ({ name: 'contact-tags', query: route.query }))
 const title = ref('')
 
+/*
+ * The form STAYS open after a save: an edit needs nothing here, and a create
+ * moves to the new record's own route, where the next Save is an update.
+ * `replace`, so Back skips the blank create form and lands on the list, with
+ * the query string it came with.
+ */
 function onSaved(tag: ContactTagDetail, mode: 'create' | 'edit'): void {
-  void router.push(
-    // The name is unique, so `search` opens the list on exactly the row just
-    // created.
-    mode === 'create' ? { name: 'contact-tags', query: { search: tag.name } } : listRoute.value,
-  )
+  if (mode !== 'create') return
+  void router.replace({
+    name: 'contact-tag-edit',
+    params: { id: String(tag.id) },
+    query: route.query,
+  })
 }
 
 function backToList(): void {
