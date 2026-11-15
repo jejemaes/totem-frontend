@@ -32,14 +32,28 @@ describe('createResequenceQueue', () => {
     await flush()
     // The second order waits for the first: in parallel, it could land first.
     expect(send).toHaveBeenCalledTimes(1)
-    expect(send).toHaveBeenLastCalledWith(['a', 'b'])
+    expect(send).toHaveBeenLastCalledWith(['a', 'b'], 0)
 
     first.resolve()
     await flush()
     expect(send).toHaveBeenCalledTimes(2)
-    expect(send).toHaveBeenLastCalledWith(['b', 'a'])
+    expect(send).toHaveBeenLastCalledWith(['b', 'a'], 0)
     second.resolve()
     await flush()
+  })
+
+  it('sends each order with the offset it was dropped at', async () => {
+    const send = vi.fn(async () => {})
+    const queue = createResequenceQueue(send, { onError: vi.fn(), onIdle: vi.fn() })
+
+    // A drop on page 3 of a 10-row list, then one on page 1: each keeps its own.
+    queue.push(['x', 'y'], 20)
+    queue.push(['a', 'b'])
+    await flush()
+    expect(send.mock.calls).toEqual([
+      [['x', 'y'], 20],
+      [['a', 'b'], 0],
+    ])
   })
 
   it('goes idle once per burst, not once per drop', async () => {
@@ -79,6 +93,6 @@ describe('createResequenceQueue', () => {
     queue.push(ids)
     ids.reverse()
     await flush()
-    expect(send).toHaveBeenCalledWith(['a', 'b'])
+    expect(send).toHaveBeenCalledWith(['a', 'b'], 0)
   })
 })

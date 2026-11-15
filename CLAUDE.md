@@ -477,7 +477,10 @@ value is not data, and it registers no key.
   (`function account(row: ListRow): AccountRow`) before calling a resource's formatter. A slot
   drawing a number sets `align="end"`: the slot aligns its cell, the header is ListView's.
 - `resequence` enables row drag: one page of `MAX_PAGE_SIZE`, `sequenceField` order, no header
-  sort, drops chained through `resequence.ts`.
+  sort, drops chained through `resequence.ts`. `resequence-paged` (off by default) keeps the
+  paginator instead and calls `resequence(ids, offset)` with the page's first row index, for a
+  route taking the backend's `{ids, offset}` body (`DocumentTagListView`); a row then moves
+  within its page only.
 - `mode="selection"` adds checkboxes; `selection.ts` keeps a `Map` across pages and the ids come
   back through `v-model:selection` (plus `selection-rows`, to label m2m chips). `syncUrl` is
   ignored in that mode.

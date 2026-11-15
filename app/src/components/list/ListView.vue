@@ -96,8 +96,19 @@ const props = withDefaults(
      * every row on one page, in `sequenceField` order, with no header sort --
      * a drag only means something in that order, and the route numbers only
      * the ids it is given.
+     *
+     * `offset` is where the first id sits in the whole list: always 0, unless
+     * `resequencePaged`.
      */
-    resequence?: (ids: string[]) => Promise<unknown>
+    resequence?: (ids: string[], offset: number) => Promise<unknown>
+    /**
+     * Keep the paginator while reorderable: a drop sends the PAGE's order and
+     * the index of its first row, for a route that numbers the ids from there
+     * (the backend's `{ids, offset}`). OFF by default: a route numbering from
+     * 1 whatever it is sent would renumber page 2 over page 1. A row moves
+     * within its page only.
+     */
+    resequencePaged?: boolean
     sequenceField?: string
     /**
      * Keys asked for whatever the columns: what the view itself reads from a
@@ -121,6 +132,7 @@ const props = withDefaults(
     selection: () => [],
     storageKey: undefined,
     resequence: undefined,
+    resequencePaged: false,
     sequenceField: 'sequence',
     extraFields: () => [],
     emptyText: 'No record yet.',
@@ -214,8 +226,9 @@ const orderable = computed(() => Boolean(props.resequence) && props.mode === 'di
 const list = useResourceList<R, F>({
   fetchPage: props.fetchPage,
   filters: props.filters,
-  // EVERY row when orderable: the new order has to be sent whole.
-  pageSize: props.resequence ? MAX_PAGE_SIZE : props.pageSize,
+  // EVERY row when orderable: the new order has to be sent whole -- unless the
+  // route takes the page's offset.
+  pageSize: props.resequence && !props.resequencePaged ? MAX_PAGE_SIZE : props.pageSize,
   sortField: props.resequence ? props.sequenceField : props.sortField,
   sortOrder: props.sortOrder,
   sortable: props.sortable,
@@ -282,9 +295,12 @@ if (import.meta.env.DEV) {
 /**
  * The handle is offered only when a drop can be saved: every row on screen,
  * since past one page the order could not be sent whole, and a partial one
- * collides with the sequences it skips.
+ * collides with the sequences it skips. A paged route numbers the page where
+ * it sits, so any page can be saved.
  */
-const reorderable = computed(() => orderable.value && total.value <= pageSize.value)
+const reorderable = computed(
+  () => orderable.value && (props.resequencePaged || total.value <= pageSize.value),
+)
 
 /** The order just dropped, shown until the next load carries the server's. */
 const ordered = shallowRef<R[] | null>(null)
@@ -294,7 +310,7 @@ watch(rows, () => {
 
 const reorderError = ref<string | null>(null)
 
-const resequenceQueue = createResequenceQueue((ids) => props.resequence!(ids), {
+const resequenceQueue = createResequenceQueue((ids, offset) => props.resequence!(ids, offset), {
   onError(caught: unknown) {
     reorderError.value =
       caught instanceof ApiError ? caught.message : 'The new order could not be saved.'
@@ -307,7 +323,10 @@ const resequenceQueue = createResequenceQueue((ids) => props.resequence!(ids), {
 function onRowReorder(event: { value: R[] }): void {
   ordered.value = event.value
   reorderError.value = null
-  resequenceQueue.push(event.value.map((row) => String(row.id)))
+  resequenceQueue.push(
+    event.value.map((row) => String(row.id)),
+    props.resequencePaged ? first.value : 0,
+  )
 }
 
 // ---------------------------------------------------------------- selection
@@ -342,7 +361,9 @@ const showPaginator = computed(() => {
   if (props.paginator === 'none') return false
   // One page of everything -- always the case when reorderable -- leaves a
   // compact pager nowhere to go. The full one stays: it carries the page size.
-  if (props.paginator === 'compact' || props.resequence) return total.value > pageSize.value
+  if (props.paginator === 'compact' || (props.resequence && !props.resequencePaged)) {
+    return total.value > pageSize.value
+  }
   return true
 })
 
