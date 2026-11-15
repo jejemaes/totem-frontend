@@ -22,24 +22,29 @@ export interface ResequenceHooks {
 }
 
 export interface ResequenceQueue {
-  push(ids: readonly string[]): void
+  /**
+   * `offset`: where the first id sits in the whole list -- 0 for an order sent
+   * whole, the index of the page's first row for one page of a paged list.
+   * Captured with the order: the user may turn the page before it is sent.
+   */
+  push(ids: readonly string[], offset?: number): void
   /** Drops sent or waiting. */
   pending(): number
 }
 
 export function createResequenceQueue(
-  send: (ids: string[]) => Promise<unknown>,
+  send: (ids: string[], offset: number) => Promise<unknown>,
   hooks: ResequenceHooks,
 ): ResequenceQueue {
   let chain: Promise<void> = Promise.resolve()
   let queued = 0
 
   return {
-    push(ids: readonly string[]): void {
+    push(ids: readonly string[], offset = 0): void {
       const order = [...ids]
       queued += 1
       chain = chain
-        .then(() => send(order))
+        .then(() => send(order, offset))
         .then(
           () => undefined,
           (caught: unknown) => {
