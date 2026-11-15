@@ -373,6 +373,20 @@ deeply. Slots: `#default({ draft, dirty })` for the fields and `#actions({ inval
 the buttons (submit is `:disabled="!isNew && !dirty"`). Fields declare themselves through
 `provide`/`inject`; `Form.vue` cannot discover them any other way, they live in its slot.
 
+### Previous / next on a form opened from a list
+
+Every routed edit form shows `3 / 10 ‹ ›` on the page title's line when it was opened
+from a list or card view, walking that page's records and wrapping at both ends. No screen opts
+in: the routed `ListView` / `CardView` (the one owning the URL, never a Dialog or selection
+mode) publishes its displayed ids through `usePublishedRecordSet`; the router's `afterEach`
+stamps them onto the form's history entry when the navigation left that list's path for one of
+those ids; `<FormView mode="page">` teleports `form/RecordPager.vue` into the page's `.page__header`
+(found in `onMounted`; no header, no buttons), which navigates with
+`router.replace` (Back still reaches the list) and asks before dropping unsaved edits -- through
+`<Form>`'s exposed `dirty` plus `externalDirty`. The set carries a per-load `BOOT_ID`, so a typed
+URL or an F5 shows no buttons. The rules live in `components/recordSet.ts`. A form route must
+name its param `:id` for this to apply.
+
 ## The generic form framework
 
 ### Where field types are registered — two places, both in `form/fields/`
@@ -680,6 +694,7 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | every list cell                | `list/fields/cells.ts`  |
 | `ChartView.vue`                | `chart/prefs.ts`, `chart/series.ts`, `chart/fields/labels.ts`, `api/groupBy.ts` |
 | `ViewSwitcher.vue`             | `viewSwitcher.ts`       |
+| `RecordPager.vue`              | `recordSet.ts`          |
 | `CardView.vue`                 | `card/cardView.ts`      |
 | every card field               | `card/fields/cardFields.ts` (+ `list/fields/cells.ts`) |
 

@@ -52,6 +52,7 @@ import {
   selectionFromIds,
   type Selection,
 } from '@/components/list/selection'
+import { usePublishedRecordSet } from '@/composables/usePublishedRecordSet'
 import { useResourceList, type ListFetcher } from '@/composables/useResourceList'
 
 import CardControls from './CardControls.vue'
@@ -194,6 +195,11 @@ onMounted(() => {
 const skeletonRecords = Array.from({ length: 6 }, (_, i) => ({ id: `skeleton-${i}` }) as R)
 
 const displayed = computed<R[]>(() => (isInitialLoad.value ? skeletonRecords : rows.value))
+
+// What a form opened from here walks with its previous / next buttons.
+usePublishedRecordSet(props.syncUrl && !selecting.value, () =>
+  isInitialLoad.value ? null : rows.value.map((record) => String(record.id)),
+)
 
 // On `loading` going false rather than on `total`: a reload landing on the same
 // count must still be reported.

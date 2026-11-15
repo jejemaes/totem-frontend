@@ -215,6 +215,19 @@ a {
   margin-left: auto;
 }
 
+/* The record pager (components/form/RecordPager.vue) is teleported in LAST, by
+   <FormView>. It must join the page's own actions on the right, not push them
+   back against the title: the first action takes the auto margin, and the
+   pager drops the one the rule above gives it -- two auto margins would split
+   the free space and float the pager alone in the middle. */
+.page__header:has(> .record-pager) > :nth-child(2) {
+  margin-left: auto;
+}
+
+.page__header:has(> .record-pager) > .record-pager:not(:nth-child(2)) {
+  margin-left: 0;
+}
+
 .page__header h1 + .page__subtitle {
   margin: 0.15rem 0 0;
   color: var(--app-muted);

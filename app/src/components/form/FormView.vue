@@ -4,13 +4,21 @@ import Card from 'primevue/card'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import { useConfirm } from 'primevue/useconfirm'
-import { computed, watch, type FunctionalComponent } from 'vue'
+import {
+  computed,
+  onMounted,
+  shallowRef,
+  useTemplateRef,
+  watch,
+  type FunctionalComponent,
+} from 'vue'
 
 import { can } from '@/auth/permissions'
 import type { ResourceForm } from '@/composables/useResourceForm'
 
 import type { FormData } from './context'
 import Form from './Form.vue'
+import RecordPager from './RecordPager.vue'
 
 /*
  * Everything drawn AROUND the fields of a create/edit screen: the load, save and
@@ -131,6 +139,30 @@ const canDelete = computed(
     can(props.deletePermission),
 )
 
+/**
+ * For the previous / next buttons, which sit outside <Form> and must ask before
+ * dropping an edit. `externalDirty` too: an edit confined to a detached widget
+ * (the user roles) is just as lost by a move.
+ */
+const formRef = useTemplateRef<InstanceType<typeof Form>>('formRef')
+const dirty = computed(() => (formRef.value?.dirty ?? false) || externalDirty.value)
+
+/**
+ * Where the previous / next buttons go: the page's own header, on the title's
+ * line -- they move between records, they are not part of the one being
+ * edited. Teleported there rather than drawn by each XxxPage, which would have
+ * to opt in (and could forget) and has no access to `dirty`.
+ *
+ * Looked up in onMounted, when the whole page is in the document: during setup
+ * the header is not attached yet. Only one page is mounted at a time, so the
+ * first `.page__header` is this page's. No header (a page drawing its own
+ * chrome) means no buttons, never a teleport warning.
+ */
+const pageHeader = shallowRef<HTMLElement | null>(null)
+onMounted(() => {
+  if (props.mode === 'page') pageHeader.value = document.querySelector('.page .page__header')
+})
+
 watch(() => props.title, (value) => emit('title', value), { immediate: true })
 
 function save(values: FormData, changed?: FormData): void {
@@ -153,6 +185,14 @@ function askDelete(): void {
 </script>
 
 <template>
+  <!-- Every routed edit form, with nothing to opt into: it draws itself only
+       when the form was opened from a list. Outside the card, so it stays put
+       while the next record loads -- and on a record that failed to load,
+       which the user may simply want to skip. Never in a Dialog. -->
+  <Teleport v-if="pageHeader && !isNew" :to="pageHeader">
+    <RecordPager :dirty="dirty" />
+  </Teleport>
+
   <Message v-if="loadError" severity="error" :closable="false" class="page__message">
     <div class="form-view__error">
       <span>{{ loadError }}</span>
@@ -188,6 +228,7 @@ function askDelete(): void {
       </div>
       <Form
         v-else-if="data"
+        ref="formRef"
         :data="data"
         :save-label="saveLabel"
         :saving="saving"

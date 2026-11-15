@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { useAuthStore } from '@/auth/authStore'
+import { RECORD_SET_STATE_KEY, recordSetState, takeRecordSet } from '@/components/recordSet'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import BlankLayout from '@/layouts/BlankLayout.vue'
 
@@ -456,6 +457,22 @@ router.beforeEach(async (to) => {
   return true
 })
 
-router.afterEach((to) => {
+router.afterEach((to, from, failure) => {
   document.title = to.meta.title ? `${to.meta.title} · Totem Admin` : 'Totem Admin'
+
+  // A record opened from the routed list it sits in: the list's page goes onto
+  // the form's history entry, for <RecordPager> (components/recordSet.ts).
+  // Here rather than in every XxxPage's `open`, so no screen can forget it.
+  // afterEach runs right after vue-router wrote the entry and BEFORE Vue
+  // re-renders, so the form reads it on its first render. Merged into
+  // vue-router's own state, which it needs for Back and scrolling.
+  const id = to.params.id
+  if (failure || typeof id !== 'string') return
+  const ids = takeRecordSet(from.path, id)
+  if (ids) {
+    window.history.replaceState(
+      { ...window.history.state, [RECORD_SET_STATE_KEY]: recordSetState(ids) },
+      '',
+    )
+  }
 })
