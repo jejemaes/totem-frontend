@@ -61,6 +61,24 @@ export const menu: MenuSection[] = [
     ],
   },
   {
+    label: 'Documents',
+    icon: 'pi pi-folder',
+    items: [
+      {
+        label: 'Documents',
+        icon: 'pi pi-file',
+        to: '/documents/documents',
+        permission: 'totem.document.read',
+      },
+      {
+        label: 'Categories',
+        icon: 'pi pi-tags',
+        to: '/documents/tag-categories',
+        permission: 'totem.documenttagcategory.read',
+      },
+    ],
+  },
+  {
     label: 'Website',
     icon: 'pi pi-globe',
     items: [

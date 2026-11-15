@@ -8,7 +8,14 @@
  */
 
 import { apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
-import { fetchList, type ListQuery, type Page } from '@/api/list'
+import {
+  fetchAllPages,
+  fetchDisplayNames,
+  fetchList,
+  type ListQuery,
+  type Page,
+} from '@/api/list'
+import type { RelationRecord } from '@/components/form/fields/many2one'
 
 import type { CountryRef } from './countries'
 
@@ -168,6 +175,67 @@ export function updateContact(
   payload: ContactUpdatePayload,
 ): Promise<ContactDetail> {
   return patchJson<ContactDetail>(`/contacts/${encodeURIComponent(id)}/`, payload)
+}
+
+// ---------------------------------------------------------------- relation
+
+/**
+ * A contact as another resource nests it -- `ContactDisplayNameSchema`: the
+ * two names and nothing else.
+ *
+ * A `type` and not an `interface`: only type aliases get the implicit index
+ * signature that makes them assignable to `RelationRecord`.
+ */
+export type ContactRef = {
+  id: string
+  first_name?: string | null
+  last_name: string
+}
+
+export const CONTACT_RELATION_FIELDS = [
+  'id',
+  'first_name',
+  'last_name',
+] as const satisfies readonly (keyof ContactRef)[]
+
+/**
+ * The loader of a contact dropdown: `RelationFetch` shaped.
+ *
+ * Exactly the keys a nested contact carries, so the dropdown entries and the
+ * loaded value are labelled by the same rule -- see displayContact. `search`
+ * matches the names or the email, server-side.
+ */
+export function searchContacts(
+  search: string | null,
+  signal?: AbortSignal,
+): Promise<ContactRef[]> {
+  return fetchAllPages<ContactRef>(
+    '/contacts/',
+    CONTACT_RELATION_FIELDS,
+    { filters: { search } },
+    signal,
+  )
+}
+
+/** The labels of a few known contacts: `RelationResolve` shaped, for a filter. */
+export function contactDisplayNames(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<ContactRef[]> {
+  return fetchDisplayNames<ContactRef>('/contacts/', ids, signal)
+}
+
+/**
+ * The label of a contact in a dropdown, a cell or a read-only field.
+ *
+ * The generic `displayRelation` reads `name`, which this model does not have.
+ * Tolerant of a missing key, like every `RelationDisplay`: a record restored
+ * from a URL may hold nothing but its id.
+ */
+export function displayContact(record: RelationRecord): string {
+  const last = typeof record.last_name === 'string' ? record.last_name.trim() : ''
+  const first = typeof record.first_name === 'string' ? record.first_name.trim() : ''
+  return [first, last].filter(Boolean).join(' ') || String(record.id)
 }
 
 // ------------------------------------------------------------- presentation
