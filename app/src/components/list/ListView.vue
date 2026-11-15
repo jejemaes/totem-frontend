@@ -37,6 +37,7 @@ import {
 
 import { ApiError } from '@/api/client'
 import { MAX_PAGE_SIZE, type ListFilters } from '@/api/list'
+import { usePublishedRecordSet } from '@/composables/usePublishedRecordSet'
 import { useResourceList, type ListFetcher } from '@/composables/useResourceList'
 
 import ColumnMenu from './ColumnMenu.vue'
@@ -345,6 +346,12 @@ watch(
 )
 
 const displayed = computed<R[]>(() => (isInitialLoad.value ? skeletonRows : (ordered.value ?? rows.value)))
+
+// What a form opened from here walks with its previous / next buttons: the
+// rows in the order they are SHOWN, a drag included.
+usePublishedRecordSet(props.syncUrl && props.mode === 'display', () =>
+  isInitialLoad.value ? null : (ordered.value ?? rows.value).map((row) => String(row.id)),
+)
 
 const pageSelected = computed<R[]>(() => pageSelection(selected.value, rows.value))
 

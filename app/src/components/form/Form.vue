@@ -96,6 +96,14 @@ const changed = computed<FormData>(() => {
 
 const dirty = computed(() => Object.keys(changed.value).length > 0)
 
+/*
+ * Read-only, for <FormView>'s previous / next buttons: they sit outside this
+ * component, where the slots' `dirty` does not reach, and must ask before
+ * dropping an edit. Exposed rather than emitted: an event would make every
+ * <Form> user mirror a ref it does not need.
+ */
+defineExpose({ dirty })
+
 /** A field's error message: the `required` constraint first, then whatever the
     server answered. */
 function errorFor(name: string): string | undefined {
