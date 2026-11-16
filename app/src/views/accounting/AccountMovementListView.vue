@@ -34,6 +34,7 @@ import {
   type AccountMovementRow,
 } from '@/resources/accountMovements'
 import { amountDirection, formatAmount } from '@/resources/accounts'
+import { displayContact } from '@/resources/contacts'
 
 import { accountMovementFilterFields } from './accountMovementFilters'
 
@@ -156,6 +157,14 @@ defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.reso
     <Field name="name" label="Name" sortable />
 
     <Field name="category" widget="many2one" label="Category" :width="18" />
+
+    <Field
+      name="contact"
+      widget="many2one"
+      label="Contact"
+      :width="18"
+      :options="{ relationDisplay: displayContact }"
+    />
 
     <Field name="amount" label="Amount" sortable align="end" :width="14">
       <template #default="{ row }">

@@ -17,6 +17,7 @@ import { fetchList, type ListQuery, type Page } from '@/api/list'
 
 import type { AccountCategoryRef } from './accountCategories'
 import type { AccountRef, Amount } from './accounts'
+import type { ContactRef } from './contacts'
 
 /** One row of the list. Relations are read as nested objects and written as ids. */
 export type AccountMovementRow = {
@@ -27,6 +28,8 @@ export type AccountMovementRow = {
   date: string
   amount: Amount
   category: AccountCategoryRef | null
+  /** The counterparty -- a supplier, a customer. Nulled if the contact is deleted. */
+  contact: ContactRef | null
 }
 
 /**
@@ -40,6 +43,7 @@ export const ACCOUNT_MOVEMENT_LIST_FIELDS = [
   'date',
   'amount',
   'category',
+  'contact',
 ] as const satisfies readonly (keyof AccountMovementRow)[]
 
 /** Fields the backend accepts in `?ordering=`. A relation is not one of them. */
@@ -57,6 +61,8 @@ export type AccountMovementFilters = {
   account?: string
   /** Category ids, `'null'` for the uncategorized movements: a backend `MultiValue`. */
   category?: string | string[]
+  /** Contact ids, `'null'` for the movements with no counterparty: a `MultiValue` too. */
+  contact?: string | string[]
   /** Inclusive bounds, both calendar days `YYYY-MM-DD`. */
   date_from?: string
   date_to?: string
@@ -78,13 +84,14 @@ export function listAccountMovements(
 
 /**
  * What `POST /accounting/movements/group-by/` groups by, as the service
- * declares them (`AccountMovementService.group_by_dimensions`). `account` and
- * `category` come back nested as the list renders them; a `date_*` is the
+ * declares them (`AccountMovementService.group_by_dimensions`). `account`,
+ * `category` and `contact` come back nested as the list renders them; a `date_*` is the
  * first day of its period, `YYYY-MM-DD`.
  */
 export const ACCOUNT_MOVEMENT_DIMENSIONS = [
   'account',
   'category',
+  'contact',
   'date_day',
   'date_week',
   'date_month',
@@ -154,6 +161,8 @@ export interface AccountMovementCreatePayload {
    * owned by it -- or the backend answers a 422 on `category`.
    */
   category?: string | null
+  /** A contact id, or `null`. Any contact: unlike the category, not tied to the account. */
+  contact?: string | null
 }
 
 export function createAccountMovement(

@@ -16,6 +16,7 @@ import {
   accountCategoryDisplayNames,
   searchApplicableCategories,
 } from '@/resources/accountCategories'
+import { contactDisplayNames, displayContact, searchContacts } from '@/resources/contacts'
 
 /**
  * The filters, keyed by the query parameter the API takes.
@@ -44,6 +45,22 @@ export function accountMovementFilterFields(accountId: string): FilterFields {
         fetch: searchApplicableCategories(accountId),
         resolve: accountCategoryDisplayNames,
         permission: 'totem.accountcategory.read',
+      },
+    },
+    contact: {
+      type: 'many2one',
+      // A MultiValue too, and NOT narrowed by the account: any contact can be
+      // the counterparty of any movement.
+      widget: 'many2many_tags',
+      label: 'Contact',
+      help_text: 'Keep the movements with these counterparties.',
+      allowNull: true,
+      nullLabel: 'No contact',
+      options: {
+        fetch: searchContacts,
+        resolve: contactDisplayNames,
+        relationDisplay: displayContact,
+        permission: 'totem.contact.read',
       },
     },
     direction: {
