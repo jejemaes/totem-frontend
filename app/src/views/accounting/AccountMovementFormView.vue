@@ -7,6 +7,7 @@ import type { FieldValue } from '@/components/form/fields/types'
 import { toIsoDate, toNumberOrNull } from '@/components/form/fields/values'
 import FormView from '@/components/form/FormView.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
+import { displayContact, searchContacts, type ContactRef } from '@/resources/contacts'
 import {
   searchApplicableCategories,
   type AccountCategoryRef,
@@ -67,6 +68,8 @@ const searchCategories = computed(() => searchApplicableCategories(props.account
  * one hook that fires when the route param changes under a reused component.
  */
 const category = ref<AccountCategoryRef | null>(null)
+/** The contact of the loaded record, nested: same reason as `category`. */
+const contact = ref<ContactRef | null>(null)
 
 function createPayload(values: FormData): AccountMovementCreatePayload {
   return {
@@ -79,6 +82,7 @@ function createPayload(values: FormData): AccountMovementCreatePayload {
     description: text(values.description),
     reference: text(values.reference),
     category: text(values.category),
+    contact: text(values.contact),
   }
 }
 
@@ -94,6 +98,7 @@ function updatePayload(changed: FormData): AccountMovementUpdatePayload {
   if ('description' in changed) body.description = text(changed.description)
   if ('reference' in changed) body.reference = text(changed.reference)
   if ('category' in changed) body.category = text(changed.category)
+  if ('contact' in changed) body.contact = text(changed.contact)
   return body
 }
 
@@ -108,6 +113,7 @@ const form = useResourceForm<AccountMovementDetail>({
     date: toIsoDate(new Date()),
     amount: null,
     category: null,
+    contact: null,
     reference: null,
     description: null,
   },
@@ -117,6 +123,7 @@ const form = useResourceForm<AccountMovementDetail>({
     date: movement.date,
     amount: toNumberOrNull(movement.amount),
     category: movement.category?.id ?? null,
+    contact: movement.contact?.id ?? null,
     reference: movement.reference,
     description: movement.description,
   }),
@@ -124,6 +131,7 @@ const form = useResourceForm<AccountMovementDetail>({
   fetchDefaults: fetchAccountMovementDefaults,
   onLoaded: (movement) => {
     category.value = movement?.category ?? null
+    contact.value = movement?.contact ?? null
   },
   create: (values) => createAccountMovement(createPayload(values)),
   update: (id, changed) => updateAccountMovement(id, updatePayload(changed)),
@@ -146,7 +154,7 @@ const title = computed(() => {
   <FormView
     :form="form"
     :title="title"
-    :skeleton="6"
+    :skeleton="7"
     delete-permission="totem.accountmovement.delete"
     delete-header="Delete this movement?"
     :delete-message="`“${title}” will be removed, and the account balance with it.`"
@@ -185,6 +193,19 @@ const title = computed(() => {
         permission: 'totem.accountcategory.read',
       }"
       help="The general categories and this account's own."
+    />
+
+    <Field
+      name="contact"
+      widget="many2one"
+      label="Contact"
+      :options="{
+        fetch: searchContacts,
+        record: contact,
+        relationDisplay: displayContact,
+        permission: 'totem.contact.read',
+      }"
+      help="The counterparty: a supplier, a customer…"
     />
 
     <Field

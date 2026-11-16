@@ -23,6 +23,7 @@ import {
   type AccountMovementFilters,
   type AccountMovementMeasure,
 } from '@/resources/accountMovements'
+import { displayContact } from '@/resources/contacts'
 
 import { accountMovementFilterFields } from './accountMovementFilters'
 
@@ -112,6 +113,15 @@ function fetchGroups(
       widget="many2one"
       label="Category"
       help="The general categories and this account's own."
+      sortable
+    />
+    <Field
+      name="contact"
+      type="dimension"
+      widget="many2one"
+      label="Contact"
+      help="The counterparty: the expenses and revenues per supplier or customer."
+      :options="{ relationDisplay: displayContact }"
       sortable
     />
     <Field
