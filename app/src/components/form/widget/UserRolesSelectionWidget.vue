@@ -11,6 +11,11 @@
  * Consequence for the caller: the value lives in the parent, so the parent also
  * owns what <Form> would have done -- seeding it from the record, telling an
  * edit from an untouched list, and putting it in the payload. See UserFormView.
+ *
+ * The dropdowns are laid out by <FormColumns>, the forms' own grid, so they
+ * line up with the fields around them and collapse on the same rule. That is
+ * layout, not the form context: it injects nothing, and the widget still
+ * stands alone.
  */
 import Button from 'primevue/button'
 import Message from 'primevue/message'
@@ -21,6 +26,7 @@ import { computed, onScopeDispose, ref, shallowRef, useId } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { can } from '@/auth/permissions'
+import FormColumns from '@/components/form/FormColumns.vue'
 import { fetchAllUserRoles } from '@/resources/userRoles'
 
 import {
@@ -49,6 +55,11 @@ const props = defineProps<{
   /** Red ring, for a refusal the backend pinned on the roles. */
   invalid?: boolean
   error?: string
+  /**
+   * How many dropdowns side by side. One by default, the widget as it always
+   * was: a caller opts into columns where its form has the room.
+   */
+  columns?: number
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [ids: string[]] }>()
@@ -143,11 +154,12 @@ onScopeDispose(() => inFlight?.abort())
          way BooleanField's radio group does. -->
     <span v-if="label" :id="labelId" class="roles__label">{{ label }}</span>
 
-    <div v-if="loading" class="roles__groups">
-      <!-- Two placeholders: the real count is unknown until the catalogue
-           lands, and one would understate a multi-category instance. -->
+    <!-- Two placeholders: the real count is unknown until the catalogue
+         lands, and one would understate a multi-category instance. In the
+         same columns as the dropdowns, so nothing jumps when they land. -->
+    <FormColumns v-if="loading" :columns="columns ?? 1">
       <Skeleton v-for="n in 2" :key="n" height="3.2rem" />
-    </div>
+    </FormColumns>
 
     <!-- A failed fetch leaves the value untouched -- it lives in the parent --
          so this degrades to "not editable right now", never to a silent wipe. -->
@@ -169,7 +181,14 @@ onScopeDispose(() => inFlight?.abort())
       No role is defined on this instance.
     </Message>
 
-    <div v-else class="roles__groups" role="group" :aria-labelledby="label ? labelId : undefined">
+    <!-- One cell per category. Not <FieldGroup>s: those stack several fields,
+         and a category is ONE control under its label. -->
+    <FormColumns
+      v-else
+      :columns="columns ?? 1"
+      role="group"
+      :aria-labelledby="label ? labelId : undefined"
+    >
       <div v-for="group in groups" :key="group.key" class="roles__group">
         <!-- A real <label for> here: one group is one focusable dropdown. -->
         <label :for="`${baseId}-${group.key}`" class="roles__group-label">{{ group.label }}</label>
@@ -187,7 +206,7 @@ onScopeDispose(() => inFlight?.abort())
           @update:model-value="(next: unknown) => onSelect(group, next)"
         />
       </div>
-    </div>
+    </FormColumns>
 
     <!-- Hidden while loading, when every id would look unmanaged. -->
     <div v-if="!loading && unmanaged.length" class="roles__unmanaged">
@@ -217,14 +236,10 @@ onScopeDispose(() => inFlight?.abort())
   color: var(--app-muted);
 }
 
-.roles__groups {
-  display: grid;
-  gap: 0.75rem;
-}
-
 .roles__group {
   display: grid;
   gap: 0.25rem;
+  min-width: 0;
 }
 
 .roles__group-label {
