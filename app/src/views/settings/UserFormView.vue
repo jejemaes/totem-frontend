@@ -256,6 +256,7 @@ const title = computed(() => (isNew.value ? 'New user' : (text(data.value?.login
       v-model="roleIds"
       :values="draft"
       label="Roles"
+      :columns="2"
       help="One role per category. Permissions are the union of the roles granted."
       :readonly="saving"
       :invalid="Boolean(fieldErrors.roles)"
