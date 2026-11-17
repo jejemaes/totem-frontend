@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
+import type { RecordAction } from '@/components/actions/actions'
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
@@ -38,7 +39,32 @@ const emit = defineEmits<{
   cancel: []
   /** The heading for whoever frames this form -- a page's <h1>, a Dialog's header. */
   title: [title: string]
+  /** The "Change password" action: whoever frames this form opens the Dialog. */
+  'change-password': [user: UserDetail]
 }>()
+
+/**
+ * The record actions beside the form.
+ *
+ * "Change password" is declared here, with the fields it sits beside, but only
+ * EMITS: the password is another endpoint behind its own Dialog, and a Dialog
+ * opened from inside a view that may itself sit in a Dialog belongs to whoever
+ * frames it. No `reload`: opening a Dialog stores nothing.
+ *
+ * `totem.user.password`, NOT `totem.user.update`: that is the scope the backend
+ * checks, and a role can hold the second without the first -- such a user would
+ * get a button that only ever answers 403. Absent on a create by construction:
+ * there is no record, so no account yet to set a password on.
+ */
+const ACTIONS: RecordAction<UserDetail>[] = [
+  {
+    key: 'change-password',
+    label: 'Change password',
+    icon: 'pi pi-key',
+    permission: 'totem.user.password',
+    run: ([user]) => emit('change-password', user),
+  },
+]
 
 /*
  * The roles live here rather than in the <Form> draft.
@@ -167,6 +193,7 @@ const title = computed(() => (isNew.value ? 'New user' : (text(data.value?.login
     :form="form"
     :title="title"
     :skeleton="6"
+    :actions="ACTIONS"
     @cancel="emit('cancel')"
     @title="emit('title', $event)"
     v-slot="{ draft }"

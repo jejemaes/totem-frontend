@@ -6,15 +6,16 @@
  * Dialog.
  *
  * It also frames the password of the user being edited, in a Dialog: another
- * endpoint under another scope, so not a field of the user form.
+ * endpoint under another scope, so not a field of the user form. The button
+ * that opens it is the form's "Change password" record action, declared by
+ * UserFormView -- with its scope -- and drawn beside the form; it reaches this
+ * page as an event.
  */
-import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Message from 'primevue/message'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { can } from '@/auth/permissions'
 import type { UserDetail } from '@/resources/users'
 import UserFormView from '@/views/settings/UserFormView.vue'
 import UserPasswordView from '@/views/settings/UserPasswordView.vue'
@@ -25,14 +26,6 @@ const router = useRouter()
 const id = computed(() => (route.params.id ? String(route.params.id) : null))
 const listRoute = computed(() => ({ name: 'settings-users', query: route.query }))
 const title = ref('')
-
-/**
- * `totem.user.password`, NOT `totem.user.update`: that is the scope the
- * backend checks, and a role can hold the second without the first -- such a
- * user would get a button that only ever answers 403. No button on a create
- * either: there is no account yet to set a password on.
- */
-const canSetPassword = computed(() => id.value !== null && can('totem.user.password'))
 
 /*
  * The form STAYS open after a save: an edit needs nothing here, and a create
@@ -93,13 +86,6 @@ function onPasswordChanged(): void {
           <template v-else>The account status is not editable here.</template>
         </p>
       </div>
-      <Button
-        v-if="canSetPassword"
-        label="Change password"
-        icon="pi pi-key"
-        outlined
-        @click="openPassword"
-      />
     </header>
 
     <Message v-if="passwordChanged" severity="success" :closable="false" class="page__message">
@@ -111,6 +97,7 @@ function onPasswordChanged(): void {
       @saved="onSaved"
       @cancel="backToList"
       @title="title = $event"
+      @change-password="openPassword"
     />
 
     <Dialog

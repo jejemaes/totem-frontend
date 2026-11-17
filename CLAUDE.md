@@ -35,13 +35,14 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
     api/          client.ts (fetch wrapper), list.ts (pagination contract), groupBy.ts
     auth/         tokenApi.ts, refresh.ts, tokenStorage.ts, authStore.ts (Pinia), permissions.ts
     components/   ColorDot.vue, ColorTag.vue, colors.ts, ViewSwitcher.vue + viewSwitcher.ts
+      actions/    actions.ts (RecordAction: card menus, form buttons, list bulk actions)
       card/       CardView.vue, Field.vue, CardRecord.vue, context.ts, cardView.ts, fields/
       chart/      ChartView.vue, Field.vue, context.ts, prefs.ts, series.ts, fields/
       form/       Form.vue, FormView.vue, context.ts, FieldSwitch, fields/, widget/
       filters/    MultiRecordFilters.vue, filters.ts
       list/       ListView.vue, Field.vue, context.ts, ColumnMenu.vue, DeleteButton.vue, fields/
     composables/  useResourceList.ts, useResourceGroups.ts, useResourceForm.ts, useFilter.ts,
-                  useTheme.ts
+                  useActionRunner.ts, useTheme.ts
     layouts/      AdminLayout.vue, BlankLayout.vue, AppMenu.vue, menu.ts
     plugins/      primevue.ts
     resources/    one module per backend endpoint
@@ -352,7 +353,8 @@ pager: `<FormView mode="page">` calls `composables/useLeaveConfirmation.ts`, whi
 `saved === 'create'`) and the way out after a delete (`form.deleted`, set before `onDeleted`).
 The way to /login never asks: the session is over.
 
-`<FormView>` props worth knowing: `mode="dialog"` drops the card for a form inside a `Dialog`;
+`<FormView>` props worth knowing: `actions` (see *Record actions*: a column beside the card, a
+row above the fields in a Dialog); `mode="dialog"` drops the card for a form inside a `Dialog`;
 `width` (`narrow` 36rem, `medium` 56rem, `wide` 64rem); `skeleton` rows; `create-label` ("Add");
 `delete-permission` + `delete-header` + `delete-message` — Delete is shown only on an edit, when
 the composable got a `remove` AND the scope is held, left-aligned in the actions row, never in
@@ -390,6 +392,35 @@ create sends `values`, an update sends `changed`. It watches `props.data` on ide
 deeply. Slots: `#default({ draft, dirty })` for the fields and `#actions({ invalid, dirty })` for
 the buttons (submit is `:disabled="!isNew && !dirty"`). Fields declare themselves through
 `provide`/`inject`; `Form.vue` cannot discover them any other way, they live in its slot.
+
+### Record actions
+
+`components/actions/actions.ts` declares an action ONCE for every container acting on records:
+a card's "⋮" menu (`menu`), the column of buttons beside a form (`<FormView :actions>`), and --
+not built yet -- a bar over a list's selection. A `RecordAction<R>` has a `key`, `label`, `icon`
+(`pi pi-…`), `severity`, `permission`, `condition(record)`, `confirm` (`{header, message}`),
+`multi`, `reload` and `run(records)`. `visibleActions` decides what shows.
+
+- **`run` always receives an ARRAY** -- `[record]` from a form or a card, the selection from a
+  list -- so one declaration serves all three. **`multi` is OFF by default**: an action is offered
+  on several records only when it says so, and then only if EVERY record passes `condition`.
+- **After a run**: a record resolved by `run` is the stored record after it -- a form re-seeds
+  from it through `form.replace` (no request, no skeleton), a card grid reloads its page.
+  Otherwise nothing is refreshed unless the action sets `reload` (OFF by default: an action that
+  opens a Dialog changed nothing).
+- **On a form, `condition` reads `form.record`**, the STORED record as last loaded or saved,
+  WHOLE -- not the draft, so an unsaved edit neither offers nor hides an action, and a key with
+  no `<Field>` (`state`) is still there: a detail GET sends no `?fields=` and returns every key.
+  Hence no `extra-fields` on a form. The buttons are disabled while the form is dirty (an action
+  acts on what is stored, and its reload would discard the edit) and absent on a create form.
+- `useActionRunner` holds what surrounds a run: the confirm, the busy `running` key, the refusal
+  in `error`, ONE run at a time. Containers read its outcome; a view never calls it itself.
+- A view declares `RecordAction<XxxDetail>[]`, its `run` closing over its own `resources/`
+  module. `<FormView>` takes `ActionEntry<object>[]`: `object`, because a detail declared as an
+  `interface` has no index signature and is not a `Record<string, unknown>`; and `condition` /
+  `run` are declared as METHODS, whose parameters TypeScript checks bivariantly.
+- An action whose work is a Dialog only EMITS, and the page framing the view opens the Dialog:
+  `UserFormView`'s "Change password" (`@change-password` on `UserPage`) is the model.
 
 ### Previous / next on a form opened from a list
 
@@ -552,10 +583,10 @@ reusable specific one goes in `list/widgets/` (none yet, the folder does not exi
   (`data.state`), go in `extra-fields`; in dev the former warns once.
 - **The checkbox and the "⋮" sit over the cover** when the view gives a `#cover`, around the
   title otherwise -- one `CardControls.vue` drawn in either spot.
-- **`menu`** is a `CardMenuItem[]` (`label`, `icon` as a `pi pi-…` class, `command(record)`,
-  `condition(record)`, `separator`): one popup `<Menu>` for every card, built per record by
-  `cardMenuItems`, which also drops orphaned separators. A card whose entries are all hidden has
-  no "⋮".
+- **`menu`** is an `ActionEntry[]` -- record actions, see *Record actions* -- plus
+  `{ separator: true }`: one popup `<Menu>` for every card, built per record by `cardMenuItems`
+  over `visibleActions`, which also drops orphaned separators. A card whose entries are all
+  hidden has no "⋮". The page reloads after a run that answered a record or set `reload`.
 - **`@click`** is a PROP (`onClick`), so CardView knows a listener exists: only then is a card a
   `role="button"`. A click landing on a button, link, input or the menu is left to it
   (`isInteractiveTarget`) -- a footer button needs no `.stop`. In selection mode a card click
@@ -714,6 +745,7 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | `ViewSwitcher.vue`             | `viewSwitcher.ts`       |
 | `RecordPager.vue`              | `recordSet.ts`          |
 | `CardView.vue`                 | `card/cardView.ts`      |
+| every record action            | `actions/actions.ts`, `composables/useActionRunner.ts` |
 | every card field               | `card/fields/cardFields.ts` (+ `list/fields/cells.ts`) |
 
 Follow that split for anything new: if a bug would stay invisible until a user hits it, its logic

@@ -15,7 +15,17 @@
  * with fake callbacks, without mocking `fetch` or mounting a component.
  */
 
-import { computed, onScopeDispose, ref, toValue, watch, type ComputedRef, type Ref } from 'vue'
+import {
+  computed,
+  onScopeDispose,
+  ref,
+  shallowRef,
+  toValue,
+  watch,
+  type ComputedRef,
+  type Ref,
+  type ShallowRef,
+} from 'vue'
 
 import { ApiError, NON_FIELD } from '@/api/client'
 import type { FormData } from '@/components/form/context'
@@ -117,6 +127,17 @@ export interface ResourceForm {
    * placeholder and mount <Form> once, already seeded.
    */
   data: Ref<FormData | null>
+  /**
+   * The record as the backend last returned it -- loaded, or answered by a
+   * save -- WHOLE, where `data` holds only what `toForm` kept. Null on a
+   * create form and while loading.
+   *
+   * What a record action's `condition` reads: `state` decides whether
+   * "Publish" is offered without being a <Field>. No `?fields=` to extend for
+   * that: a detail GET returns every key. And the stored record rather than
+   * the draft, on purpose -- an unsaved edit must not offer an action.
+   */
+  record: ShallowRef<Readonly<Record<string, unknown>> | null>
   loading: Ref<boolean>
   /** The record could not be read at all: there is no form to show. */
   loadError: Ref<string | null>
@@ -158,6 +179,15 @@ export interface ResourceForm {
   save(values: FormData, changed?: FormData): Promise<void>
   /** Load the record again, discarding any edit in progress. */
   reload(): Promise<void>
+  /**
+   * Re-seeds the form from a record obtained elsewhere -- what a record action
+   * answered -- exactly as a save does: a new `data` (the <Form> baseline),
+   * `record`, `onLoaded`. Spares the request and the skeleton of `reload`.
+   * Supersedes a load in flight, which would paint the older record over it.
+   * Typed loosely because `ResourceForm` is: the caller hands back the detail
+   * its own endpoint returns.
+   */
+  replace(record: Readonly<Record<string, unknown>>): void
   /** Deletes the record being edited. A no-op on a create form. */
   remove(): Promise<void>
 }
@@ -193,8 +223,18 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
   let inFlight: AbortController | undefined
 
   /** The record as fetched, kept so a no-op save still has something to hand
-      to `onSaved`. */
+      to `onSaved`. `record` is the same, exposed and loosely typed. */
   let loaded: T | null = null
+  const record = shallowRef<Readonly<Record<string, unknown>> | null>(null)
+
+  /** The one place a stored record becomes the form's: a load, a save, a
+      `replace`. A NEW `data` object each time, which is what resets <Form>. */
+  function seed(fetched: T): void {
+    loaded = fetched
+    record.value = fetched as Readonly<Record<string, unknown>>
+    data.value = options.toForm(fetched)
+    options.onLoaded?.(fetched)
+  }
 
   /**
    * Seeds a create form from the server's defaults, over the static ones.
@@ -249,6 +289,7 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
     fieldErrors.value = {}
     deleteError.value = null
 
+    record.value = null
     if (!id.value || !options.fetchOne) {
       loaded = null
       loadError.value = null
@@ -269,13 +310,11 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
     data.value = null
 
     try {
-      const record = await options.fetchOne(id.value, controller.signal)
+      const fetched = await options.fetchOne(id.value, controller.signal)
       if (ticket !== seq) return
-      loaded = record
-      data.value = options.toForm(record)
       // Inside the ticket guard above, so a superseded response cannot re-seed
       // a widget with the record the user has already navigated away from.
-      options.onLoaded?.(record)
+      seed(fetched)
     } catch (caught) {
       if (ticket !== seq || controller.signal.aborted) return
       loadError.value =
@@ -314,7 +353,7 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
     fieldErrors.value = {}
 
     try {
-      const record = current
+      const stored = current
         ? await options.update(current, changed)
         : await options.create(values)
       if (current) {
@@ -325,17 +364,13 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
         // enabled. `onLoaded` too, so a detached widget re-seeds from what the
         // backend actually stored. Guarded by the id: a move to another record
         // during the request must not get this one painted over it.
-        if (current === id.value) {
-          loaded = record
-          data.value = options.toForm(record)
-          options.onLoaded?.(record)
-        }
+        if (current === id.value) seed(stored)
         saved.value = 'edit'
       } else {
         saved.value = 'create'
         keepSavedOnNextId = true
       }
-      await options.onSaved?.(record, current ? 'edit' : 'create')
+      await options.onSaved?.(stored, current ? 'edit' : 'create')
     } catch (caught) {
       if (caught instanceof ApiError) {
         fieldErrors.value = caught.fields ?? {}
@@ -377,6 +412,15 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
     }
   }
 
+  function replace(replacement: Readonly<Record<string, unknown>>): void {
+    if (!id.value) return
+    ++seq
+    inFlight?.abort()
+    loading.value = false
+    loadError.value = null
+    seed(replacement as T)
+  }
+
   // `immediate`, and keyed on the id rather than onMounted: it works inside a
   // plain effectScope, and it refetches when the route param changes under a
   // reused component.
@@ -396,6 +440,7 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
   return {
     isNew,
     data,
+    record,
     loading,
     loadError,
     saving,
@@ -409,6 +454,7 @@ export function useResourceForm<T>(options: UseResourceFormOptions<T>): Resource
     deleted,
     save,
     reload: load,
+    replace,
     remove,
   }
 }

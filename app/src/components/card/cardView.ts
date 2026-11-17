@@ -1,15 +1,23 @@
 /*
  * The decisions of <CardView>, with no dependency on Vue.
  *
- * Each one is a bug a user would only meet by clicking: a menu entry shown on a
- * record it must not act on, a menu opening on two separators, a footer button
- * that also opens the record behind it, a request missing the key a card
- * draws. Kept here, with a spec, so the .vue only wires them.
+ * Each one is a bug a user would only meet by clicking: a menu entry acting on
+ * another card than the one it opened on, a footer button that also opens the
+ * record behind it, a request missing the key a card draws. Kept here, with a
+ * spec, so the .vue only wires them. Which entries a record shows is
+ * actions/actions.ts's decision, shared with the forms.
  */
 
 import type { MenuItem } from 'primevue/menuitem'
 
-import type { CardMenuItem, CardRecord } from './fields/types'
+import {
+  isSeparator,
+  visibleActions,
+  type ActionEntry,
+  type RecordAction,
+} from '@/components/actions/actions'
+
+import type { CardRecord } from './fields/types'
 
 /**
  * The `?fields=` of a card list: `id` -- what the cards are keyed by and what
@@ -24,37 +32,25 @@ export function requestedCardFields(
 }
 
 /**
- * The menu of ONE card. `condition` is asked of this record, and so is
- * `command` bound to it: the Menu is a single popup shared by every card, so
- * the record must be captured here, when it opens, not looked up when an entry
- * is clicked.
+ * The menu of ONE card: the entries `visibleActions` keeps for this record,
+ * as PrimeVue menu items. Each `command` is bound to the record HERE, when the
+ * menu opens: the Menu is a single popup shared by every card, so the record
+ * could not be looked up when an entry is clicked.
  *
- * Separators left with nothing to separate -- leading, trailing, or doubled
- * once a conditional entry is gone -- are dropped: a menu opening on a rule
- * reads as broken.
+ * `execute` is the card view's runner, so a menu entry gets the same confirm,
+ * busy flag and error banner as a form's button.
  */
 export function cardMenuItems<R extends CardRecord>(
-  items: readonly CardMenuItem<R>[],
+  entries: readonly ActionEntry<R>[],
   record: R,
+  can: (permission: string) => boolean,
+  execute: (action: RecordAction<R>, record: R) => void,
 ): MenuItem[] {
-  const shown = items.filter((item) => !item.condition || item.condition(record))
-
-  const result: MenuItem[] = []
-  for (const item of shown) {
-    if (item.separator) {
-      if (result.length && !result[result.length - 1].separator) result.push({ separator: true })
-      continue
-    }
-    const command = item.command
-    result.push({
-      label: item.label,
-      icon: item.icon,
-      disabled: item.disabled,
-      command: command ? () => command(record) : undefined,
-    })
-  }
-  if (result.length && result[result.length - 1].separator) result.pop()
-  return result
+  return visibleActions(entries, [record], can).map((entry) =>
+    isSeparator(entry)
+      ? { separator: true }
+      : { label: entry.label, icon: entry.icon, command: () => execute(entry, record) },
+  )
 }
 
 export type CardPaginator = 'full' | 'compact' | 'none'

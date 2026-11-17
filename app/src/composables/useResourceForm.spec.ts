@@ -704,3 +704,64 @@ describe('useResourceForm — deleted', () => {
     expect(form.deleted.value).toBe(false)
   })
 })
+
+describe('useResourceForm — the stored record', () => {
+  it('keeps the whole record, where data holds only what toForm kept', async () => {
+    const fetchOne = vi.fn(async () => ({ id: '7', name: 'Totem' }))
+    const { form } = mount({ id: '7', fetchOne })
+    expect(form.record.value).toBeNull()
+    await flush()
+
+    expect(form.record.value).toEqual({ id: '7', name: 'Totem' })
+    expect(form.data.value).toEqual({ name: 'Totem' })
+  })
+
+  it('follows a save, and is null on a create form', async () => {
+    const fetchOne = vi.fn(async () => ({ id: '1', name: 'Totem' }))
+    const { form } = mount({ id: '1', fetchOne })
+    await flush()
+    await form.save({ name: 'x' }, { name: 'x' })
+    expect(form.record.value).toEqual({ id: '1', name: 'updated' })
+
+    const blank = mount()
+    await flush()
+    expect(blank.form.record.value).toBeNull()
+  })
+})
+
+describe('useResourceForm — replace', () => {
+  it('re-seeds like a save: new data, record, onLoaded, no request', async () => {
+    const fetchOne = vi.fn(async () => ({ id: '1', name: 'Totem' }))
+    const onLoaded = vi.fn()
+    const { form } = mount({ id: '1', fetchOne, onLoaded })
+    await flush()
+    const before = form.data.value
+
+    form.replace({ id: '1', name: 'Published' })
+
+    expect(form.data.value).toEqual({ name: 'Published' })
+    expect(form.data.value).not.toBe(before)
+    expect(form.record.value).toEqual({ id: '1', name: 'Published' })
+    expect(onLoaded).toHaveBeenLastCalledWith({ id: '1', name: 'Published' })
+    expect(fetchOne).toHaveBeenCalledTimes(1)
+  })
+
+  it('wins over a load still in flight', async () => {
+    const pending = deferred<Record>()
+    const { form } = mount({ id: '1', fetchOne: () => pending.promise })
+
+    form.replace({ id: '1', name: 'Replaced' })
+    pending.resolve({ id: '1', name: 'Stale' })
+    await flush()
+
+    expect(form.data.value).toEqual({ name: 'Replaced' })
+    expect(form.loading.value).toBe(false)
+  })
+
+  it('does nothing on a create form', async () => {
+    const { form } = mount()
+    await flush()
+    form.replace({ id: '1', name: 'x' })
+    expect(form.data.value).toEqual(DEFAULTS)
+  })
+})

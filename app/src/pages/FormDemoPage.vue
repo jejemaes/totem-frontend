@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Card from 'primevue/card'
+import ConfirmDialog from 'primevue/confirmdialog'
 import { computed, ref } from 'vue'
 
 import type { FormData } from '@/components/form/context'
@@ -16,6 +17,7 @@ import Field from '@/components/form/fields/Field.vue'
 import Form from '@/components/form/Form.vue'
 import CardViewDemo from '@/views/demo/CardViewDemo.vue'
 import ChartViewDemo from '@/views/demo/ChartViewDemo.vue'
+import FormViewDemo from '@/views/demo/FormViewDemo.vue'
 import ListViewDemo from '@/views/demo/ListViewDemo.vue'
 
 /*
@@ -461,6 +463,14 @@ const DEFINITION = `<Form :data="data" @save="onSave">
         </template>
       </Card>
 
+      <!-- The whole row: the actions column sits beside the form's card. -->
+      <Card class="cards__wide">
+        <template #title>Form view and record actions</template>
+        <template #content>
+          <FormViewDemo />
+        </template>
+      </Card>
+
       <!-- The whole row: a table is wider than a form. -->
       <Card class="cards__wide">
         <template #title>List view</template>
@@ -490,6 +500,10 @@ const DEFINITION = `<Form :data="data" @save="onSave">
         </template>
       </Card>
     </div>
+
+    <!-- The confirmations of the record actions. AdminLayout mounts the app's
+         one; this page lives in BlankLayout, which has none. -->
+    <ConfirmDialog />
   </section>
 </template>
 

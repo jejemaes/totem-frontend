@@ -12,7 +12,10 @@
  * Retry, the empty block, the pager, and three optional behaviours:
  *
  * - `menu`: a "⋮" in the top-right corner of each card, one popup <Menu>
- *   shared by them all, built per record (cardView.ts);
+ *   shared by them all, built per record from record actions
+ *   (actions/actions.ts) and run through `useActionRunner`, the page being
+ *   reloaded after an action that stored something (`reload`, or a record
+ *   answered);
  * - `@click`: the whole card opens the record -- but not a click on one of
  *   its buttons, links or checkbox (`isInteractiveTarget`);
  * - `mode="selection"`: a checkbox per card, kept across pages by
@@ -41,6 +44,8 @@ import Paginator from 'primevue/paginator'
 import { computed, onMounted, onScopeDispose, provide, ref, shallowRef, watch } from 'vue'
 
 import type { ListFilters } from '@/api/list'
+import { can } from '@/auth/permissions'
+import type { ActionEntry, RecordAction } from '@/components/actions/actions'
 import { createDelayedFlag } from '@/components/list/delayedFlag'
 import type { ListRow } from '@/components/list/fields/types'
 import {
@@ -52,6 +57,7 @@ import {
   selectionFromIds,
   type Selection,
 } from '@/components/list/selection'
+import { useActionRunner } from '@/composables/useActionRunner'
 import { usePublishedRecordSet } from '@/composables/usePublishedRecordSet'
 import { useResourceList, type ListFetcher } from '@/composables/useResourceList'
 
@@ -66,7 +72,6 @@ import {
   type CardPaginator,
 } from './cardView'
 import { CARD_CONTEXT } from './context'
-import type { CardMenuItem } from './fields/types'
 
 const props = withDefaults(
   defineProps<{
@@ -89,7 +94,7 @@ const props = withDefaults(
     /** The selected ids, selection mode only. */
     selection?: readonly (string | number)[]
     /** The "⋮" menu of each card. Absent or empty: no button at all. */
-    menu?: readonly CardMenuItem<R>[]
+    menu?: readonly ActionEntry<R>[]
     /**
      * Keys asked for whatever the <Field>s: what the slots read themselves (a
      * `v-if="data.state === 'done'"`), and the keys of a <Field> behind such a
@@ -265,6 +270,15 @@ function onKeydown(record: R, event: KeyboardEvent): void {
   activate(record, event)
 }
 
+const runner = useActionRunner()
+const actionError = runner.error
+
+/** A card has no form to re-seed: an answered record means a reload too. */
+async function runAction(action: RecordAction<R>, record: R): Promise<void> {
+  const outcome = await runner.execute(action, [record])
+  if (outcome.status === 'done' && (action.reload || outcome.result)) void list.reload()
+}
+
 const menuRef = ref<InstanceType<typeof Menu> | null>(null)
 const menuItems = shallowRef<MenuItem[]>([])
 
@@ -273,7 +287,7 @@ const menuItems = shallowRef<MenuItem[]>([])
 const menus = computed(() => {
   const byId = new Map<string, MenuItem[]>()
   if (!props.menu.length || isInitialLoad.value) return byId
-  for (const record of rows.value) byId.set(rowKey(record), cardMenuItems(props.menu, record))
+  for (const record of rows.value) byId.set(rowKey(record), cardMenuItems(props.menu, record, can, runAction))
   return byId
 })
 
@@ -294,6 +308,11 @@ defineExpose({ reload: list.reload, reset: list.reset })
         <span>{{ error }}</span>
         <Button label="Retry" size="small" severity="danger" outlined @click="list.reload" />
       </div>
+    </Message>
+
+    <!-- A refused menu action: closable, the cards behind it are still valid. -->
+    <Message v-if="actionError" severity="error" closable @close="actionError = null">
+      {{ actionError }}
     </Message>
 
     <div v-if="displayed.length" class="card-view__grid" :class="{ 'card-view__grid--masked': masked }"

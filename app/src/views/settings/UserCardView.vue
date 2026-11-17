@@ -6,16 +6,16 @@
  * Router-free like every view: a click on a card emits `open`, and the page
  * decides it is a route push. The password Dialog lives HERE rather than in
  * the page: it is an action on one card, not a navigation, and a page hosting
- * this view in a Dialog would otherwise have to re-wire it.
+ * this view in a Dialog would otherwise have to re-wire it. It opens from the
+ * card's "⋮" menu, a record action like the form's own "Change password".
  */
 import Avatar from 'primevue/avatar'
-import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Message from 'primevue/message'
 import Tag from 'primevue/tag'
-import { computed, ref, useTemplateRef } from 'vue'
+import { ref, useTemplateRef } from 'vue'
 
-import { can } from '@/auth/permissions'
+import type { ActionEntry } from '@/components/actions/actions'
 import CardView from '@/components/card/CardView.vue'
 import Field from '@/components/card/Field.vue'
 import type { CardRecord } from '@/components/card/fields/types'
@@ -49,13 +49,6 @@ const emit = defineEmits<{
   /** Every settled response, so the caller can show the count in its header. */
   loaded: [total: number]
 }>()
-
-/**
- * `totem.user.password`, NOT `totem.user.update`: that is the scope the
- * backend checks, and a role can hold the second without the first. A
- * computed: `can()` instantiates the store, and the footer is drawn per card.
- */
-const canSetPassword = computed(() => can('totem.user.password'))
 
 const { filters, setFilters, updateFilters, activeFilters } = useFilter<UserFilters>(
   USER_FILTER_FIELDS,
@@ -91,6 +84,22 @@ function onPasswordChanged(): void {
   passwordChanged.value = passwordUser.value ? lastFirstName(passwordUser.value) : null
 }
 
+/**
+ * The "⋮" menu of each card. `totem.user.password`, NOT `totem.user.update`:
+ * that is the scope the backend checks, and a role can hold the second without
+ * the first -- such a user would get an entry that only ever answers 403. No
+ * `reload`: opening a Dialog stores nothing.
+ */
+const MENU: ActionEntry<UserRow>[] = [
+  {
+    key: 'change-password',
+    label: 'Change password',
+    icon: 'pi pi-key',
+    permission: 'totem.user.password',
+    run: ([target]) => openPassword(target),
+  },
+]
+
 const cards = useTemplateRef<{ reload(): Promise<void> }>('cards')
 
 defineExpose({ reload: (): Promise<void> => cards.value?.reload() ?? Promise.resolve() })
@@ -115,6 +124,7 @@ defineExpose({ reload: (): Promise<void> => cards.value?.reload() ?? Promise.res
       :sortable="USER_SORTABLE"
       :page-size="pageSize"
       :sync-url="syncUrl"
+      :menu="MENU"
       empty-text="No user."
       @click="emit('open', String($event.id))"
       @loaded="emit('loaded', $event)"
@@ -181,16 +191,6 @@ defineExpose({ reload: (): Promise<void> => cards.value?.reload() ?? Promise.res
             <Tag :severity="value ? 'success' : 'danger'" :value="value ? 'Active' : 'Inactive'" />
           </template>
         </Field>
-      </template>
-
-      <template v-if="canSetPassword" #footer="{ data }">
-        <Button
-          label="Change password"
-          icon="pi pi-key"
-          size="small"
-          outlined
-          @click="openPassword(user(data))"
-        />
       </template>
     </CardView>
 
