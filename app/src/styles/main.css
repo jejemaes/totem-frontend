@@ -60,6 +60,21 @@ a {
   text-decoration: none;
 }
 
+/* -------------------------------------------------------------- controls -- */
+
+/*
+ * The 1.6 above is for prose, and it leaked into the dropdowns: a Select or a
+ * MultiSelect draws its value in a <span>, which inherits it (43.6px high),
+ * where an <input> keeps the browser's `normal` (37px). A many2one stood taller
+ * than the text field next to it. PrimeVue sets no line-height on either, Aura
+ * assumes a page at `normal`, so the dropdowns are brought back to it rather
+ * than every input raised to 1.6. Global: it is every dropdown of the app.
+ */
+.p-select-label,
+.p-multiselect-label {
+  line-height: normal;
+}
+
 /* ---------------------------------------------------------------- layout -- */
 
 .topbar {
