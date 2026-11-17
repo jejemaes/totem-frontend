@@ -3,8 +3,10 @@ import { computed, ref } from 'vue'
 
 import type { RecordAction } from '@/components/actions/actions'
 import type { FormData } from '@/components/form/context'
+import FieldGroup from '@/components/form/FieldGroup.vue'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
+import FormColumns from '@/components/form/FormColumns.vue'
 import FormView from '@/components/form/FormView.vue'
 import UserRolesSelectionWidget from '@/components/form/widget/UserRolesSelectionWidget.vue'
 import { sameRoleIds } from '@/components/form/widget/userRolesSelection'
@@ -215,23 +217,34 @@ const title = computed(() => (isNew.value ? 'New user' : (text(data.value?.login
       :options="{ maxLength: 255, placeholder: 'jane.doe@example.com' }"
     />
 
-    <Field name="first_name" widget="string" label="First name" :options="{ maxLength: 255 }" />
+    <!-- The name reads down, one half; the language beside it, the other. -->
+    <FormColumns>
+      <FieldGroup>
+        <Field
+          name="first_name"
+          widget="string"
+          label="First name"
+          :options="{ maxLength: 255 }"
+        />
+        <Field name="last_name" widget="string" label="Last name" :options="{ maxLength: 255 }" />
+      </FieldGroup>
 
-    <Field name="last_name" widget="string" label="Last name" :options="{ maxLength: 255 }" />
-
-    <Field
-      name="language"
-      widget="selection"
-      label="Language"
-      required
-      :options="{
-        choices: [
-          { value: 'fr', label: 'French' },
-          { value: 'en-us', label: 'English' },
-        ],
-      }"
-      help="Interface language for this account."
-    />
+      <FieldGroup>
+        <Field
+          name="language"
+          widget="selection"
+          label="Language"
+          required
+          :options="{
+            choices: [
+              { value: 'fr', label: 'French' },
+              { value: 'en-us', label: 'English' },
+            ],
+          }"
+          help="Interface language for this account."
+        />
+      </FieldGroup>
+    </FormColumns>
 
     <!-- Not a <Field>: its value is a list of role ids, which the
          <Field> system cannot carry. It is passed `draft` for the same

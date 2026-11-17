@@ -9,6 +9,7 @@ import { computed, ref, watch } from 'vue'
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
+import FormColumns from '@/components/form/FormColumns.vue'
 import FormView from '@/components/form/FormView.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import { displayAccount, searchAccounts, type AccountRef } from '@/resources/accounts'
@@ -196,11 +197,8 @@ const title = computed(() =>
       :options="{ maxLength: 255, placeholder: 'Household 2026' }"
     />
 
-    <!-- Two columns of the view's own: a layout concern of this screen,
-         not something <Form> should grow. <Field> registers through
-         inject, so any wrapper is transparent to it. Read row by row:
-         account | active, then user. -->
-    <div class="budget-form__columns">
+    <!-- Read row by row: account | active, then user. -->
+    <FormColumns>
       <Field
         name="account"
         widget="many2one"
@@ -230,7 +228,7 @@ const title = computed(() =>
         }"
         help="The user in charge of the budget."
       />
-    </div>
+    </FormColumns>
 
     <Tabs v-model:value="tab" class="budget-form__tabs">
       <TabList>
@@ -259,10 +257,10 @@ const title = computed(() =>
 
         <!-- Shown, never sent: neither schema accepts the dates. -->
         <TabPanel v-if="!isNew" value="infos">
-          <div class="budget-form__columns">
+          <FormColumns>
             <Field name="create_date" widget="datetime" label="Created on" readonly />
             <Field name="update_date" widget="datetime" label="Last updated" readonly />
-          </div>
+          </FormColumns>
         </TabPanel>
       </TabPanels>
     </Tabs>
@@ -270,19 +268,6 @@ const title = computed(() =>
 </template>
 
 <style scoped>
-.budget-form__columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem 2rem;
-}
-
-/* One column on a narrow screen: half of a phone is too small for a dropdown. */
-@media (max-width: 40rem) {
-  .budget-form__columns {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* The panel's own padding sits flush with the fields above. */
 .budget-form__tabs :deep(.p-tabpanels) {
   padding: 1rem 0 0;

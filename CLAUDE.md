@@ -38,7 +38,8 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
       actions/    actions.ts (RecordAction: card menus, form buttons, list bulk actions)
       card/       CardView.vue, Field.vue, CardRecord.vue, context.ts, cardView.ts, fields/
       chart/      ChartView.vue, Field.vue, context.ts, prefs.ts, series.ts, fields/
-      form/       Form.vue, FormView.vue, context.ts, FieldSwitch, fields/, widget/
+      form/       Form.vue, FormView.vue, context.ts, FieldSwitch, FormColumns, FieldGroup,
+                  fields/, widget/
       filters/    MultiRecordFilters.vue, filters.ts
       list/       ListView.vue, Field.vue, context.ts, ColumnMenu.vue, DeleteButton.vue, fields/
     composables/  useResourceList.ts, useResourceGroups.ts, useResourceForm.ts, useFilter.ts,
@@ -491,6 +492,16 @@ static import would put a rich-text editor in the login page's entry chunk. It i
 `FieldSwitch` is adjacent but **not** a widget: it picks between mutually exclusive fields (`page`
 vs `link` on a website menu) when the backend stores no discriminator. It is purely visual, its
 value is not data, and it registers no key.
+
+**Field layout** is two components of the same kind, purely visual, registering nothing --
+`<Field>` reaches `<Form>` through inject, across any wrapper. `<FormColumns :columns="2">` lays
+its DIRECT children in equal columns, filled row by row; `<FieldGroup title="…">` stacks its
+fields as ONE such cell. Bare `<Field>`s in `<FormColumns>` read across (`BudgetFormView`:
+account | active, then user); a `<FieldGroup>` per column reads down (`UserFormView`: first name
+over last name, beside the language). The columns collapse on the width of the FORM -- a
+container query, 36rem -- not of the viewport: the same form sits in an 80 % card or a 32rem
+Dialog. Never a per-view `1fr 1fr` grid again; never a layout key on `<Field>`, which would
+teach `<Form>` about layout.
 
 ## The generic list framework
 

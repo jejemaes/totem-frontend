@@ -9,7 +9,8 @@
  * `state` (never a <Field> here, which is the point), disabled while the form
  * is dirty, busy while one runs, a confirmation, a refusal in the banner, a
  * re-seed from an answered record or a reload, and "Preview" which does
- * neither.
+ * neither. The fields are laid out by <FormColumns> and two titled
+ * <FieldGroup>s, which collapse into one column when the form gets narrow.
  */
 import ToggleSwitch from 'primevue/toggleswitch'
 import { computed, ref } from 'vue'
@@ -17,13 +18,16 @@ import { computed, ref } from 'vue'
 import { ApiError, NON_FIELD } from '@/api/client'
 import type { RecordAction } from '@/components/actions/actions'
 import type { FormData } from '@/components/form/context'
+import FieldGroup from '@/components/form/FieldGroup.vue'
 import Field from '@/components/form/fields/Field.vue'
+import FormColumns from '@/components/form/FormColumns.vue'
 import FormView from '@/components/form/FormView.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 
 type DemoPage = {
   id: string
   name: string
+  slug: string
   summary: string | null
   state: 'draft' | 'published' | 'archived'
 }
@@ -31,6 +35,7 @@ type DemoPage = {
 const STORED = ref<DemoPage>({
   id: 'page-1',
   name: 'About us',
+  slug: 'about-us',
   summary: 'Who we are.',
   state: 'draft',
 })
@@ -111,8 +116,8 @@ const ACTIONS: RecordAction<DemoPage>[] = [
 
 const form = useResourceForm<DemoPage>({
   id: 'page-1',
-  defaults: { name: null, summary: null },
-  toForm: (page) => ({ name: page.name, summary: page.summary }),
+  defaults: { name: null, slug: null, summary: null },
+  toForm: (page) => ({ name: page.name, slug: page.slug, summary: page.summary }),
   fetchOne: () => later(() => ({ ...STORED.value })),
   create: () => Promise.reject(new Error('unreachable')),
   update: (_id, changed: FormData) =>
@@ -134,8 +139,15 @@ const state = computed(() => form.record.value?.state ?? '…')
 
     <FormView :form="form" title="About us" :skeleton="2" :actions="ACTIONS"
               :cancellable="false">
-      <Field name="name" widget="string" label="Name" required />
-      <Field name="summary" widget="text" label="Summary" :options="{ rows: 2 }" />
+      <FormColumns>
+        <FieldGroup title="Page">
+          <Field name="name" widget="string" label="Name" required />
+          <Field name="slug" widget="string" label="Slug" required />
+        </FieldGroup>
+        <FieldGroup title="Content">
+          <Field name="summary" widget="text" label="Summary" :options="{ rows: 4 }" />
+        </FieldGroup>
+      </FormColumns>
     </FormView>
 
     <p class="form-view-demo__status">
