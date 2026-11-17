@@ -355,7 +355,10 @@ The way to /login never asks: the session is over.
 
 `<FormView>` props worth knowing: `actions` (see *Record actions*: a column beside the card, a
 row above the fields in a Dialog); `mode="dialog"` drops the card for a form inside a `Dialog`;
-`width` (`narrow` 36rem, `medium` 56rem, `wide` 64rem); `skeleton` rows; `create-label` ("Add");
+`skeleton` rows; `create-label` ("Add"). There is no width prop: `.page` has no max-width, and
+a page form is an 80 / 20 grid -- the card, then its actions column, reserved even when empty so
+the card never jumps -- stacked into one column under a 75rem viewport.
+Other props:
 `delete-permission` + `delete-header` + `delete-message` — Delete is shown only on an edit, when
 the composable got a `remove` AND the scope is held, left-aligned in the actions row, never in
 the page header; `readonly`; `:cancellable="false"` for a screen with nowhere to go back to;

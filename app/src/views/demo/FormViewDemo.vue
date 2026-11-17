@@ -132,7 +132,7 @@ const state = computed(() => form.record.value?.state ?? '…')
       Fail the next request
     </label>
 
-    <FormView :form="form" title="About us" width="narrow" :skeleton="2" :actions="ACTIONS"
+    <FormView :form="form" title="About us" :skeleton="2" :actions="ACTIONS"
               :cancellable="false">
       <Field name="name" widget="string" label="Name" required />
       <Field name="summary" widget="text" label="Summary" :options="{ rows: 2 }" />

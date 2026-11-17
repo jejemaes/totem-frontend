@@ -228,7 +228,6 @@ const title = computed(() => {
   <FormView
     :form="form"
     :title="title"
-    width="wide"
     :skeleton="6"
     delete-permission="totem.websitepage.delete"
     delete-header="Delete this page?"

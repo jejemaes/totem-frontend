@@ -61,8 +61,6 @@ const props = withDefaults(
      * already -- and its way out is "Close", not "Back".
      */
     mode?: 'page' | 'dialog'
-    /** The card's max-width. A full-width form is unreadable: fields are short. */
-    width?: 'narrow' | 'medium' | 'wide'
     /** Skeleton rows while the record loads: the form's real shape, so the
         card does not jump when it lands. */
     skeleton?: number
@@ -92,7 +90,6 @@ const props = withDefaults(
   }>(),
   {
     mode: 'page',
-    width: 'narrow',
     skeleton: 4,
     createLabel: 'Create',
     deletePermission: undefined,
@@ -327,10 +324,7 @@ function askDelete(): void {
   <slot name="messages" />
 
   <div v-if="!loadError" class="form-view__body" :class="`form-view__body--${mode}`">
-    <component
-      :is="mode === 'page' ? Card : BareFrame"
-      :class="mode === 'page' ? `form-view--${width}` : undefined"
-    >
+    <component :is="mode === 'page' ? Card : BareFrame">
       <template #content>
         <div v-if="loading" class="form-view__skeleton">
           <Skeleton v-for="n in skeleton" :key="n" height="3.2rem" />
@@ -411,32 +405,23 @@ function askDelete(): void {
 </template>
 
 <style scoped>
-.form-view--narrow {
-  max-width: 36rem;
-}
-
-/* Two columns of fields, or a rich-text editor below them. */
-.form-view--medium {
-  max-width: 56rem;
-}
-
-/* A rich-text editor whose toolbar needs the room and whose tables are
-   unusable in a narrow column. */
-.form-view--wide {
-  max-width: 64rem;
-}
-
-/* The card and its actions column side by side; the column wraps under the
-   card when the screen cannot hold both. */
+/*
+ * A page form spans the page: 80 % for the card, 20 % for its actions. The
+ * column is reserved even when it holds no button -- on a screen declaring no
+ * action, or on a record whose conditions hide them all -- so every form has
+ * the same width, and walking the pager never makes the card jump when an
+ * action appears. A per-screen width (`narrow`, `medium`, `wide`) used to cap
+ * the card instead; with the column next to it, one rule fits every screen.
+ */
 .form-view__body--page {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 1fr);
+  align-items: start;
   gap: 1rem;
 }
 
 .form-view__body--page > .p-card {
-  flex: 1 1 24rem;
+  grid-column: 1;
   min-width: 0;
 }
 
@@ -452,15 +437,27 @@ function askDelete(): void {
   gap: 0.5rem;
 }
 
-.form-view__body--page > .form-view__actions {
-  flex: 0 0 13rem;
-}
-
 /* A Dialog has no room for a column: a row above the fields. */
 .form-view__body--dialog > .form-view__actions {
   order: -1;
   flex-direction: row;
   flex-wrap: wrap;
+}
+
+/* Too narrow for 20 % to hold a label: one column, the actions as a row under
+   the card -- after it, as in the DOM, so Save stays next to the fields.
+   75rem of VIEWPORT, the sidebar's 16rem included: below it the column falls
+   under ~11rem, where "Change password" and its icon wrap. A container query
+   would need an extra wrapper for the grid to query. */
+@media (max-width: 75rem) {
+  .form-view__body--page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .form-view__body--page > .form-view__actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }
 
 .form-view__actions-hint {
