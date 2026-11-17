@@ -11,6 +11,7 @@ import { formatFileSize } from '@/components/fileSize'
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
+import FormColumns from '@/components/form/FormColumns.vue'
 import FormView from '@/components/form/FormView.vue'
 import FileInputWidget from '@/components/form/widget/FileInputWidget.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
@@ -316,7 +317,7 @@ const title = computed(() => {
         </TabPanel>
 
         <TabPanel value="info">
-          <div class="document-form__columns">
+          <FormColumns>
             <Field
               name="contact"
               widget="many2one"
@@ -345,7 +346,7 @@ const title = computed(() => {
               <Field name="create_date" widget="datetime" label="Created" readonly />
               <Field name="update_date" widget="datetime" label="Last updated" readonly />
             </template>
-          </div>
+          </FormColumns>
         </TabPanel>
       </TabPanels>
     </Tabs>
@@ -399,21 +400,10 @@ const title = computed(() => {
   color: var(--app-muted);
 }
 
-.document-form__columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem 2rem;
-}
-
-/* One column on a narrow screen: half of a phone is too small for a dropdown,
-   and the preview goes above the fields. */
+/* On a narrow screen the preview goes above the fields. */
 @media (max-width: 40rem) {
   .document-form__top {
     flex-direction: column;
-  }
-
-  .document-form__columns {
-    grid-template-columns: 1fr;
   }
 }
 
