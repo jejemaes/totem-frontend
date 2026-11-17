@@ -3,9 +3,11 @@ import { computed, onScopeDispose, ref, shallowRef } from 'vue'
 
 import { can } from '@/auth/permissions'
 import type { FormData } from '@/components/form/context'
+import FieldGroup from '@/components/form/FieldGroup.vue'
 import Field from '@/components/form/fields/Field.vue'
 import { htmlOrNull } from '@/components/form/fields/html'
 import type { FieldValue } from '@/components/form/fields/types'
+import FormColumns from '@/components/form/FormColumns.vue'
 import FormView from '@/components/form/FormView.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import { displayUser, searchUsers, type UserRef } from '@/resources/users'
@@ -228,48 +230,33 @@ const title = computed(() => {
   <FormView
     :form="form"
     :title="title"
-    :skeleton="6"
+    :skeleton="4"
     delete-permission="totem.websitepage.delete"
     delete-header="Delete this page?"
     :delete-message="`“${title}” will be removed from the website.`"
     @cancel="emit('cancel')"
     @title="emit('title', $event)"
   >
-    <Field
-      name="title"
-      widget="string"
-      label="Title"
-      required
-      :options="{ maxLength: 256, placeholder: 'About us' }"
-    />
+    <FormColumns>
+      <Field
+        name="title"
+        widget="string"
+        label="Title"
+        required
+        :options="{ maxLength: 256, placeholder: 'About us' }"
+      />
 
-    <!-- Required by the create schema and unique across the instance: a
-         clash comes back as a field error here. -->
-    <Field
-      name="slug"
-      widget="string"
-      label="Slug"
-      required
-      :options="{ maxLength: 256, placeholder: 'about-us' }"
-      help="URL part: letters, digits, hyphens and underscores."
-    />
-
-    <!-- A relation: the draft holds the id, `record` is the nested
-         author the GET already returned, so read-only mode costs no
-         request. -->
-    <Field
-      name="user"
-      widget="many2one"
-      label="Author"
-      :options="{
-        fetch: searchUsers,
-        record: user,
-        relationDisplay: displayUser,
-        permission: 'totem.user.read',
-      }"
-    />
-
-    <Field name="is_published" widget="boolean" label="Published" required />
+      <!-- Required by the create schema and unique across the instance: a
+           clash comes back as a field error here. -->
+      <Field
+        name="slug"
+        widget="string"
+        label="Slug"
+        required
+        :options="{ maxLength: 256, placeholder: 'about-us' }"
+        help="URL part: letters, digits, hyphens and underscores."
+      />
+    </FormColumns>
 
     <!-- A rich text editor, not a textarea.
 
@@ -304,37 +291,60 @@ const title = computed(() => {
             backend validates the tags and attributes it accepts."
     />
 
-    <!-- Owned by the backend: it stamps this whenever the publication
-         state changes, and the write schemas do not accept it. -->
-    <Field
-      name="date_published"
-      widget="datetime"
-      label="Publication date"
-      readonly
-      help="Set by the backend when the publication state changes."
-    />
+    <FormColumns>
+      <FieldGroup>
+        <!-- A relation: the draft holds the id, `record` is the nested
+             author the GET already returned, so read-only mode costs no
+             request. -->
+        <Field
+          name="user"
+          widget="many2one"
+          label="Author"
+          :options="{
+            fetch: searchUsers,
+            record: user,
+            relationDisplay: displayUser,
+            permission: 'totem.user.read',
+          }"
+        />
 
-    <!-- A relation over a vocabulary rather than over a table: the
-         value is a layout id, which is all this needs to be an ordinary
-         many2one. `filter: false` because the route takes no search
-         parameter and the whole vocabulary is a handful of entries, so
-         a filter box would refetch the same list on every keystroke.
-         `required`: the column is NOT NULL, so there is no empty state
-         to offer -- and that also removes the clear button. -->
-    <Field
-      v-if="canReadLayouts"
-      name="layout"
-      widget="many2one"
-      label="Layout"
-      required
-      :options="{
-        fetch: searchWebsiteLayouts,
-        record: layout,
-        relationDisplay: displayLayout,
-        filter: false,
-      }"
-      help="Structure of the page body. A theme that does not implement it falls back
-            when the page renders, so switching theme cannot invalidate a page."
-    />
+        <!-- A relation over a vocabulary rather than over a table: the
+             value is a layout id, which is all this needs to be an ordinary
+             many2one. `filter: false` because the route takes no search
+             parameter and the whole vocabulary is a handful of entries, so
+             a filter box would refetch the same list on every keystroke.
+             `required`: the column is NOT NULL, so there is no empty state
+             to offer -- and that also removes the clear button. -->
+        <Field
+          v-if="canReadLayouts"
+          name="layout"
+          widget="many2one"
+          label="Layout"
+          required
+          :options="{
+            fetch: searchWebsiteLayouts,
+            record: layout,
+            relationDisplay: displayLayout,
+            filter: false,
+          }"
+          help="Structure of the page body. A theme that does not implement it falls back
+                when the page renders, so switching theme cannot invalidate a page."
+        />
+      </FieldGroup>
+
+      <FieldGroup>
+        <Field name="is_published" widget="boolean" label="Published" required />
+
+        <!-- Owned by the backend: it stamps this whenever the publication
+             state changes, and the write schemas do not accept it. -->
+        <Field
+          name="date_published"
+          widget="datetime"
+          label="Publication date"
+          readonly
+          help="Set by the backend when the publication state changes."
+        />
+      </FieldGroup>
+    </FormColumns>
   </FormView>
 </template>

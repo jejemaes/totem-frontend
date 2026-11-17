@@ -5,6 +5,7 @@ import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
 import { toNumberOrNull } from '@/components/form/fields/values'
+import FormColumns from '@/components/form/FormColumns.vue'
 import FormView from '@/components/form/FormView.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import {
@@ -124,30 +125,32 @@ const title = computed(() => {
   <FormView
     :form="form"
     :title="title"
-    :skeleton="4"
+    :skeleton="3"
     delete-permission="totem.account.delete"
     delete-header="Delete this account?"
     :delete-message="`“${title}” and its own categories will be removed.`"
     @cancel="emit('cancel')"
     @title="emit('title', $event)"
   >
-    <Field
-      name="code"
-      widget="string"
-      label="Code"
-      required
-      :options="{ maxLength: 50, placeholder: 'BANK-MAIN' }"
-      help="Upper case letters, digits, '_' and '-' only."
-    />
+    <FormColumns>
+      <Field
+        name="code"
+        widget="string"
+        label="Code"
+        required
+        :options="{ maxLength: 50, placeholder: 'BANK-MAIN' }"
+        help="Upper case letters, digits, '_' and '-' only."
+      />
 
-    <!-- Unique: a duplicate comes back as a field error, shown in place. -->
-    <Field
-      name="name"
-      widget="string"
-      label="Name"
-      required
-      :options="{ maxLength: 255, placeholder: 'Main bank account' }"
-    />
+      <!-- Unique: a duplicate comes back as a field error, shown in place. -->
+      <Field
+        name="name"
+        widget="string"
+        label="Name"
+        required
+        :options="{ maxLength: 255, placeholder: 'Main bank account' }"
+      />
+    </FormColumns>
 
     <Field name="description" widget="text" label="Description" />
 

@@ -2,8 +2,10 @@
 import { computed, ref } from 'vue'
 
 import type { FormData } from '@/components/form/context'
+import FieldGroup from '@/components/form/FieldGroup.vue'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
+import FormColumns from '@/components/form/FormColumns.vue'
 import FormView from '@/components/form/FormView.vue'
 import { useResourceForm } from '@/composables/useResourceForm'
 import { searchContactTags } from '@/resources/contactTags'
@@ -198,82 +200,97 @@ const title = computed(() => {
   <FormView
     :form="form"
     :title="title"
-    :skeleton="11"
+    :skeleton="7"
     @cancel="emit('cancel')"
     @title="emit('title', $event)"
   >
-    <!-- The last name is the only field the model requires. -->
-    <Field
-      name="last_name"
-      widget="string"
-      label="Last name"
-      required
-      :options="{ maxLength: 255, placeholder: 'Doe' }"
-    />
+    <!-- Who, beside how to reach them. -->
+    <FormColumns>
+      <FieldGroup>
+        <!-- The last name is the only field the model requires. -->
+        <Field
+          name="last_name"
+          widget="string"
+          label="Last name"
+          required
+          :options="{ maxLength: 255, placeholder: 'Doe' }"
+        />
 
-    <Field
-      name="first_name"
-      widget="string"
-      label="First name"
-      :options="{ maxLength: 255, placeholder: 'Jane' }"
-    />
+        <Field
+          name="first_name"
+          widget="string"
+          label="First name"
+          :options="{ maxLength: 255, placeholder: 'Jane' }"
+        />
+      </FieldGroup>
 
-    <Field
-      name="email"
-      widget="string"
-      label="Email"
-      :options="{ maxLength: 255, placeholder: 'jane.doe@example.com' }"
-    />
+      <FieldGroup>
+        <Field
+          name="email"
+          widget="string"
+          label="Email"
+          :options="{ maxLength: 255, placeholder: 'jane.doe@example.com' }"
+        />
 
-    <Field name="mobile" widget="string" label="Mobile" :options="{ maxLength: 32 }" />
+        <Field name="mobile" widget="string" label="Mobile" :options="{ maxLength: 32 }" />
+      </FieldGroup>
+    </FormColumns>
 
-    <!-- Stored as a calendar day: no time, no timezone. -->
-    <Field name="birth_date" widget="date" label="Birth date" />
+    <!-- One titled group, its fields read row by row: number | street,
+         zip | city, then the country. -->
+    <FieldGroup title="Address">
+      <FormColumns>
+        <Field
+          name="number"
+          widget="string"
+          label="Number"
+          :options="{ maxLength: 32, placeholder: '12A' }"
+          help="Street number, not necessarily numeric (12A, 3 bis, …)."
+        />
 
-    <Field
-      name="number"
-      widget="string"
-      label="Number"
-      :options="{ maxLength: 32, placeholder: '12A' }"
-      help="Street number, not necessarily numeric (12A, 3 bis, …)."
-    />
+        <Field name="street" widget="string" label="Street" :options="{ maxLength: 255 }" />
 
-    <Field name="street" widget="string" label="Street" :options="{ maxLength: 255 }" />
+        <Field name="zip" widget="string" label="Zip" :options="{ maxLength: 32 }" />
 
-    <Field name="zip" widget="string" label="Zip" :options="{ maxLength: 32 }" />
+        <Field name="city" widget="string" label="City" :options="{ maxLength: 255 }" />
 
-    <Field name="city" widget="string" label="City" :options="{ maxLength: 255 }" />
+        <!-- A relation: the draft holds the ISO code, the dropdown is filled
+             by the countries endpoint and its filter box searches there.
+             `record` is what the field shows when it is read-only -- the
+             nested country the GET already returned, so that mode costs no
+             request. -->
+        <Field
+          name="country"
+          widget="many2one"
+          label="Country"
+          :options="{
+            fetch: searchCountries,
+            record: country,
+            permission: 'totem.country.read',
+          }"
+        />
+      </FormColumns>
+    </FieldGroup>
 
-    <!-- A relation: the draft holds the ISO code, the dropdown is filled
-         by the countries endpoint and its filter box searches there.
-         `record` is what the field shows when it is read-only -- the
-         nested country the GET already returned, so that mode costs no
-         request. -->
-    <Field
-      name="country"
-      widget="many2one"
-      label="Country"
-      :options="{
-        fetch: searchCountries,
-        record: country,
-        permission: 'totem.country.read',
-      }"
-    />
+    <FormColumns>
+      <!-- Stored as a calendar day: no time, no timezone. -->
+      <Field name="birth_date" widget="date" label="Birth date" />
 
-    <!-- The other relation, and the only list-valued field of the form:
-         the draft holds the tag ids, the chips are painted from the
-         tags the GET already nested, and /contact-tags/ is not called
-         until the dropdown is opened. -->
-    <Field
-      name="tags"
-      widget="many2many_tags"
-      label="Tags"
-      :options="{
-        fetch: searchContactTags,
-        records: tags,
-        permission: 'totem.contacttag.read',
-        placeholder: 'Add a tag…',
-      }"
-    />
+      <!-- The other relation, and the only list-valued field of the form:
+           the draft holds the tag ids, the chips are painted from the
+           tags the GET already nested, and /contact-tags/ is not called
+           until the dropdown is opened. -->
+      <Field
+        name="tags"
+        widget="many2many_tags"
+        label="Tags"
+        :options="{
+          fetch: searchContactTags,
+          records: tags,
+          permission: 'totem.contacttag.read',
+          placeholder: 'Add a tag…',
+        }"
+      />
+    </FormColumns>
   </FormView>
 </template>
