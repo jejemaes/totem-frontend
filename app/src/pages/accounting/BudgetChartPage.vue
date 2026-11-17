@@ -52,7 +52,7 @@ const title = computed(() => budget.value?.name ?? 'Budget chart')
 </script>
 
 <template>
-  <section class="page page--wide">
+  <section class="page">
     <!-- No query carried back: the budgets list reads `?name=` as ITS filter,
          and this page writes `?name=` as the positions'. -->
     <RouterLink :to="{ name: 'accounting-budgets' }" class="budget-chart__back">

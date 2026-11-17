@@ -181,7 +181,6 @@ const title = computed(() =>
   <FormView
     :form="form"
     :title="title"
-    width="medium"
     :skeleton="4"
     delete-permission="totem.budget.delete"
     delete-header="Delete this budget?"

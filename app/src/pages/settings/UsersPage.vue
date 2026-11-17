@@ -50,7 +50,7 @@ function openRecord(id: string): void {
 </script>
 
 <template>
-  <section class="page page--wide">
+  <section class="page">
     <header class="page__header">
       <div>
         <h1>Utilisateurs</h1>

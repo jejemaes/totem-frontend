@@ -98,7 +98,7 @@ function openRecord(id: string): void {
 </script>
 
 <template>
-  <section class="page page--wide">
+  <section class="page">
     <RouterLink :to="{ name: 'accounting-accounts' }" class="movements__back">
       <i class="pi pi-arrow-left" /> Accounts
     </RouterLink>

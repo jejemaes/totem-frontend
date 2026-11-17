@@ -93,7 +93,6 @@ const form: ResourceForm = useResourceForm<UserProfile>({
   <FormView
     :form="form"
     title="My profile"
-    width="narrow"
     :skeleton="5"
     :cancellable="false"
     @title="emit('title', $event)"

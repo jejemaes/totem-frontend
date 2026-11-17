@@ -37,7 +37,7 @@ function openMovements(accountId: string): void {
 </script>
 
 <template>
-  <section class="page page--wide">
+  <section class="page">
     <header class="page__header">
       <div>
         <h1>Accounts</h1>

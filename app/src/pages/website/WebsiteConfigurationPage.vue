@@ -321,7 +321,6 @@ function discard(): void {
     <FormView
       :form="form"
       title="Website configuration"
-      width="wide"
       :skeleton="8"
       :readonly="!canUpdate"
       :cancellable="false"
