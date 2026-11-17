@@ -45,18 +45,3 @@ export interface CardFieldProps {
   name: string
   options?: FieldOptions
 }
-
-/**
- * One entry of a card's "⋮" menu. Built per record when the menu opens, so
- * `condition` and `command` are handed the card's record.
- */
-export interface CardMenuItem<R extends CardRecord = CardRecord> {
-  label?: string
-  /** A primeicons class, `pi pi-copy`: the icon convention of the whole app. */
-  icon?: string
-  command?: (record: R) => void
-  /** Hides the entry for this record when false -- a permission, a state. */
-  condition?: (record: R) => boolean
-  separator?: boolean
-  disabled?: boolean
-}

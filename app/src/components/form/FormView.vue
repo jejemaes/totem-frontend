@@ -14,6 +14,8 @@ import {
 } from 'vue'
 
 import { can } from '@/auth/permissions'
+import { visibleButtons, type ActionEntry, type RecordAction } from '@/components/actions/actions'
+import { useActionRunner } from '@/composables/useActionRunner'
 import { useLeaveConfirmation } from '@/composables/useLeaveConfirmation'
 import type { ResourceForm } from '@/composables/useResourceForm'
 
@@ -39,6 +41,15 @@ import RecordPager from './RecordPager.vue'
  *
  * NOT part of <Form>'s contract, and it widens nothing there: this is one more
  * consumer of <Form>, exactly like `MultiRecordFilters`.
+ *
+ * `actions` -- record actions (actions/actions.ts), the same declarations a
+ * card's menu takes -- are drawn here too, as a column of buttons beside the
+ * card: the view declares WHAT each one does, closing over its own resource
+ * module; this owns how it runs. Their condition reads `form.record`, the
+ * STORED record: an unsaved edit neither offers nor hides an action. They
+ * are disabled while the form is dirty -- an action acts on what is stored,
+ * and the reload after it would throw the edit away -- and absent on a
+ * create form, which has no record to act on.
  */
 const props = withDefaults(
   defineProps<{
@@ -69,6 +80,15 @@ const props = withDefaults(
     cancellable?: boolean
     /** Replaces `form.save`, for a caller that has state of its own to reset first. */
     onSave?: (values: FormData, changed?: FormData) => void
+    /**
+     * Record actions, stacked beside the card (above the fields in a Dialog).
+     * Separators are ignored: a column of buttons has nothing to separate. A
+     * view's `RecordAction<XxxDetail>[]` is accepted as is: typed on `object`,
+     * which an `interface` detail satisfies where `Record<string, unknown>`
+     * (an index signature) would not, and `condition` / `run` are declared as
+     * methods, whose parameters TypeScript checks bivariantly.
+     */
+    actions?: readonly ActionEntry<object>[]
   }>(),
   {
     mode: 'page',
@@ -81,6 +101,7 @@ const props = withDefaults(
     readonly: false,
     cancellable: true,
     onSave: undefined,
+    actions: () => [],
   },
 )
 
@@ -118,6 +139,7 @@ BareFrame.inheritAttrs = false
 const {
   isNew,
   data,
+  record,
   loading,
   loadError,
   saving,
@@ -189,6 +211,41 @@ onMounted(() => {
 
 watch(() => props.title, (value) => emit('title', value), { immediate: true })
 
+// ------------------------------------------------------------ record actions
+
+const runner = useActionRunner()
+const running = runner.running
+const actionError = runner.error
+
+/** In a computed, like `canDelete`: `can()` instantiates the store. */
+const buttons = computed(() =>
+  record.value ? visibleButtons(props.actions, [record.value], can) : [],
+)
+
+const actionsDisabled = computed(
+  () => dirty.value || saving.value || deleting.value || running.value !== null,
+)
+
+/**
+ * After a run, the form must show what the action stored: from the record it
+ * answered when it answered one -- no request, no skeleton --, by a reload
+ * when the action asks for one, and not at all otherwise (it opened a Dialog,
+ * it changed nothing). Neither when the user moved to another record
+ * meanwhile (the pager stays usable): that record is not the one acted on.
+ */
+async function runAction(action: RecordAction<object>): Promise<void> {
+  const current = record.value
+  if (!current || actionsDisabled.value) return
+  const outcome = await runner.execute(action, [current])
+  if (outcome.status !== 'done' || record.value !== current) return
+  const result = outcome.result
+  // The detail its own endpoint answers, whatever its declared type.
+  if (result && typeof result === 'object') {
+    props.form.replace(result as Readonly<Record<string, unknown>>)
+  }
+  else if (action.reload) void props.form.reload()
+}
+
 function save(values: FormData, changed?: FormData): void {
   if (props.onSave) props.onSave(values, changed)
   else void props.form.save(values, changed)
@@ -239,6 +296,17 @@ function askDelete(): void {
     {{ error }}
   </Message>
 
+  <!-- Closable, unlike the save banner: the form under it is untouched. -->
+  <Message
+    v-if="actionError"
+    severity="error"
+    closable
+    class="page__message"
+    @close="actionError = null"
+  >
+    {{ actionError }}
+  </Message>
+
   <!-- A save keeps the user on the form, where Save merely turning disabled
        again would say nothing. Not in a Dialog: its opener closes it.
        Gone after 3 s or on its cross; either way `saved` is reset rather than
@@ -258,70 +326,88 @@ function askDelete(): void {
 
   <slot name="messages" />
 
-  <component
-    :is="mode === 'page' ? Card : BareFrame"
-    v-if="!loadError"
-    :class="mode === 'page' ? `form-view--${width}` : undefined"
-  >
-    <template #content>
-      <div v-if="loading" class="form-view__skeleton">
-        <Skeleton v-for="n in skeleton" :key="n" height="3.2rem" />
-      </div>
-      <Form
-        v-else-if="data"
-        ref="formRef"
-        :data="data"
-        :save-label="saveLabel"
-        :saving="saving"
-        :readonly="readonly"
-        :errors="fieldErrors"
-        @save="save"
-      >
-        <template #default="{ draft, dirty }">
-          <slot :draft="draft" :dirty="dirty" />
-        </template>
-        <template #actions="{ dirty }">
-          <slot
-            name="actions"
-            :dirty="dirty"
-            :saving="saving"
-            :is-new="isNew"
-            :save-label="saveLabel"
-          >
-            <Button
-              v-if="canDelete"
-              label="Delete"
-              icon="pi pi-trash"
-              severity="danger"
-              text
-              class="form-view__delete"
-              :loading="deleting"
-              :disabled="saving"
-              @click="askDelete"
-            />
-            <Button
-              v-if="cancellable"
-              label="Cancel"
-              severity="secondary"
-              text
-              :disabled="saving"
-              @click="emit('cancel')"
-            />
-            <!-- Nothing edited means nothing to PATCH, so on an existing record
-                 Save has no work to do. A create always has. `externalDirty`
-                 covers a standalone widget <Form>'s own `dirty` cannot see. -->
-            <Button
-              type="submit"
-              :label="saveLabel"
-              icon="pi pi-check"
-              :loading="saving"
-              :disabled="!isNew && !dirty && !externalDirty"
-            />
-          </slot>
-        </template>
-      </Form>
-    </template>
-  </component>
+  <div v-if="!loadError" class="form-view__body" :class="`form-view__body--${mode}`">
+    <component
+      :is="mode === 'page' ? Card : BareFrame"
+      :class="mode === 'page' ? `form-view--${width}` : undefined"
+    >
+      <template #content>
+        <div v-if="loading" class="form-view__skeleton">
+          <Skeleton v-for="n in skeleton" :key="n" height="3.2rem" />
+        </div>
+        <Form
+          v-else-if="data"
+          ref="formRef"
+          :data="data"
+          :save-label="saveLabel"
+          :saving="saving"
+          :readonly="readonly"
+          :errors="fieldErrors"
+          @save="save"
+        >
+          <template #default="{ draft, dirty }">
+            <slot :draft="draft" :dirty="dirty" />
+          </template>
+          <template #actions="{ dirty }">
+            <slot
+              name="actions"
+              :dirty="dirty"
+              :saving="saving"
+              :is-new="isNew"
+              :save-label="saveLabel"
+            >
+              <Button
+                v-if="canDelete"
+                label="Delete"
+                icon="pi pi-trash"
+                severity="danger"
+                text
+                class="form-view__delete"
+                :loading="deleting"
+                :disabled="saving"
+                @click="askDelete"
+              />
+              <Button
+                v-if="cancellable"
+                label="Cancel"
+                severity="secondary"
+                text
+                :disabled="saving"
+                @click="emit('cancel')"
+              />
+              <!-- Nothing edited means nothing to PATCH, so on an existing record
+                   Save has no work to do. A create always has. `externalDirty`
+                   covers a standalone widget <Form>'s own `dirty` cannot see. -->
+              <Button
+                type="submit"
+                :label="saveLabel"
+                icon="pi pi-check"
+                :loading="saving"
+                :disabled="!isNew && !dirty && !externalDirty"
+              />
+            </slot>
+          </template>
+        </Form>
+      </template>
+    </component>
+
+    <!-- After the card in the DOM, so the fields come first to the keyboard
+         and a screen reader; above them in a Dialog through `order`. -->
+    <aside v-if="buttons.length" class="form-view__actions" aria-label="Actions">
+      <Button
+        v-for="action in buttons"
+        :key="action.key"
+        :label="action.label"
+        :icon="action.icon"
+        :severity="action.severity ?? 'secondary'"
+        :outlined="!action.severity"
+        :loading="running === action.key"
+        :disabled="actionsDisabled"
+        @click="runAction(action)"
+      />
+      <small v-if="dirty" class="form-view__actions-hint">Save your changes first.</small>
+    </aside>
+  </div>
 </template>
 
 <style scoped>
@@ -338,6 +424,47 @@ function askDelete(): void {
    unusable in a narrow column. */
 .form-view--wide {
   max-width: 64rem;
+}
+
+/* The card and its actions column side by side; the column wraps under the
+   card when the screen cannot hold both. */
+.form-view__body--page {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.form-view__body--page > .p-card {
+  flex: 1 1 24rem;
+  min-width: 0;
+}
+
+.form-view__body--dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-view__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-view__body--page > .form-view__actions {
+  flex: 0 0 13rem;
+}
+
+/* A Dialog has no room for a column: a row above the fields. */
+.form-view__body--dialog > .form-view__actions {
+  order: -1;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.form-view__actions-hint {
+  color: var(--app-muted);
 }
 
 .form-view__skeleton {

@@ -15,9 +15,9 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import { ref } from 'vue'
 
 import type { ListQuery, Page } from '@/api/list'
+import type { ActionEntry } from '@/components/actions/actions'
 import Field from '@/components/card/Field.vue'
 import CardView from '@/components/card/CardView.vue'
-import type { CardMenuItem } from '@/components/card/fields/types'
 import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
 import type { FilterFields } from '@/components/filters/filters'
 import { useFilter } from '@/composables/useFilter'
@@ -144,16 +144,39 @@ const selection = ref<string[]>(['doc-2'])
 const selectedNames = ref<string[]>([])
 const lastAction = ref<string | null>(null)
 
-const MENU: CardMenuItem<DemoDocument>[] = [
-  { label: 'Duplicate', icon: 'pi pi-copy', command: (doc) => (lastAction.value = `Duplicate ${doc.name}`) },
-  { label: 'Export', icon: 'pi pi-download', command: (doc) => (lastAction.value = `Export ${doc.name}`) },
+const MENU: ActionEntry<DemoDocument>[] = [
+  {
+    key: 'duplicate',
+    label: 'Duplicate',
+    icon: 'pi pi-copy',
+    run: ([doc]) => void (lastAction.value = `Duplicate ${doc.name}`),
+  },
+  {
+    key: 'export',
+    label: 'Export',
+    icon: 'pi pi-download',
+    run: ([doc]) => void (lastAction.value = `Export ${doc.name}`),
+  },
   { separator: true },
   {
+    key: 'publish',
     label: 'Publish',
     icon: 'pi pi-send',
     // Shown on drafts only: `state` is read here, hence in `extra-fields`.
     condition: (doc) => doc.state === 'draft',
-    command: (doc) => (lastAction.value = `Publish ${doc.name}`),
+    confirm: { header: 'Publish this document?', message: 'It becomes visible to everyone.' },
+    reload: true,
+    // Stored for real, after a delay: the entry must be gone from the menu
+    // once the page reloads, and the card's "Published" tag shown.
+    run: ([doc]) =>
+      new Promise<void>((resolve) =>
+        setTimeout(() => {
+          const stored = TABLE.find((row) => row.id === doc.id)
+          if (stored) stored.state = 'published'
+          lastAction.value = `Publish ${doc.name}`
+          resolve()
+        }, 400),
+      ),
   },
 ]
 

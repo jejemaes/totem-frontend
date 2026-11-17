@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { ActionEntry, RecordAction } from '@/components/actions/actions'
+
 import {
   cardMenuItems,
   isInteractiveTarget,
@@ -7,7 +9,6 @@ import {
   requestedCardFields,
   showPaginator,
 } from './cardView'
-import type { CardMenuItem } from './fields/types'
 
 type Doc = { id: string; state: string }
 
@@ -29,42 +30,35 @@ describe('requestedCardFields', () => {
 describe('cardMenuItems', () => {
   const draft: Doc = { id: '1', state: 'draft' }
   const done: Doc = { id: '2', state: 'done' }
+  const ALL = (): boolean => true
 
-  it('binds each command to the record the menu opened on', () => {
-    const rename = vi.fn()
-    const [item] = cardMenuItems<Doc>([{ label: 'Rename', command: rename }], draft)
+  function action(key: string, extra: Partial<RecordAction<Doc>> = {}): RecordAction<Doc> {
+    return { key, label: key, run: () => undefined, ...extra }
+  }
+
+  it('hands each entry to the runner with the record the menu opened on', () => {
+    const execute = vi.fn()
+    const rename = action('rename')
+    const [item] = cardMenuItems<Doc>([rename], draft, ALL, execute)
     item.command!({} as never)
-    expect(rename).toHaveBeenCalledWith(draft)
+    expect(execute).toHaveBeenCalledWith(rename, draft)
   })
 
-  it('asks each condition of this record', () => {
-    const items: CardMenuItem<Doc>[] = [
-      { label: 'Open' },
-      { label: 'Publish', condition: (doc) => doc.state === 'draft' },
+  it('keeps the entries visibleActions keeps, separators as menu rules', () => {
+    const entries: ActionEntry<Doc>[] = [
+      action('open'),
+      { separator: true },
+      action('publish', { condition: (doc) => doc.state === 'draft' }),
+      { separator: true },
+      action('delete', { icon: 'pi pi-trash' }),
     ]
-    expect(cardMenuItems(items, draft).map((item) => item.label)).toEqual(['Open', 'Publish'])
-    expect(cardMenuItems(items, done).map((item) => item.label)).toEqual(['Open'])
-  })
-
-  it('drops the separators left with nothing to separate', () => {
-    const items: CardMenuItem<Doc>[] = [
-      { separator: true },
-      { label: 'Open' },
-      { separator: true },
-      { label: 'Publish', condition: (doc) => doc.state === 'draft' },
-      { separator: true },
-      { label: 'Delete' },
-      { separator: true },
-    ]
-    expect(cardMenuItems(items, done).map((item) => item.label ?? '---')).toEqual([
-      'Open',
+    const items = cardMenuItems(entries, done, ALL, vi.fn())
+    expect(items.map((item) => (item.separator ? '---' : item.label))).toEqual([
+      'open',
       '---',
-      'Delete',
+      'delete',
     ])
-  })
-
-  it('answers an empty menu when every entry is hidden', () => {
-    expect(cardMenuItems<Doc>([{ label: 'X', condition: () => false }], draft)).toEqual([])
+    expect(items[2].icon).toBe('pi pi-trash')
   })
 })
 
