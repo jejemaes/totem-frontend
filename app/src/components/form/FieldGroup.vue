@@ -12,7 +12,11 @@ import { useId } from 'vue'
  * own, so a group reads as a continuation of the form around it.
  *
  * An optional `title` names the group; it is then a labelled `role="group"`,
- * so a screen reader announces it on entering the first field.
+ * so a screen reader announces it on entering the first field -- and it gets
+ * room above and below, to stand apart from the fields around it. Vertical
+ * only: its fields stay aligned with the form's left and right edges. And
+ * only when titled: an untitled group is a column cell, and padding it would
+ * lower its first field under the next column's.
  */
 defineProps<{
   title?: string
@@ -24,6 +28,7 @@ const titleId = useId()
 <template>
   <div
     class="field-group"
+    :class="{ 'field-group--titled': title }"
     :role="title ? 'group' : undefined"
     :aria-labelledby="title ? titleId : undefined"
   >
@@ -38,6 +43,10 @@ const titleId = useId()
   gap: 1rem;
   align-content: start;
   min-width: 0;
+}
+
+.field-group--titled {
+  padding: 1rem 0;
 }
 
 .field-group__title {

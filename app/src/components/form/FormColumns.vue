@@ -44,6 +44,10 @@ withDefaults(
   display: grid;
   grid-template-columns: repeat(var(--form-columns), minmax(0, 1fr));
   gap: 1rem 2rem;
+  /* Each cell at the top of its row, at its own height. Stretched, a bare
+     field beside a taller group (the tags beside the address) would spread
+     its own grid -- label, input, help -- over the extra height. */
+  align-items: start;
 }
 
 /* Under 36rem a half is under 17rem: too small for a dropdown or a date. */
