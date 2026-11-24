@@ -25,6 +25,7 @@ import type {
 export type Widget =
   | 'string'
   | 'boolean'
+  | 'boolean_toggle'
   | 'text'
   | 'integer'
   | 'float'
@@ -107,6 +108,13 @@ export interface FieldOptions {
   maxFractionDigits?: number
   /** BooleanField: force the control shape instead of deriving it from `required`. */
   display?: 'radio' | 'select'
+  /**
+   * BooleanToggleField: the text beside each side of the switch -- `true_label`
+   * on the right, `false_label` on the left. Default to Yes / No. Snake_case,
+   * unlike the keys around them: they name what the backend would call them.
+   */
+  true_label?: string
+  false_label?: string
   /**
    * ManyToOneField / ManyToManyTagsField: loads the candidates. REQUIRED for
    * both -- it is what carries the endpoint, its `?fields=` list and the name

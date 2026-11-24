@@ -444,8 +444,8 @@ name its param `:id` for this to apply.
 
 ### Where field types are registered — two places, both in `form/fields/`
 
-1. The `Widget` union in `types.ts`: `string`, `boolean`, `text`, `integer`, `float`, `selection`,
-   `date`, `datetime`, `color`, `many2one`, `many2many_tags`, `media_image`, `html`, `password`.
+1. The `Widget` union in `types.ts`: `string`, `boolean`, `boolean_toggle`, `text`, `integer`,
+   `float`, `selection`, `date`, `datetime`, `color`, `many2one`, `many2many_tags`, `media_image`, `html`, `password`.
 2. The `WIDGETS: Record<Widget, Component>` map in `Field.vue` — *"the one and only widget →
    component registry"*. The `Record<Widget, …>` type is deliberate: adding a member to the union
    without its component becomes a compile error rather than a blank field at runtime. An unknown
@@ -748,6 +748,7 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | `ManyToManyTagsField.vue`      | `many2many.ts`          |
 | `HtmlField.vue`                | `html.ts`               |
 | `PasswordField.vue`            | `password.ts`           |
+| `BooleanToggleField.vue`       | `booleanToggle.ts`      |
 | `FieldSwitch.vue`              | `fieldSwitch.ts`        |
 | `UserRolesSelectionWidget.vue` | `userRolesSelection.ts` |
 | `MultiRecordFilters.vue`       | `filters/filters.ts`    |
