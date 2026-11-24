@@ -31,6 +31,14 @@ function onSaved(account: AccountDetail, mode: 'create' | 'edit'): void {
   })
 }
 
+/**
+ * The same navigation as AccountsPage's: the query string is NOT carried, the
+ * movements list would read the account list's `?search=` as its own.
+ */
+function openMovements(accountId: string): void {
+  void router.push({ name: 'accounting-account-movements', params: { accountId } })
+}
+
 function backToList(): void {
   void router.push(listRoute.value)
 }
@@ -49,6 +57,7 @@ function backToList(): void {
       @saved="onSaved"
       @cancel="backToList"
       @deleted="backToList"
+      @movements="openMovements"
       @title="title = $event"
     />
   </section>

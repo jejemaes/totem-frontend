@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import type { RecordAction } from '@/components/actions/actions'
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
@@ -41,7 +42,28 @@ const emit = defineEmits<{
   deleted: []
   /** The heading for whoever frames this form -- a page's <h1>, a Dialog's header. */
   title: [title: string]
+  /** The "Movements" action: the same event, and meaning, as AccountListView's. */
+  movements: [id: string]
 }>()
+
+/**
+ * The record actions beside the form.
+ *
+ * "Movements" only EMITS, like the list's button of the same name: where the
+ * movements of an account live is a route, and this view has no router. The
+ * same event name and payload as AccountListView's, so a page handles both
+ * with one function. No `reload`: leaving for another list stores nothing.
+ * Absent on a create by construction: a new account has no movements yet.
+ */
+const ACTIONS: RecordAction<AccountDetail>[] = [
+  {
+    key: 'movements',
+    label: 'Movements',
+    icon: 'pi pi-list',
+    permission: 'totem.accountmovement.read',
+    run: ([account]) => emit('movements', account.id),
+  },
+]
 
 /** `FieldValue` is wider than the payload accepts. */
 function text(value: FieldValue): string | null {
@@ -126,6 +148,7 @@ const title = computed(() => {
     :form="form"
     :title="title"
     :skeleton="3"
+    :actions="ACTIONS"
     delete-permission="totem.account.delete"
     delete-header="Delete this account?"
     :delete-message="`“${title}” and its own categories will be removed.`"
