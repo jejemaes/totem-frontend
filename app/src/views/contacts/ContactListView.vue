@@ -59,7 +59,12 @@ const FILTER_FIELDS: FilterFields = {
   search: {
     type: 'string',
     label: 'Search',
-    help_text: 'Matches the first name, the last name or the email.',
+    help_text: 'Matches the name of a person or a company, the email or the VAT number.',
+  },
+  is_company: {
+    type: 'boolean',
+    label: 'Company',
+    help_text: 'Yes for the companies only, No for the persons only.',
   },
   email: {
     type: 'string',
@@ -122,7 +127,7 @@ defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.reso
     ref="list"
     :fetch-page="listContacts"
     :filters="filters"
-    sort-field="last_name"
+    sort-field="display_name"
     :sortable="CONTACT_SORTABLE"
     :page-size="pageSize"
     :sync-url="syncUrl"
@@ -135,7 +140,7 @@ defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.reso
         :filters="filters"
         :active-filters="activeFilters"
         :loading="loading"
-        search-placeholder="Search a name or an email…"
+        search-placeholder="Search a name, an email or a VAT number…"
         @apply="setFilters"
         @patch="updateFilters"
         @refresh="reload"
@@ -150,12 +155,19 @@ defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.reso
       </div>
     </template>
 
-    <!-- Sorted on `last_name`, the backend's own default ordering; the cell
-         reads both names. -->
-    <Field name="last_name" label="Name" sortable :fields="['first_name', 'last_name']">
+    <!-- `display_name`, the backend's own default ordering: the name of a
+         company, the first and last names of a person, in one column. A
+         company's avatar is a building rather than letters. -->
+    <Field name="display_name" label="Name" sortable :fields="['display_name', 'is_company']">
       <template #default="{ row }">
         <div class="contact-cell">
-          <Avatar :label="initials(contact(row))" shape="circle" />
+          <Avatar
+            v-if="contact(row).is_company"
+            icon="pi pi-building"
+            shape="circle"
+            aria-label="Company"
+          />
+          <Avatar v-else :label="initials(contact(row))" shape="circle" />
           <span class="contact-cell__name">{{ displayName(contact(row)) }}</span>
         </div>
       </template>
