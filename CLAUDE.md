@@ -440,6 +440,31 @@ business, below. The set carries a per-load `BOOT_ID`, so a typed
 URL or an F5 shows no buttons. The rules live in `components/recordSet.ts`. A form route must
 name its param `:id` for this to apply.
 
+### Breadcrumbs on a page with several origins
+
+A page reached from more than one place -- a budget's chart (from the budgets list or from that
+budget's form), an account's movements (accounts list, account form, a budget's balance) -- draws
+`<Breadcrumbs :fallback="…" current="Chart" />` (`components/Breadcrumbs.vue`) above its header
+instead of a hard-coded "← Back" link. The ORIGIN page hands the trail over on its push:
+`router.push({ …, state: crumbState(chain) })`, `chain` being its WHOLE path, itself included
+(`[{ label: 'Budgets', to: route.fullPath }]` from a list; the list, then the record, from a
+form) -- never an extension of its own trail, so it cannot grow without end. `to` is a
+`fullPath`, so the list's crumb restores its page, sort and filters. The trail lives in the
+destination's `history.state` (`components/breadcrumbs.ts`): `router.replace` merges
+`history.state`, so the destination's own filter writes keep it, and so does an F5 -- no
+`BOOT_ID` here, the path stays true. No state (a typed URL, the menu) draws `fallback`. Opt-in
+per page; a view never draws one.
+
+**Every routed edit form opened from its list draws one too, with nothing to opt into**: the
+router's `afterEach` stamps the trail under the record pager's own condition (the list it was
+opened from published that id), and `<FormView mode="page">` teleports a fallback-less
+`<Breadcrumbs>` into `.page__header`, lifted onto a row above the title by CSS `order`. The list's
+crumb is what that list page's own `<Breadcrumbs>` published (`publishCrumbs`: a movement opened
+from an account's movements reads `Accounts / BANK / Movements / …`), else its `meta.title` --
+so a list route needs a `meta.title`. A crumb clicked carries the trail before it, so the form
+reached from `Budgets / Budget X / Chart` still reads `Budgets / Budget X`. A typed URL, a
+create form or a Dialog draws none.
+
 ## The generic form framework
 
 ### Where field types are registered — two places, both in `form/fields/`
@@ -759,6 +784,7 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | `ChartView.vue`                | `chart/prefs.ts`, `chart/series.ts`, `chart/fields/labels.ts`, `api/groupBy.ts` |
 | `ViewSwitcher.vue`             | `viewSwitcher.ts`       |
 | `RecordPager.vue`              | `recordSet.ts`          |
+| `Breadcrumbs.vue`              | `breadcrumbs.ts`        |
 | `CardView.vue`                 | `card/cardView.ts`      |
 | every record action            | `actions/actions.ts`, `composables/useActionRunner.ts` |
 | every card field               | `card/fields/cardFields.ts` (+ `list/fields/cells.ts`) |

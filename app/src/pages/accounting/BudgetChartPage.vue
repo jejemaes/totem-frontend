@@ -11,13 +11,25 @@
  * param changes, and the view reads its budget once.
  */
 import { computed, onScopeDispose, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
+import type { Crumb } from '@/components/breadcrumbs'
+import Breadcrumbs from '@/components/Breadcrumbs.vue'
 import { formatAmount } from '@/resources/accounts'
 import { fetchBudget, type BudgetDetail } from '@/resources/budgets'
 import BudgetPositionChartView from '@/views/accounting/BudgetPositionChartView.vue'
 
 const route = useRoute()
+const router = useRouter()
+
+/**
+ * The trail when the entry carries none (a typed URL, a shared link). No query
+ * carried: the budgets list reads `?name=` as ITS filter, and this page writes
+ * `?name=` as the positions'.
+ */
+const FALLBACK_CRUMBS: Crumb[] = [
+  { label: 'Budgets', to: router.resolve({ name: 'accounting-budgets' }).fullPath },
+]
 
 const budgetId = computed(() => String(route.params.id))
 
@@ -53,11 +65,7 @@ const title = computed(() => budget.value?.name ?? 'Budget chart')
 
 <template>
   <section class="page">
-    <!-- No query carried back: the budgets list reads `?name=` as ITS filter,
-         and this page writes `?name=` as the positions'. -->
-    <RouterLink :to="{ name: 'accounting-budgets' }" class="budget-chart__back">
-      <i class="pi pi-arrow-left" /> Budgets
-    </RouterLink>
+    <Breadcrumbs :fallback="FALLBACK_CRUMBS" current="Chart" />
 
     <header class="page__header">
       <div>
@@ -80,19 +88,3 @@ const title = computed(() => budget.value?.name ?? 'Budget chart')
     />
   </section>
 </template>
-
-<style scoped>
-.budget-chart__back {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.75rem;
-  color: var(--app-muted);
-  text-decoration: none;
-  font-size: 0.9rem;
-}
-
-.budget-chart__back:hover {
-  color: var(--p-primary-color);
-}
-</style>
