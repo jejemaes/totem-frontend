@@ -6,6 +6,7 @@ import TabPanels from 'primevue/tabpanels'
 import Tabs from 'primevue/tabs'
 import { computed, ref, watch } from 'vue'
 
+import type { RecordAction } from '@/components/actions/actions'
 import type { FormData } from '@/components/form/context'
 import Field from '@/components/form/fields/Field.vue'
 import type { FieldValue } from '@/components/form/fields/types'
@@ -61,7 +62,30 @@ const emit = defineEmits<{
    * holds the budget's account -- and neither may navigate.
    */
   movements: [accountId: string, categoryId: string]
+  /** The "Chart" action: the same event, and meaning, as BudgetListView's. */
+  chart: [id: string]
 }>()
+
+/**
+ * The record actions beside the form.
+ *
+ * "Chart" only EMITS, like the list's button of the same name: the positions
+ * chart is a route of its own, and this view has no router. The same event
+ * name and payload as BudgetListView's, so a page handles both alike.
+ * `totem.budget.read` is what the chart route requires -- already held by
+ * whoever reads this form, but declared so the action stays honest in a
+ * Dialog. No `reload`: leaving for the chart stores nothing. Absent on a
+ * create by construction: a new budget has no positions to chart.
+ */
+const ACTIONS: RecordAction<BudgetDetail>[] = [
+  {
+    key: 'chart',
+    label: 'Chart',
+    icon: 'pi pi-chart-bar',
+    permission: 'totem.budget.read',
+    run: ([budget]) => emit('chart', budget.id),
+  },
+]
 
 /** `FieldValue` is wider than the payload accepts. */
 function text(value: FieldValue): string | null {
@@ -183,6 +207,7 @@ const title = computed(() =>
     :form="form"
     :title="title"
     :skeleton="4"
+    :actions="ACTIONS"
     delete-permission="totem.budget.delete"
     delete-header="Delete this budget?"
     :delete-message="`“${title}” will be removed, with its positions and lines.`"

@@ -44,6 +44,12 @@ function openMovements(accountId: string, categoryId: string): void {
   })
 }
 
+function openChart(id: string): void {
+  // The query is NOT carried, as from BudgetsPage: the list's `?name=` filter
+  // would be read by the chart page as a filter on the positions' name.
+  void router.push({ name: 'accounting-budget-chart', params: { id } })
+}
+
 function backToList(): void {
   void router.push(listRoute.value)
 }
@@ -64,6 +70,7 @@ function backToList(): void {
       @deleted="backToList"
       @title="title = $event"
       @movements="openMovements"
+      @chart="openChart"
     />
   </section>
 </template>
