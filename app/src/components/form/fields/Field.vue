@@ -5,6 +5,7 @@ import { computed, defineAsyncComponent, onScopeDispose, watchEffect, type Compo
 import { useFormContext } from '@/components/form/context'
 
 import BooleanField from './BooleanField.vue'
+import BooleanToggleField from './BooleanToggleField.vue'
 import CharField from './CharField.vue'
 import ColorIntegerField from './ColorIntegerField.vue'
 import DateField from './DateField.vue'
@@ -38,6 +39,7 @@ const props = defineProps<FieldDeclarationProps>()
 const WIDGETS: Record<Widget, Component> = {
   string: CharField,
   boolean: BooleanField,
+  boolean_toggle: BooleanToggleField,
   text: TextField,
   integer: IntegerField,
   float: FloatField,

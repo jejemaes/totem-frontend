@@ -295,6 +295,8 @@ const DEFINITION = `<Form :data="data" @save="onSave">
                      uploadImage: demoUpload, maxUploadBytes: 1024 }" />
   <Field name="active"      widget="boolean"   label="Active" required />
   <Field name="published"   widget="boolean"   label="Published" />
+  <Field name="is_company"  widget="boolean_toggle" label="Type"
+         :options="{ false_label: 'Person', true_label: 'Company' }" />
   <Field name="status"      widget="selection" label="Status"
          :options="{ choices: [
            { value: 'draft', label: 'Draft' },
@@ -386,6 +388,10 @@ const DEFINITION = `<Form :data="data" @save="onSave">
 
             <Field name="published" widget="boolean" label="Published"
                    help="Optional, hence a Yes / No / Unset dropdown." />
+
+            <Field name="is_company" widget="boolean_toggle" label="Type"
+                   :options="{ false_label: 'Person', true_label: 'Company' }"
+                   help="A switch: no Unset, and the value is never null." />
 
             <Field name="status" widget="selection" label="Status"
                    :options="{ choices: [
