@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { useAuthStore } from '@/auth/authStore'
+import { crumbState, readCrumbs, takeCrumbs } from '@/components/breadcrumbs'
 import { RECORD_SET_STATE_KEY, recordSetState, takeRecordSet } from '@/components/recordSet'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import BlankLayout from '@/layouts/BlankLayout.vue'
@@ -469,10 +470,14 @@ router.afterEach((to, from, failure) => {
   const id = to.params.id
   if (failure || typeof id !== 'string') return
   const ids = takeRecordSet(from.path, id)
-  if (ids) {
-    window.history.replaceState(
-      { ...window.history.state, [RECORD_SET_STATE_KEY]: recordSetState(ids) },
-      '',
-    )
+  if (!ids) return
+  const state = { ...window.history.state, [RECORD_SET_STATE_KEY]: recordSetState(ids) }
+  // The breadcrumb back to that list (components/breadcrumbs.ts), under the
+  // same condition and for the same reason. An origin that handed a trail of
+  // its own over on its push keeps it: it knows better than a route title.
+  if (!readCrumbs(state)) {
+    const list = { label: from.meta.title ?? 'List', to: from.fullPath }
+    Object.assign(state, crumbState(takeCrumbs(from.path, list)))
   }
+  window.history.replaceState(state, '')
 })

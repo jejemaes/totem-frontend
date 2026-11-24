@@ -6,6 +6,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { crumbState, type Crumb } from '@/components/breadcrumbs'
 import type { BudgetDetail } from '@/resources/budgets'
 import BudgetFormView from '@/views/accounting/BudgetFormView.vue'
 
@@ -15,6 +16,17 @@ const router = useRouter()
 const id = computed(() => (route.params.id ? String(route.params.id) : null))
 const listRoute = computed(() => ({ name: 'accounting-budgets', query: route.query }))
 const title = ref('')
+
+/**
+ * The trail handed to a page opened from this form: the list it was opened
+ * from -- with the query it came with -- then this record.
+ */
+function crumbs(): Crumb[] {
+  return [
+    { label: 'Budgets', to: router.resolve(listRoute.value).fullPath },
+    { label: title.value || 'Budget', to: route.fullPath },
+  ]
+}
 
 /*
  * The form STAYS open after a save: an edit needs nothing here, and a create
@@ -41,13 +53,15 @@ function openMovements(accountId: string, categoryId: string): void {
     name: 'accounting-account-movements',
     params: { accountId },
     query: { category: categoryId },
+    state: crumbState(crumbs()),
   })
 }
 
 function openChart(id: string): void {
   // The query is NOT carried, as from BudgetsPage: the list's `?name=` filter
-  // would be read by the chart page as a filter on the positions' name.
-  void router.push({ name: 'accounting-budget-chart', params: { id } })
+  // would be read by the chart page as a filter on the positions' name. The
+  // trail leads back here, not to the list.
+  void router.push({ name: 'accounting-budget-chart', params: { id }, state: crumbState(crumbs()) })
 }
 
 function backToList(): void {

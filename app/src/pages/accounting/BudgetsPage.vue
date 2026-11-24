@@ -8,6 +8,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { can } from '@/auth/permissions'
+import { crumbState } from '@/components/breadcrumbs'
 import BudgetListView from '@/views/accounting/BudgetListView.vue'
 
 const route = useRoute()
@@ -27,8 +28,13 @@ function openRecord(id: string): void {
 
 function openChart(id: string): void {
   // The query is NOT carried: this list's `?name=` filter would be read by the
-  // chart page as a filter on the positions' name.
-  void router.push({ name: 'accounting-budget-chart', params: { id } })
+  // chart page as a filter on the positions' name. It travels in the trail
+  // instead, inside `fullPath`, so the crumb lands back on this very page.
+  void router.push({
+    name: 'accounting-budget-chart',
+    params: { id },
+    state: crumbState([{ label: 'Budgets', to: route.fullPath }]),
+  })
 }
 </script>
 

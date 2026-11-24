@@ -15,6 +15,7 @@ import {
 
 import { can } from '@/auth/permissions'
 import { visibleButtons, type ActionEntry, type RecordAction } from '@/components/actions/actions'
+import Breadcrumbs from '@/components/Breadcrumbs.vue'
 import { useActionRunner } from '@/composables/useActionRunner'
 import { useLeaveConfirmation } from '@/composables/useLeaveConfirmation'
 import type { ResourceForm } from '@/composables/useResourceForm'
@@ -269,6 +270,11 @@ function askDelete(): void {
        which the user may simply want to skip. Never in a Dialog. -->
   <Teleport v-if="pageHeader && !isNew" :to="pageHeader">
     <RecordPager />
+    <!-- The way back to that list, under the same rule: drawn only when the
+         router stamped a trail on this entry (components/breadcrumbs.ts), so
+         no fallback -- a typed URL keeps the plain title and Cancel. Teleported
+         in last, but put on a row of its own ABOVE the title by CSS. -->
+    <Breadcrumbs class="form-view__crumbs" :current="title" />
   </Teleport>
 
   <Message v-if="loadError" severity="error" :closable="false" class="page__message">
@@ -405,6 +411,16 @@ function askDelete(): void {
 </template>
 
 <style scoped>
+/* A row of its own above the title in the page's (wrapping, flex) header:
+   `order` lifts it first, whatever the teleport's append put it last. The
+   header's own gap already spaces it from the title. Specific enough to beat
+   Breadcrumbs' own margin, whichever stylesheet loads last. */
+.page__header > .form-view__crumbs {
+  order: -1;
+  flex: 0 0 100%;
+  margin-bottom: -0.25rem;
+}
+
 /*
  * A page form spans the page: 80 % for the card, 20 % for its actions. The
  * column is reserved even when it holds no button -- on a screen declaring no

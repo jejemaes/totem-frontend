@@ -9,6 +9,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { can } from '@/auth/permissions'
+import { crumbState } from '@/components/breadcrumbs'
 import AccountListView from '@/views/accounting/AccountListView.vue'
 
 const route = useRoute()
@@ -29,10 +30,15 @@ function openRecord(id: string): void {
 /**
  * The query string is NOT carried here, unlike openRecord: the movements list
  * syncs its own page, sort and filters into the URL, and would read this
- * list's `?search=` as a search on movements.
+ * list's `?search=` as a search on movements. It travels in the trail instead,
+ * inside `fullPath`, so the crumb lands back on this very page.
  */
 function openMovements(accountId: string): void {
-  void router.push({ name: 'accounting-account-movements', params: { accountId } })
+  void router.push({
+    name: 'accounting-account-movements',
+    params: { accountId },
+    state: crumbState([{ label: 'Accounts', to: route.fullPath }]),
+  })
 }
 </script>
 

@@ -19,6 +19,8 @@ import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { can } from '@/auth/permissions'
+import type { Crumb } from '@/components/breadcrumbs'
+import Breadcrumbs from '@/components/Breadcrumbs.vue'
 import ViewSwitcher from '@/components/ViewSwitcher.vue'
 import { VIEW_TYPE_KEY, viewTypeFromQuery, type ViewType } from '@/components/viewSwitcher'
 import { displayAccount, fetchAccount, formatAmount, type AccountDetail } from '@/resources/accounts'
@@ -29,6 +31,14 @@ const route = useRoute()
 const router = useRouter()
 
 const accountId = computed(() => String(route.params.accountId))
+
+/**
+ * The trail when the entry carries none (a typed URL, a shared link). Bare,
+ * no query: whatever list the user had, it is not this one's to restore.
+ */
+const FALLBACK_CRUMBS: Crumb[] = [
+  { label: 'Accounts', to: router.resolve({ name: 'accounting-accounts' }).fullPath },
+]
 
 /** A computed, not a bare `can()` call: `can()` instantiates the store each time. */
 const canCreate = computed(() => can('totem.accountmovement.create'))
@@ -99,9 +109,7 @@ function openRecord(id: string): void {
 
 <template>
   <section class="page">
-    <RouterLink :to="{ name: 'accounting-accounts' }" class="movements__back">
-      <i class="pi pi-arrow-left" /> Accounts
-    </RouterLink>
+    <Breadcrumbs :fallback="FALLBACK_CRUMBS" current="Movements" />
 
     <header class="page__header">
       <div>
@@ -151,23 +159,9 @@ function openRecord(id: string): void {
 </template>
 
 <style scoped>
-.movements__back {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.75rem;
-  color: var(--app-muted);
-  text-decoration: none;
-  font-size: 0.9rem;
-}
-
 .movements__actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.movements__back:hover {
-  color: var(--p-primary-color);
 }
 </style>
