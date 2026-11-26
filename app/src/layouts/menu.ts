@@ -58,6 +58,12 @@ export const menu: MenuSection[] = [
         to: '/accounting/budgets',
         permission: 'totem.budget.read',
       },
+      {
+        label: 'Payments',
+        icon: 'pi pi-money-bill',
+        to: '/accounting/payments',
+        permission: 'totem.payment.read',
+      },
     ],
   },
   {
@@ -111,6 +117,12 @@ export const menu: MenuSection[] = [
         icon: 'pi pi-users',
         to: '/settings/users',
         permission: 'totem.user.read',
+      },
+      {
+        label: 'Payment methods',
+        icon: 'pi pi-credit-card',
+        to: '/settings/payment-methods',
+        permission: 'totem.paymentmethod.read',
       },
     ],
   },
