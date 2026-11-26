@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import Button from 'primevue/button'
 import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import TabPanel from 'primevue/tabpanel'
@@ -71,11 +70,14 @@ import InvoicePaymentListView from './InvoicePaymentListView.vue'
  * (`currencyField`), and what a create sends: the backend's default from
  * `default-values/`, else EUR. Never in `changed`, so never in a PATCH.
  *
- * Two tabs close the form: the PAYMENTS of an existing invoice
- * (InvoicePaymentListView, absent on a create -- nothing to pay yet) and the
- * description. NOT lazy, as on DocumentFormView: a lazy TabPanel would unmount
- * the description's <Field>, which would drop out of `values` while the
- * payments show. A payment written there moves the paid amounts and the
+ * Three tabs close the form: the PAYMENTS of an existing invoice
+ * (InvoicePaymentListView, absent on a create -- nothing to pay yet), the
+ * description, and the stored FILE, drawn by the `file_viewer` widget from
+ * `file_content` and `file_mimetype` -- in the draft for it, sent by no
+ * payload builder. Its PDF viewer waits for a width before fetching, so the
+ * hidden panel downloads nothing. NOT lazy, as on DocumentFormView: a lazy
+ * TabPanel would unmount the description's <Field>, which would drop out of
+ * `values` while the payments show. A payment written there moves the paid amounts and the
  * status: the invoice is fetched again and swapped in through `form.replace`
  * -- no skeleton -- which the list allows only on a clean form.
  */
@@ -109,8 +111,8 @@ function currency(value: FieldValue): CurrencyCode | null {
 }
 
 /**
- * The record as loaded, for what the draft does not carry: the file's URL and
- * the payment status. Null on a create.
+ * The record as loaded, for what the draft does not carry: the payment
+ * status, and whether a file was stored. Null on a create.
  */
 const record = ref<InvoiceDetail | null>(null)
 
@@ -193,6 +195,8 @@ const form = useResourceForm<InvoiceDetail>({
     description: null,
     amount_paid: null,
     amount_residual: null,
+    file_content: null,
+    file_mimetype: null,
   },
   // The amounts arrive as decimal strings; FloatField binds a number.
   toForm: (invoice) => ({
@@ -209,6 +213,9 @@ const form = useResourceForm<InvoiceDetail>({
     description: invoice.description,
     amount_paid: toNumberOrNull(invoice.amount_paid),
     amount_residual: toNumberOrNull(invoice.amount_residual),
+    // Shown by the File tab's viewer; named by no payload builder.
+    file_content: invoice.file_content,
+    file_mimetype: invoice.file_mimetype,
   }),
   fetchOne: fetchInvoice,
   fetchDefaults: fetchInvoiceDefaults,
@@ -253,6 +260,12 @@ async function refreshTotals(): Promise<void> {
     // Stale totals beat a load error over a form that is otherwise fine.
   }
 }
+
+/**
+ * The File tab, on an invoice stored WITH a file -- the record's, not the
+ * draft's, though both agree: the key is never edited.
+ */
+const hasFile = computed(() => !isNew.value && Boolean(record.value?.file_content))
 
 /** The backend's refusal of the file, or the widget's own. */
 const fileError = computed(() => form.fieldErrors.value.file_content)
@@ -405,24 +418,12 @@ const title = computed(() => {
         help="The original invoice, a PDF or an image of 20 MB at most. It cannot be replaced afterwards."
       />
 
-      <!-- An existing file is fixed: downloaded, never replaced. -->
-      <div v-else-if="record?.file_content" class="invoice-form__file">
-        <Button
-          as="a"
-          :href="record.file_content"
-          target="_blank"
-          rel="noopener"
-          label="Open the file"
-          icon="pi pi-file-pdf"
-          size="small"
-          outlined
-        />
-      </div>
 
       <Tabs v-model:value="tab" class="invoice-form__tabs">
         <TabList>
           <Tab v-if="!isNew" value="payments">Payments</Tab>
           <Tab value="description">Description</Tab>
+          <Tab v-if="hasFile" value="file">File</Tab>
         </TabList>
         <TabPanels>
           <TabPanel v-if="!isNew && id" value="payments">
@@ -436,6 +437,14 @@ const title = computed(() => {
           </TabPanel>
           <TabPanel value="description">
             <Field name="description" widget="text" :options="{ rows: 6 }" />
+          </TabPanel>
+          <!-- An existing file is fixed: shown, never replaced. -->
+          <TabPanel v-if="hasFile" value="file">
+            <Field
+              name="file_content"
+              widget="file_viewer"
+              :options="{ mimetypeField: 'file_mimetype' }"
+            />
           </TabPanel>
         </TabPanels>
       </Tabs>
@@ -452,11 +461,5 @@ const title = computed(() => {
 /* The panel's own padding sits flush with the fields above. */
 .invoice-form__tabs :deep(.p-tabpanels) {
   padding: 1rem 0 0;
-}
-
-.invoice-form__file {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
 }
 </style>
