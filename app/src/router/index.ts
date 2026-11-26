@@ -15,6 +15,7 @@ import AccountsPage from '@/pages/accounting/AccountsPage.vue'
 import BudgetChartPage from '@/pages/accounting/BudgetChartPage.vue'
 import BudgetPage from '@/pages/accounting/BudgetPage.vue'
 import BudgetsPage from '@/pages/accounting/BudgetsPage.vue'
+import PaymentsPage from '@/pages/accounting/PaymentsPage.vue'
 import ContactPage from '@/pages/contacts/ContactPage.vue'
 import ContactsPage from '@/pages/contacts/ContactsPage.vue'
 import ContactTagPage from '@/pages/contacts/ContactTagPage.vue'
@@ -30,6 +31,8 @@ import FormDemoPage from '@/pages/FormDemoPage.vue'
 import LoginPage from '@/pages/LoginPage.vue'
 import NotFoundPage from '@/pages/NotFoundPage.vue'
 import PublicPage from '@/pages/PublicPage.vue'
+import PaymentMethodPage from '@/pages/settings/PaymentMethodPage.vue'
+import PaymentMethodsPage from '@/pages/settings/PaymentMethodsPage.vue'
 import ProfilePage from '@/pages/settings/ProfilePage.vue'
 import UserPage from '@/pages/settings/UserPage.vue'
 import UsersPage from '@/pages/settings/UsersPage.vue'
@@ -234,6 +237,15 @@ export const router = createRouter({
           component: BudgetChartPage,
           meta: { title: 'Budget chart', permissions: ['totem.budget.read'] },
         },
+        // ONE route: payments are read only here, registered and changed from
+        // the document they settle. The path drops the API's `/payment/`
+        // prefix: the screen lives with the rest of the accounting.
+        {
+          path: 'accounting/payments',
+          name: 'accounting-payments',
+          component: PaymentsPage,
+          meta: { title: 'Payments', permissions: ['totem.payment.read'] },
+        },
         // Documents. Paths mirror the API's own two-segment prefix
         // (/document/documents/, /document/tag-categories/), pluralised like
         // the rest of the SPA.
@@ -395,6 +407,27 @@ export const router = createRouter({
           name: 'settings-user-edit',
           component: UserPage,
           meta: { title: 'Edit user', permissions: ['totem.user.read', 'totem.user.update'] },
+        },
+        {
+          path: 'settings/payment-methods',
+          name: 'settings-payment-methods',
+          component: PaymentMethodsPage,
+          meta: { title: 'Payment methods', permissions: ['totem.paymentmethod.read'] },
+        },
+        {
+          path: 'settings/payment-methods/new',
+          name: 'settings-payment-method-create',
+          component: PaymentMethodPage,
+          meta: { title: 'New payment method', permissions: ['totem.paymentmethod.create'] },
+        },
+        {
+          path: 'settings/payment-methods/:id',
+          name: 'settings-payment-method-edit',
+          component: PaymentMethodPage,
+          meta: {
+            title: 'Edit payment method',
+            permissions: ['totem.paymentmethod.read', 'totem.paymentmethod.update'],
+          },
         },
       ],
     },
