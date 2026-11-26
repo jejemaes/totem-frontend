@@ -21,6 +21,10 @@ import Field from '@/components/list/Field.vue'
 import type { ListRow } from '@/components/list/fields/types'
 import ListView from '@/components/list/ListView.vue'
 import { useFilter } from '@/composables/useFilter'
+import {
+  accountCategoryDisplayNames,
+  searchAccountCategories,
+} from '@/resources/accountCategories'
 import { accountDisplayNames, displayAccount, searchAccounts } from '@/resources/accounts'
 import { contactDisplayNames, displayContact, searchContacts } from '@/resources/contacts'
 import {
@@ -56,14 +60,18 @@ const canDelete = computed(() => can('totem.invoice.delete'))
 
 /**
  * The filters this screen offers, keyed by the query parameter the API takes.
- * No `allowNull` anywhere: every MultiValue of the backend is declared
- * `allow_null=False` -- an invoice always has a supplier and an account.
+ * `allowNull` on `category` alone: every other MultiValue of the backend is
+ * declared `allow_null=False` -- an invoice always has a supplier and an
+ * account, while its category is optional.
+ *
+ * The category filter offers EVERY category, not `applicable_to` one account
+ * as the form does: the list spans all the accounts.
  */
 const FILTER_FIELDS: FilterFields = {
   search: {
     type: 'string',
     label: 'Search',
-    help_text: 'Matches the number or the supplier reference.',
+    help_text: 'Matches the number, the name or the supplier reference.',
   },
   contact: {
     type: 'many2one',
@@ -87,6 +95,19 @@ const FILTER_FIELDS: FilterFields = {
       resolve: accountDisplayNames,
       relationDisplay: displayAccount,
       permission: 'totem.account.read',
+    },
+  },
+  category: {
+    type: 'many2one',
+    widget: 'many2many_tags',
+    label: 'Category',
+    help_text: 'Keep the invoices filed under these categories.',
+    allowNull: true,
+    nullLabel: 'Uncategorized',
+    options: {
+      fetch: searchAccountCategories,
+      resolve: accountCategoryDisplayNames,
+      permission: 'totem.accountcategory.read',
     },
   },
   payment_status: {
@@ -170,7 +191,7 @@ defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.reso
         :filters="filters"
         :active-filters="activeFilters"
         :loading="loading"
-        search-placeholder="Search a number or a reference…"
+        search-placeholder="Search a number, a name or a reference…"
         @apply="setFilters"
         @patch="updateFilters"
         @refresh="reload"
@@ -191,6 +212,8 @@ defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.reso
         <span class="invoice-cell__number">{{ value }}</span>
       </template>
     </Field>
+
+    <Field name="name" label="Name" />
 
     <Field name="reference" label="Reference" :width="12" />
 
@@ -213,6 +236,14 @@ defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.reso
       :width="16"
       :default-display="false"
       :options="{ relationDisplay: displayAccount }"
+    />
+
+    <Field
+      name="category"
+      widget="many2one"
+      label="Category"
+      :width="14"
+      :default-display="false"
     />
 
     <!-- A monetary column asks for `currency_code` itself, ticked or not. -->

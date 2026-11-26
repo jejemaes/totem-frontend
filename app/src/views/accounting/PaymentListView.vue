@@ -3,18 +3,25 @@
  * The payment table, with its filter bar -- and NOTHING that ties it to a
  * route. See ContactTagListView for the contract in full.
  *
- * Read only: no edit, no delete, no `open` event. A payment is registered and
- * changed from the document it settles; this collection only lists them.
+ * The pencil emits `open`; the trash deletes, on a draft or a cancelled
+ * payment only -- the states the backend lets go of. A done one booked a
+ * movement and is cancelled first, from its form.
  *
  * Every field the backend serialises has a column, most of them OFF by
  * default -- the cog ticks them, and a ticked column reloads the page with its
  * key in `?fields=`.
  */
+import Button from 'primevue/button'
+import Message from 'primevue/message'
 import Tag from 'primevue/tag'
+import { computed, ref, useTemplateRef } from 'vue'
 
+import { ApiError } from '@/api/client'
+import { can } from '@/auth/permissions'
 import type { FilterFields } from '@/components/filters/filters'
 import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
 import { toNumberOrNull } from '@/components/form/fields/values'
+import DeleteButton from '@/components/list/DeleteButton.vue'
 import Field from '@/components/list/Field.vue'
 import type { ListRow } from '@/components/list/fields/types'
 import ListView from '@/components/list/ListView.vue'
@@ -28,6 +35,8 @@ import {
   searchPaymentMethods,
 } from '@/resources/paymentMethods'
 import {
+  deletePayment,
+  isPaymentDeletable,
   listPayments,
   PAYMENT_DIRECTION_CHOICES,
   PAYMENT_SORTABLE,
@@ -48,9 +57,15 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
+  /** The edit button of a row: what that means is up to the caller. */
+  open: [id: string]
   /** Every settled response, so the caller can show the count in its header. */
   loaded: [total: number]
 }>()
+
+/** Computeds, not bare `can()` calls: see ContactListView. */
+const canUpdate = computed(() => can('totem.payment.update'))
+const canDelete = computed(() => can('totem.payment.delete'))
 
 /**
  * The filters this screen offers, keyed by the query parameter the API takes.
@@ -157,6 +172,30 @@ function stateLabel(state: unknown): string {
   return PAYMENT_STATE_CHOICES.find((choice) => choice.value === state)?.label ?? String(state)
 }
 
+const list = useTemplateRef<{ reload(): Promise<void> }>('list')
+
+const deleteError = ref<string | null>(null)
+
+/** The label a confirmation quotes: the reference, else the date. */
+function paymentLabel(row: PaymentRow): string {
+  return row.reference ? `Payment ${row.reference}` : `The payment of ${row.date}`
+}
+
+/**
+ * Offered on a deletable state only; a refusal raced in by another tab is
+ * shown as the backend words it.
+ */
+async function remove(row: PaymentRow): Promise<void> {
+  deleteError.value = null
+  try {
+    await deletePayment(row.id)
+    void list.value?.reload()
+  } catch (caught) {
+    deleteError.value =
+      caught instanceof ApiError ? caught.message : 'This payment could not be deleted.'
+  }
+}
+
 /**
  * The amount, signed by `direction` for display only: the backend stores it
  * positive, and a column of unsigned amounts would hide which way the money
@@ -170,7 +209,12 @@ function signedAmount(row: PaymentRow): string {
 </script>
 
 <template>
+  <Message v-if="deleteError" severity="error" :closable="false" class="page__message">
+    {{ deleteError }}
+  </Message>
+
   <ListView
+    ref="list"
     :fetch-page="listPayments"
     :filters="filters"
     sort-field="date"
@@ -179,6 +223,7 @@ function signedAmount(row: PaymentRow): string {
     :page-size="pageSize"
     :sync-url="syncUrl"
     storage-key="payments"
+    :extra-fields="['state', 'reference', 'date']"
     @loaded="emit('loaded', $event)"
   >
     <template #header="{ loading, reload }">
@@ -267,13 +312,12 @@ function signedAmount(row: PaymentRow): string {
       :options="{ choices: [...PAYMENT_TARGET_TYPE_CHOICES] }"
     />
 
-    <!-- The backend nests the invoice's id alone: the cell shows that id. -->
+    <!-- Labelled like the invoice filter's chips: number and name. -->
     <Field
       name="invoice"
       widget="many2one"
       label="Invoice"
-      :width="14"
-      :default-display="false"
+      :width="18"
       :options="{ relationDisplay: displayInvoice }"
     />
 
@@ -310,6 +354,24 @@ function signedAmount(row: PaymentRow): string {
       :width="14"
       :default-display="false"
     />
+
+    <template #actions="{ row }">
+      <Button
+        v-if="canUpdate"
+        icon="pi pi-pencil"
+        text
+        rounded
+        severity="secondary"
+        aria-label="Edit"
+        @click="emit('open', row.id)"
+      />
+      <DeleteButton
+        v-if="canDelete && isPaymentDeletable(row.state)"
+        label="Delete this payment?"
+        :message="`“${paymentLabel(payment(row))}” will be deleted.`"
+        @confirm="remove(payment(row))"
+      />
+    </template>
   </ListView>
 </template>
 

@@ -33,6 +33,13 @@ import {
  * The category dropdown is narrowed with `applicable_to`: the backend only
  * accepts a general category or one owned by this very account, so a wider
  * list would offer choices that end in a 422.
+ *
+ * A movement BOOKED from a document (`origin_type` set: a payment of an
+ * invoice) has its amount, date and reference owned by that document: the
+ * backend refuses them on update, and the movement on delete. So those three
+ * are readonly and Delete is gone -- read from `form.record`, the stored
+ * record, which no edit of the draft can change. The rest is edited as on any
+ * movement.
  */
 const props = defineProps<{
   /** `null` creates. A prop rather than the route param, so a modal can drive it. */
@@ -142,7 +149,11 @@ const form = useResourceForm<AccountMovementDetail>({
   deleteErrorMessage: 'This movement could not be deleted.',
 })
 
-const { isNew, data } = form
+const { isNew, data, record } = form
+
+/** Booked from a document: see the header. */
+const booked = computed(() => Boolean(record.value?.origin_type))
+const bookedHelp = 'Set by the payment that booked this movement: change the payment instead.'
 
 const title = computed(() => {
   if (isNew.value) return 'New movement'
@@ -155,7 +166,7 @@ const title = computed(() => {
     :form="form"
     :title="title"
     :skeleton="7"
-    delete-permission="totem.accountmovement.delete"
+    :delete-permission="booked ? undefined : 'totem.accountmovement.delete'"
     delete-header="Delete this movement?"
     :delete-message="`“${title}” will be removed, and the account balance with it.`"
     @cancel="emit('cancel')"
@@ -169,7 +180,14 @@ const title = computed(() => {
       :options="{ maxLength: 255, placeholder: 'Office rent' }"
     />
 
-    <Field name="date" widget="date" label="Date" required />
+    <Field
+      name="date"
+      widget="date"
+      label="Date"
+      required
+      :readonly="booked"
+      :help="booked ? bookedHelp : undefined"
+    />
 
     <!-- ONE signed amount: the backend has no direction column, and a
          split control would be a second copy of the sign to keep in
@@ -179,8 +197,9 @@ const title = computed(() => {
       widget="float"
       label="Amount"
       required
+      :readonly="booked"
       :options="{ maxFractionDigits: 2, placeholder: '-120.00' }"
-      help="Negative for an expense, positive for a revenue. Never zero."
+      :help="booked ? bookedHelp : 'Negative for an expense, positive for a revenue. Never zero.'"
     />
 
     <Field
@@ -212,8 +231,9 @@ const title = computed(() => {
       name="reference"
       widget="string"
       label="Reference"
+      :readonly="booked"
       :options="{ maxLength: 100, placeholder: 'INV-2026-0042' }"
-      help="An invoice or order number."
+      :help="booked ? bookedHelp : 'An invoice or order number.'"
     />
 
     <Field name="description" widget="text" label="Description" />

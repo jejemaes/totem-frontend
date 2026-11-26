@@ -22,6 +22,12 @@ describe('invoiceFormData', () => {
 })
 
 describe('displayInvoice', () => {
+  it('reads the number with the name, before the reference', () => {
+    expect(
+      displayInvoice({ id: '1', number: 'INV/2026/00001', name: 'Rent', reference: 'F-42' }),
+    ).toBe('INV/2026/00001 · Rent')
+  })
+
   it('reads the number, with the reference when there is one', () => {
     expect(displayInvoice({ id: '1', number: 'INV/2026/00001', reference: 'F-42' })).toBe(
       'INV/2026/00001 (F-42)',
