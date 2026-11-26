@@ -14,12 +14,13 @@ import Tag from 'primevue/tag'
 
 import type { FilterFields } from '@/components/filters/filters'
 import MultiRecordFilters from '@/components/filters/MultiRecordFilters.vue'
+import { toNumberOrNull } from '@/components/form/fields/values'
 import Field from '@/components/list/Field.vue'
 import type { ListRow } from '@/components/list/fields/types'
 import ListView from '@/components/list/ListView.vue'
 import { useFilter } from '@/composables/useFilter'
-import { formatAmount } from '@/resources/accounts'
 import { contactDisplayNames, displayContact, searchContacts } from '@/resources/contacts'
+import { formatMonetary } from '@/resources/currencies'
 import { displayInvoice, invoiceDisplayNames, searchInvoices } from '@/resources/invoices'
 import {
   displayPaymentMethod,
@@ -162,8 +163,9 @@ function stateLabel(state: unknown): string {
  * went once the Direction column is unticked.
  */
 function signedAmount(row: PaymentRow): string {
-  const formatted = formatAmount(row.amount)
-  return row.direction === 'outgoing' && formatted !== '—' ? `−${formatted}` : formatted
+  const amount = toNumberOrNull(row.amount)
+  const signed = amount !== null && row.direction === 'outgoing' ? -amount : amount
+  return formatMonetary(signed, row.currency_code) ?? '—'
 }
 </script>
 
@@ -244,7 +246,6 @@ function signedAmount(row: PaymentRow): string {
       <template #default="{ row }">
         <div class="amount" :class="{ 'amount--outgoing': payment(row).direction === 'outgoing' }">
           {{ signedAmount(payment(row)) }}
-          <span class="amount__currency">{{ payment(row).currency_code }}</span>
         </div>
       </template>
     </Field>
@@ -333,10 +334,5 @@ function signedAmount(row: PaymentRow): string {
 
 .amount--outgoing {
   color: var(--p-red-500);
-}
-
-.amount__currency {
-  color: var(--app-muted);
-  font-size: 0.85em;
 }
 </style>

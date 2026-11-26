@@ -15,6 +15,7 @@ import type { RelationFetch, RelationResolve } from '@/components/form/fields/ma
 import FieldSwitch from '@/components/form/FieldSwitch.vue'
 import Field from '@/components/form/fields/Field.vue'
 import Form from '@/components/form/Form.vue'
+import { CURRENCY_CODE_CHOICES } from '@/resources/currencies'
 import CardViewDemo from '@/views/demo/CardViewDemo.vue'
 import ChartViewDemo from '@/views/demo/ChartViewDemo.vue'
 import FormViewDemo from '@/views/demo/FormViewDemo.vue'
@@ -39,6 +40,8 @@ const data = ref<FormData>({
   colour: null,
   quantity: 12,
   rating: 3.14159,
+  price: '1234.5',
+  price_currency: 'USD',
   due_date: '2024-03-31',
   seen_at: '2024-03-31T14:22:00+02:00',
   swatch: 12,
@@ -285,6 +288,8 @@ const DEFINITION = `<Form :data="data" @save="onSave">
          :options="{ choices: ['blue', 'red', 'green'] }" />
   <Field name="quantity"    widget="integer"   label="Quantity" :options="{ min: 0 }" />
   <Field name="rating"      widget="float"     label="Rating" />
+  <Field name="price"       widget="monetary"  label="Price"
+         :options="{ currencyField: 'price_currency' }" />
   <Field name="due_date"    widget="date"      label="Due date" />
   <Field name="seen_at"     widget="datetime"  label="Seen at" />
   <Field name="swatch"      widget="color"     label="Swatch" :options="{ max: 15 }" />
@@ -350,6 +355,14 @@ const DEFINITION = `<Form :data="data" @save="onSave">
 
             <Field name="rating" widget="float" label="Rating"
                    help="Six decimals kept, no rounding to two." />
+
+            <Field name="price_currency" widget="selection" label="Currency"
+                   :options="{ choices: CURRENCY_CODE_CHOICES }"
+                   help="Read by the price below through `currencyField`." />
+
+            <Field name="price" widget="monetary" label="Price"
+                   :options="{ currencyField: 'price_currency' }"
+                   help="Two decimals, and the symbol of the currency above: change it." />
 
             <Field name="due_date" widget="date" label="Due date"
                    help="Carried as an ISO YYYY-MM-DD string, never shifted by a timezone." />

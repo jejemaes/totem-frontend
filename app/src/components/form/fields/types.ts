@@ -29,6 +29,7 @@ export type Widget =
   | 'text'
   | 'integer'
   | 'float'
+  | 'monetary'
   | 'selection'
   | 'date'
   | 'datetime'
@@ -106,6 +107,15 @@ export interface FieldOptions {
   maxDate?: string
   /** FloatField: how many decimals are kept. */
   maxFractionDigits?: number
+  /**
+   * MonetaryField, and the list's `monetary` cell: the key holding the ISO
+   * code of the amount's currency (`'currency_code'`) -- a sibling field of the
+   * form, read through `values`, or a key of the row. Its symbol is drawn on
+   * the currency's side; absent, or naming an unknown code, the amount is a
+   * bare 2-decimal number. A KEY rather than a code: on a list every row may be
+   * in another currency, and on a form the currency is edited beside it.
+   */
+  currencyField?: string
   /** BooleanField: force the control shape instead of deriving it from `required`. */
   display?: 'radio' | 'select'
   /**

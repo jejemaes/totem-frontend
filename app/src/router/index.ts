@@ -15,6 +15,8 @@ import AccountsPage from '@/pages/accounting/AccountsPage.vue'
 import BudgetChartPage from '@/pages/accounting/BudgetChartPage.vue'
 import BudgetPage from '@/pages/accounting/BudgetPage.vue'
 import BudgetsPage from '@/pages/accounting/BudgetsPage.vue'
+import InvoicePage from '@/pages/accounting/InvoicePage.vue'
+import InvoicesPage from '@/pages/accounting/InvoicesPage.vue'
 import PaymentsPage from '@/pages/accounting/PaymentsPage.vue'
 import ContactPage from '@/pages/contacts/ContactPage.vue'
 import ContactsPage from '@/pages/contacts/ContactsPage.vue'
@@ -236,6 +238,27 @@ export const router = createRouter({
           name: 'accounting-budget-chart',
           component: BudgetChartPage,
           meta: { title: 'Budget chart', permissions: ['totem.budget.read'] },
+        },
+        {
+          path: 'accounting/invoices',
+          name: 'accounting-invoices',
+          component: InvoicesPage,
+          meta: { title: 'Invoices', permissions: ['totem.invoice.read'] },
+        },
+        {
+          path: 'accounting/invoices/new',
+          name: 'accounting-invoice-create',
+          component: InvoicePage,
+          meta: { title: 'New invoice', permissions: ['totem.invoice.create'] },
+        },
+        {
+          path: 'accounting/invoices/:id',
+          name: 'accounting-invoice-edit',
+          component: InvoicePage,
+          meta: {
+            title: 'Edit invoice',
+            permissions: ['totem.invoice.read', 'totem.invoice.update'],
+          },
         },
         // ONE route: payments are read only here, registered and changed from
         // the document they settle. The path drops the API's `/payment/`

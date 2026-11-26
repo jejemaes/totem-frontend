@@ -10,7 +10,8 @@
  * own instead of a reuse of the form's `Widget`, whose members (`text`,
  * `html`, `media_image`) only mean something with an editor behind them.
  * `FieldOptions` IS reused, read-only: `choices`, `relationDisplay` and
- * `maxFractionDigits` mean the same thing on a column as on a field.
+ * `maxFractionDigits` and `currencyField` mean the same thing on a column as on
+ * a field.
  */
 
 import type { FieldOptions } from '@/components/form/fields/types'
@@ -23,6 +24,7 @@ export type ListWidget =
   | 'boolean'
   | 'integer'
   | 'float'
+  | 'monetary'
   | 'selection'
   | 'date'
   | 'datetime'

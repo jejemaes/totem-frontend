@@ -22,6 +22,7 @@ import FloatCell from './FloatCell.vue'
 import IntegerCell from './IntegerCell.vue'
 import ManyToManyTagsCell from './ManyToManyTagsCell.vue'
 import ManyToOneCell from './ManyToOneCell.vue'
+import MonetaryCell from './MonetaryCell.vue'
 import SelectionCell from './SelectionCell.vue'
 import type { ListRow, ListWidget } from './types'
 
@@ -44,6 +45,7 @@ const LIST_WIDGETS: Record<ListWidget, Component> = {
   boolean: BooleanCell,
   integer: IntegerCell,
   float: FloatCell,
+  monetary: MonetaryCell,
   selection: SelectionCell,
   date: DateCell,
   datetime: DateTimeCell,

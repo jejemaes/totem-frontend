@@ -10,12 +10,12 @@
 import { fetchList, type ListQuery, type Page } from '@/api/list'
 import type { Amount } from '@/resources/accounts'
 import type { ContactRef } from '@/resources/contacts'
+import type { CurrencyCode } from '@/resources/currencies'
 import type { PaymentMethodRef } from '@/resources/paymentMethods'
 
 export type PaymentState = 'draft' | 'pending' | 'cancelled' | 'done'
 export type PaymentDirection = 'incoming' | 'outgoing'
 export type PaymentTargetType = 'invoice'
-export type CurrencyCode = 'EUR' | 'USD'
 
 export const PAYMENT_STATE_CHOICES = [
   { value: 'draft', label: 'Draft' },
