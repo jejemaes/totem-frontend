@@ -35,6 +35,7 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
     api/          client.ts (fetch wrapper), list.ts (pagination contract), groupBy.ts
     auth/         tokenApi.ts, refresh.ts, tokenStorage.ts, authStore.ts (Pinia), permissions.ts
     components/   ColorDot.vue, ColorTag.vue, colors.ts, ViewSwitcher.vue + viewSwitcher.ts
+      file/       FileViewer.vue (image / PDF / icon by mimetype), PdfViewer.vue (lazy, PDF.js)
       actions/    actions.ts (RecordAction: card menus, form buttons, list bulk actions)
       card/       CardView.vue, Field.vue, CardRecord.vue, context.ts, cardView.ts, fields/
       chart/      ChartView.vue, Field.vue, context.ts, prefs.ts, series.ts, fields/
@@ -56,7 +57,8 @@ app/                  # the Vue project -- package.json lives HERE, not at the r
 `totem-backend`'s `src/`.
 
 Stack: `vue` 3.5, `vue-router` 4.5, `pinia` 2.3, `primevue` 4.5 (Aura preset) + `primeicons`,
-`@tiptap/*` 3.31 for the rich-text widget, `chart.js` 4.5 (drawn through `primevue/chart`), `vitest` 4, `vue-tsc`, `typescript` 5.7, `vite` 6.
+`@tiptap/*` 3.31 for the rich-text widget, `chart.js` 4.5 (drawn through `primevue/chart`),
+`pdfjs-dist` 5.7 for the PDF viewer (a lazy chunk, with its worker), `vitest` 4, `vue-tsc`, `typescript` 5.7, `vite` 6.
 Every version is pinned exactly, with no `^` — keep it that way.
 
 ## Commands
@@ -470,7 +472,7 @@ create form or a Dialog draws none.
 ### Where field types are registered — two places, both in `form/fields/`
 
 1. The `Widget` union in `types.ts`: `string`, `boolean`, `boolean_toggle`, `text`, `integer`,
-   `float`, `monetary`, `selection`, `date`, `datetime`, `color`, `many2one`, `many2many_tags`, `media_image`, `html`, `password`.
+   `float`, `monetary`, `selection`, `date`, `datetime`, `color`, `many2one`, `many2many_tags`, `media_image`, `html`, `password`, `file_viewer`.
 2. The `WIDGETS: Record<Widget, Component>` map in `Field.vue` — *"the one and only widget →
    component registry"*. The `Record<Widget, …>` type is deliberate: adding a member to the union
    without its component becomes a compile error rather than a blank field at runtime. An unknown
@@ -508,6 +510,11 @@ keeps it usable standalone, outside a `<Form>`.
   use a truthiness test — that is the classic `required` bug.
 - `sameFieldValue` compares lists as **sets**: a many-to-many has no order, the backend accepts the
   ids in any, and the widget rebuilds the array on every pick.
+
+`file_viewer` is display only: its value is a file's URL, it never emits, and
+`options.mimetypeField` names the sibling key holding the type (the URL's extension is a fallback,
+unreliable on a signed private URL). Its PDF viewer is lazy INSIDE `FileViewer`, and fetches
+nothing until it has a width -- a non-lazy TabPanel mounts it hidden.
 
 Static imports only, with one deliberate exception: `html` is `defineAsyncComponent`, because
 TipTap and prosemirror are ~130 kB gzipped and `router/index.ts` imports every view statically — a
@@ -778,6 +785,8 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | `UserRolesSelectionWidget.vue` | `userRolesSelection.ts` |
 | `MultiRecordFilters.vue`       | `filters/filters.ts`    |
 | `ColorTag.vue`                 | `colors.ts`             |
+| `FileViewer.vue`               | `file/fileViewer.ts`    |
+| `PdfViewer.vue`                | `file/pdfViewer.ts`     |
 | every field                    | `fields/values.ts`      |
 | `ListView.vue`                 | `list/columns.ts`, `list/selection.ts`, `list/resequence.ts`, `list/delayedFlag.ts` |
 | every list cell                | `list/fields/cells.ts`  |

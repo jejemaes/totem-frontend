@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Card from 'primevue/card'
 import ConfirmDialog from 'primevue/confirmdialog'
-import { computed, ref } from 'vue'
+import { computed, onScopeDispose, ref } from 'vue'
 
 import type { FormData } from '@/components/form/context'
 import { activeSwitchField, type FieldSwitchChoice } from '@/components/form/fieldSwitch'
@@ -31,6 +31,46 @@ import ListViewDemo from '@/views/demo/ListViewDemo.vue'
  *  - `colour` is null: that is a real value, so its <Field>'s `default` does
  *    NOT overwrite it.
  */
+/**
+ * A three-page PDF written by hand, offline: enough to page through and zoom in
+ * the `file_viewer` field without a backend. Byte offsets are computed, so the
+ * cross-reference table is a valid one -- PDF.js would repair a wrong one
+ * silently, and the demo would then not show what a real file does.
+ */
+function demoPdf(pageCount: number): string {
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Count ${pageCount} /Kids [${Array.from(
+      { length: pageCount },
+      (_, index) => `${4 + index * 2} 0 R`,
+    ).join(' ')}] >>`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ]
+  for (let index = 0; index < pageCount; index += 1) {
+    const stream = `BT /F1 48 Tf 72 700 Td (Page ${index + 1}) Tj ET`
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] ` +
+        `/Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + index * 2} 0 R >>`,
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    )
+  }
+  let pdf = '%PDF-1.4\n'
+  const offsets = objects.map((body, index) => {
+    const offset = pdf.length
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`
+    return offset
+  })
+  const xref = pdf.length
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
+  pdf += offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return pdf
+}
+
+/** A blob: URL stands for the signed media URL a real record carries. */
+const DEMO_PDF_URL = URL.createObjectURL(new Blob([demoPdf(3)], { type: 'application/pdf' }))
+onScopeDispose(() => URL.revokeObjectURL(DEMO_PDF_URL))
+
 const data = ref<FormData>({
   name: 'Totem',
   // An id from LIBRARY, labelled by `demoCover` above -- the arrangement a real
@@ -54,6 +94,8 @@ const data = ref<FormData>({
   published: null,
   status: 'draft',
   reference: 'REF-001',
+  attachment: DEMO_PDF_URL,
+  attachment_mimetype: 'application/pdf',
   secret: null,
   body: '<h2>About us</h2><p>A <strong>reception kiosk</strong> in the main hall.</p>',
   // Deliberately carries a marker AND a <section>, neither of which the editor
@@ -308,6 +350,8 @@ const DEFINITION = `<Form :data="data" @save="onSave">
            { value: 'done',  label: 'Done' },
          ] }" />
   <Field name="reference"   widget="string"    label="Reference" readonly />
+  <Field name="attachment"  widget="file_viewer" label="Attachment"
+         :options="{ mimetypeField: 'attachment_mimetype' }" />
   <Field name="secret"      widget="password"  label="Secret"
          :options="{ pattern: '^(?!\\\\d+$).{8,}$',
                      patternMessage: 'At least 8 characters, and not only digits.' }" />
@@ -414,6 +458,13 @@ const DEFINITION = `<Form :data="data" @save="onSave">
 
             <Field name="reference" widget="string" label="Reference" readonly
                    help="Locked, but still present in the payload." />
+
+            <!-- Display only: the value is the file's URL, here a blob: one
+                 standing for a signed media URL, and the widget never emits. -->
+            <Field name="attachment" widget="file_viewer" label="Attachment"
+                   :options="{ mimetypeField: 'attachment_mimetype' }"
+                   help="A PDF drawn by PDF.js: page through it, zoom, fit to the width.
+                         An image would be drawn as is, anything else as an icon." />
 
             <Field name="secret" widget="password" label="Secret"
                    :options="{ pattern: '^(?!\\d+$).{8,}$',

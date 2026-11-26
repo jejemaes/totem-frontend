@@ -10,6 +10,7 @@ import CharField from './CharField.vue'
 import ColorIntegerField from './ColorIntegerField.vue'
 import DateField from './DateField.vue'
 import DateTimeField from './DateTimeField.vue'
+import FileViewerField from './FileViewerField.vue'
 import FloatField from './FloatField.vue'
 import IntegerField from './IntegerField.vue'
 import ManyToManyTagsField from './ManyToManyTagsField.vue'
@@ -65,6 +66,12 @@ const WIDGETS: Record<Widget, Component> = {
    */
   media_image: MediaImageField,
   password: PasswordField,
+  /*
+   * Display only: the value is a file's URL, a plain string, and the widget
+   * never emits it. Static, though it shows PDFs: FileViewer itself loads the
+   * PDF viewer lazily, so only that part -- PDF.js -- is a chunk of its own.
+   */
+  file_viewer: FileViewerField,
   /*
    * The only lazily-loaded widget. TipTap and prosemirror are ~130 kB gzipped,
    * router/index.ts imports every view statically, and one screen uses this --

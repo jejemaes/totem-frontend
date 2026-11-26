@@ -39,6 +39,7 @@ export type Widget =
   | 'media_image'
   | 'html'
   | 'password'
+  | 'file_viewer'
 
 /**
  * What a field can hold -- deliberately narrow: exactly what the widgets in
@@ -116,6 +117,13 @@ export interface FieldOptions {
    * in another currency, and on a form the currency is edited beside it.
    */
   currencyField?: string
+  /**
+   * FileViewerField: the key holding the file's mimetype (`'file_mimetype'`),
+   * a sibling field read through `values`, as `currencyField` is. It decides
+   * whether the URL is drawn as an image, a PDF or an icon. Absent, the type is
+   * guessed from the URL's extension -- unreliable on a signed private URL.
+   */
+  mimetypeField?: string
   /** BooleanField: force the control shape instead of deriving it from `required`. */
   display?: 'radio' | 'select'
   /**
