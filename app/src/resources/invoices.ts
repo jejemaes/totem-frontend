@@ -12,10 +12,13 @@
  * - `number` (`INV/<year>/<sequence>`), `file_mimetype` and the three paid
  *   amounts are the backend's: in no write schema.
  *
- * The payments of an invoice (`/{id}/payments/`) are not here yet.
+ * The payments of an invoice live under it (`/{id}/payments/`), behind the
+ * INVOICE's scopes: reading them is reading the invoice, writing them is
+ * updating it -- see the payments section below. That route knows only the
+ * DONE payments: registered done, cancelled rather than deleted.
  */
 
-import { apiDelete, apiFetch, fetchDefaultValues, patchJson } from '@/api/client'
+import { apiDelete, apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
 import {
   fetchAllPages,
   fetchDisplayNames,
@@ -24,9 +27,11 @@ import {
   type Page,
 } from '@/api/list'
 import type { RelationRecord } from '@/components/form/fields/many2one'
+import type { AccountCategoryRef } from '@/resources/accountCategories'
 import type { AccountRef, Amount } from '@/resources/accounts'
 import type { ContactRef } from '@/resources/contacts'
 import type { CurrencyCode } from '@/resources/currencies'
+import type { PaymentRow } from '@/resources/payments'
 
 const PATH = '/accounting/invoices/'
 
@@ -78,6 +83,8 @@ export type InvoiceRow = {
   id: string
   /** `INV/<year>/<sequence>`, assigned at creation. */
   number: string
+  /** A label of the user's own, describing the invoice. */
+  name: string | null
   /** The number the SUPPLIER gave the invoice. */
   reference: string | null
   /** `YYYY-MM-DD`. Never in the future. */
@@ -87,6 +94,11 @@ export type InvoiceRow = {
   contact: ContactRef | null
   /** The account its payments are booked on. */
   account: AccountRef | null
+  /**
+   * The category the movements its payments book are filed under -- then
+   * editable on each movement. General, or owned by `account`.
+   */
+  category: AccountCategoryRef | null
   amount_total: Amount
   currency_code: CurrencyCode
   /** Sum of the DONE payments: a pending one is not money gone yet. */
@@ -104,11 +116,13 @@ export type InvoiceRow = {
 export const INVOICE_LIST_FIELDS = [
   'id',
   'number',
+  'name',
   'reference',
   'date',
   'due_date',
   'contact',
   'account',
+  'category',
   'amount_total',
   'currency_code',
   'amount_paid',
@@ -131,13 +145,15 @@ export const INVOICE_SORTABLE = [
 
 /**
  * A `type`, for the implicit index signature `ListFilters` needs. The lists
- * are MultiValues, all declared `allow_null=False`.
+ * are MultiValues, all declared `allow_null=False` but `category`.
  */
 export type InvoiceFilters = {
-  /** Matches the number or the reference, case-insensitive. */
+  /** Matches the number, the name or the reference, case-insensitive. */
   search?: string | null
   contact?: string | string[] | null
   account?: string | string[] | null
+  /** `null` among the items keeps the invoices without a category. */
+  category?: string | string[] | null
   payment_status?: string | string[] | null
   /** Inclusive, `YYYY-MM-DD`. */
   date_from?: string | null
@@ -177,6 +193,12 @@ export interface InvoiceCreatePayload {
   date: string
   /** Positive: the backend refuses zero and below. */
   amount_total: number
+  /**
+   * A category id, or `null`. General, or owned by `account`: another
+   * account's is a 422 on `category`.
+   */
+  category?: string | null
+  name?: string | null
   reference?: string | null
   due_date?: string | null
   description?: string | null
@@ -198,8 +220,10 @@ export function invoiceFormData(payload: InvoiceCreatePayload, file: Blob | null
   const keys = [
     'contact',
     'account',
+    'category',
     'date',
     'amount_total',
+    'name',
     'reference',
     'due_date',
     'description',
@@ -241,6 +265,79 @@ export function deleteInvoice(id: string): Promise<void> {
   return apiDelete(detailPath(id))
 }
 
+// ------------------------------------------------------------- payments
+
+/**
+ * A payment as the invoice's own route returns it: a payment row without the
+ * target keys, which would only name this invoice again, nor `state` and
+ * `contact`, the same on every one -- done, to the invoice's supplier.
+ */
+export type InvoicePaymentDetail = Omit<PaymentRow, 'target_type' | 'invoice' | 'state' | 'contact'>
+
+function paymentsPath(invoiceId: string): string {
+  return `${detailPath(invoiceId)}payments/`
+}
+
+/**
+ * EVERY done payment of the invoice, the latest first: the route is not paged
+ * -- an invoice is paid in a handful of instalments -- and answers a bare
+ * array. A cancelled one is no longer listed. Needs `totem.invoice.read`.
+ */
+export function listInvoicePayments(
+  invoiceId: string,
+  signal?: AbortSignal,
+): Promise<InvoicePaymentDetail[]> {
+  return apiFetch<InvoicePaymentDetail[]>(paymentsPath(invoiceId), { signal })
+}
+
+/**
+ * No `state` and no `contact`: the backend registers the payment DONE, to the
+ * invoice's supplier, and accepts neither key. No `direction` and no
+ * `currency_code` either: optional, defaulted from the invoice (outgoing, in
+ * its currency), and any other value is refused -- a screen has nothing to
+ * choose.
+ */
+export interface InvoicePaymentCreatePayload {
+  /** `YYYY-MM-DD`. */
+  date: string
+  /** Positive, and no more than what is due on the invoice. */
+  amount: number
+  /** A payment method id. */
+  payment_method: string
+  reference?: string | null
+}
+
+/** Needs `totem.invoice.update`: paying an invoice changes it. */
+export function registerInvoicePayment(
+  invoiceId: string,
+  payload: InvoicePaymentCreatePayload,
+): Promise<InvoicePaymentDetail> {
+  return postJson<InvoicePaymentDetail>(paymentsPath(invoiceId), payload)
+}
+
+/** A PATCH body, and only the edited keys: see the PATCH asymmetry in users.ts. */
+export type InvoicePaymentUpdatePayload = Partial<InvoicePaymentCreatePayload>
+
+export function updateInvoicePayment(
+  invoiceId: string,
+  paymentId: string,
+  payload: InvoicePaymentUpdatePayload,
+): Promise<InvoicePaymentDetail> {
+  return patchJson<InvoicePaymentDetail>(
+    `${paymentsPath(invoiceId)}${encodeURIComponent(paymentId)}/`,
+    payload,
+  )
+}
+
+/**
+ * DELETE, but a CANCEL: the payment stays, `cancelled`, and only its movement
+ * goes -- the invoice's paid amount with it. It then drops out of the
+ * invoice's list, which shows the done ones alone.
+ */
+export function cancelInvoicePayment(invoiceId: string, paymentId: string): Promise<void> {
+  return apiDelete(`${paymentsPath(invoiceId)}${encodeURIComponent(paymentId)}/`)
+}
+
 // ------------------------------------------------------------- relations
 
 /**
@@ -251,18 +348,20 @@ export type InvoiceRef = {
   /** A ULID. */
   id: string
   number: string
+  name: string | null
   reference: string | null
 }
 
 export const INVOICE_RELATION_FIELDS = [
   'id',
   'number',
+  'name',
   'reference',
 ] as const satisfies readonly (keyof InvoiceRef)[]
 
 /**
  * The loader of an invoice dropdown: `RelationFetch` shaped. `search` matches
- * the number or the reference, server-side.
+ * the number, the name or the reference, server-side.
  */
 export function searchInvoices(search: string | null, signal?: AbortSignal): Promise<InvoiceRef[]> {
   return fetchAllPages<InvoiceRef>(PATH, INVOICE_RELATION_FIELDS, { filters: { search } }, signal)
@@ -274,14 +373,17 @@ export function invoiceDisplayNames(ids: string[], signal?: AbortSignal): Promis
 }
 
 /**
- * The label of an invoice: its number, with the supplier's reference when
- * there is one. The generic `displayRelation` reads `name`, which an invoice
- * does not have. Tolerant of a missing key: a record restored from a URL may
- * hold nothing but its id.
+ * The label of an invoice: `INV/2026/00001 · Office rent`, the number with the
+ * user's name for it -- else with the supplier's reference, in brackets. Not
+ * the generic `displayRelation`, which would read the name ALONE: optional,
+ * and no way to tell two invoices apart without their number. Tolerant of a
+ * missing key: a record restored from a URL may hold nothing but its id.
  */
 export function displayInvoice(record: RelationRecord): string {
   const number = typeof record.number === 'string' ? record.number.trim() : ''
+  const name = typeof record.name === 'string' ? record.name.trim() : ''
   const reference = typeof record.reference === 'string' ? record.reference.trim() : ''
+  if (number && name) return `${number} · ${name}`
   if (number && reference) return `${number} (${reference})`
-  return number || reference || String(record.id)
+  return number || name || reference || String(record.id)
 }

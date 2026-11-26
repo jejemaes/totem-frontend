@@ -18,6 +18,7 @@ import { fetchList, type ListQuery, type Page } from '@/api/list'
 import type { AccountCategoryRef } from './accountCategories'
 import type { AccountRef, Amount } from './accounts'
 import type { ContactRef } from './contacts'
+import type { InvoiceRef } from './invoices'
 
 /** One row of the list. Relations are read as nested objects and written as ids. */
 export type AccountMovementRow = {
@@ -30,6 +31,13 @@ export type AccountMovementRow = {
   category: AccountCategoryRef | null
   /** The counterparty -- a supplier, a customer. Nulled if the contact is deleted. */
   contact: ContactRef | null
+  /**
+   * Set when a payment of a document booked the movement; `null` when it was
+   * entered by hand. Such a movement's `amount`, `date` and `reference` are
+   * the document's: refused on update, and the movement itself on delete --
+   * correct the payment instead.
+   */
+  origin_type: MovementOriginType | null
 }
 
 /**
@@ -127,12 +135,20 @@ export function groupAccountMovements(
   return fetchGroups('/accounting/movements/group-by/', query, signal)
 }
 
+/**
+ * The kind of document a movement was booked from, by one of its payments.
+ * The backend's `MovementOriginType`.
+ */
+export type MovementOriginType = 'invoice'
+
 /** What GET /accounting/movements/{id}/ returns. */
 export type AccountMovementDetail = AccountMovementRow & {
   account: AccountRef
   description: string | null
   /** An invoice or order number. */
   reference: string | null
+  /** The invoice it was booked from, when `origin_type` is `invoice`. */
+  invoice: InvoiceRef | null
   create_date: string
   update_date: string
 }

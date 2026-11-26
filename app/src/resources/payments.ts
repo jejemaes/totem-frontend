@@ -1,12 +1,18 @@
 /**
  * /api/v1/payment/payments/ -- every payment, whatever document it settles.
  *
- * READ ONLY, behind `totem.payment.read`: a payment is registered, changed and
- * deleted from the document it settles (`/accounting/invoices/{id}/payments/`),
- * whose rules and scopes apply. This collection only lists and retrieves, so
- * there is no create, update or delete here -- and no form screen.
+ * The collection's OWN routes, behind the `totem.payment.*` scopes: any state,
+ * and a payment settling no document. The invoice's routes
+ * (`/accounting/invoices/{id}/payments/`, see invoices.ts) are a second way in,
+ * behind the invoice's scopes and limited to its `done` payments. The rules are
+ * the same either way: a payment of an invoice written here still obeys the
+ * invoice (outgoing, in its currency, no more than what is due).
+ *
+ * DELETE really deletes, unlike the invoice's route, which cancels -- and only
+ * a draft or a cancelled payment: a done one is refused, "cancel it first".
  */
 
+import { apiDelete, apiFetch, fetchDefaultValues, patchJson, postJson } from '@/api/client'
 import { fetchList, type ListQuery, type Page } from '@/api/list'
 import type { Amount } from '@/resources/accounts'
 import type { ContactRef } from '@/resources/contacts'
@@ -16,6 +22,23 @@ import type { PaymentMethodRef } from '@/resources/paymentMethods'
 export type PaymentState = 'draft' | 'pending' | 'cancelled' | 'done'
 export type PaymentDirection = 'incoming' | 'outgoing'
 export type PaymentTargetType = 'invoice'
+
+const PATH = '/payment/payments/'
+
+function detailPath(id: string): string {
+  return `${PATH}${encodeURIComponent(id)}/`
+}
+
+/**
+ * The states a payment can be deleted in, mirroring the backend's
+ * `DELETABLE_STATES`: the trash and the Delete button are offered on these
+ * only, rather than shown everywhere and refused on a done payment.
+ */
+export const PAYMENT_DELETABLE_STATES: readonly PaymentState[] = ['draft', 'cancelled']
+
+export function isPaymentDeletable(state: unknown): boolean {
+  return PAYMENT_DELETABLE_STATES.includes(state as PaymentState)
+}
 
 export const PAYMENT_STATE_CHOICES = [
   { value: 'draft', label: 'Draft' },
@@ -51,11 +74,14 @@ export type PaymentAccountMovementRef = {
 }
 
 /**
- * The invoice a payment settles. The backend nests its id and NOTHING else, so
- * a cell can only show the id until it nests the number too.
+ * The invoice a payment settles, as the backend nests it: the keys
+ * `displayInvoice` reads, so a cell and the invoice filter label it alike.
  */
 export type PaymentInvoiceRef = {
   id: string
+  number: string
+  name: string | null
+  reference: string | null
 }
 
 /**
@@ -146,5 +172,79 @@ export function listPayments(
   query: ListQuery<PaymentFilters>,
   signal?: AbortSignal,
 ): Promise<Page<PaymentRow>> {
-  return fetchList<PaymentRow>('/payment/payments/', query, PAYMENT_LIST_FIELDS, signal)
+  return fetchList<PaymentRow>(PATH, query, PAYMENT_LIST_FIELDS, signal)
+}
+
+/** The detail carries nothing the row does not. */
+export type PaymentDetail = PaymentRow
+
+export function fetchPayment(id: string, signal?: AbortSignal): Promise<PaymentDetail> {
+  return apiFetch<PaymentDetail>(detailPath(id), { signal })
+}
+
+export function fetchPaymentDefaults(signal?: AbortSignal): Promise<Partial<PaymentDetail>> {
+  return fetchDefaultValues<PaymentDetail>(PATH, signal)
+}
+
+/**
+ * `invoice` is named exactly when `target_type` is `'invoice'`: the backend
+ * refuses one without the other, on the field at fault.
+ */
+export interface PaymentCreatePayload {
+  /** `YYYY-MM-DD`. */
+  date: string
+  /** Positive: the side is `direction`. */
+  amount: number
+  currency_code?: CurrencyCode | null
+  direction?: PaymentDirection | null
+  /** Defaults to `draft` server-side. */
+  state?: PaymentState | null
+  payment_method: string
+  contact?: string | null
+  reference?: string | null
+  target_type?: PaymentTargetType | null
+  invoice?: string | null
+}
+
+export function createPayment(payload: PaymentCreatePayload): Promise<PaymentDetail> {
+  return postJson<PaymentDetail>(PATH, payload)
+}
+
+/** A PATCH body, and only the edited keys: see the PATCH asymmetry in users.ts. */
+export type PaymentUpdatePayload = Partial<PaymentCreatePayload>
+
+export function updatePayment(id: string, payload: PaymentUpdatePayload): Promise<PaymentDetail> {
+  return patchJson<PaymentDetail>(detailPath(id), payload)
+}
+
+/** Refused on a payment neither draft nor cancelled: see the header. */
+export function deletePayment(id: string): Promise<void> {
+  return apiDelete(detailPath(id))
+}
+
+/** A draft value as the target keys read it: a non-empty string, or nothing. */
+function targetText(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null
+}
+
+/**
+ * The `target_type` / `invoice` keys of a payment body, from the keys of a
+ * draft -- ALL of them on a create, the edited ones on an update.
+ *
+ * The form keeps the invoice picked while "Settles" changes, so the user can
+ * switch back without picking it again; sent as it is, a payment settling no
+ * document would still name an invoice, which the backend refuses. So the
+ * invoice is cleared, explicitly, whenever the target stops being one -- and a
+ * PATCH that only changes the invoice leaves `target_type` out, unchanged.
+ */
+export function paymentTargetPayload(
+  draft: { target_type?: unknown; invoice?: unknown },
+): Pick<PaymentCreatePayload, 'target_type' | 'invoice'> {
+  const body: Pick<PaymentCreatePayload, 'target_type' | 'invoice'> = {}
+  if ('target_type' in draft) {
+    body.target_type = targetText(draft.target_type) as PaymentTargetType | null
+    if (body.target_type !== 'invoice') body.invoice = null
+  }
+  if ('invoice' in draft && body.invoice === undefined) body.invoice = targetText(draft.invoice)
+  return body
 }

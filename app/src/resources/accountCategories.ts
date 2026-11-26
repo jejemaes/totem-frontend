@@ -91,6 +91,23 @@ export const ACCOUNT_CATEGORY_RELATION_FIELDS = [
 ] as const satisfies readonly (keyof AccountCategoryRef)[]
 
 /**
+ * The loader of a category dropdown over EVERY account: `RelationFetch`
+ * shaped, for a filter -- an invoice list spans all the accounts, so narrowing
+ * it to one would hide categories its rows carry.
+ */
+export function searchAccountCategories(
+  search: string | null,
+  signal?: AbortSignal,
+): Promise<AccountCategoryRef[]> {
+  return fetchAllPages<AccountCategoryRef>(
+    '/accounting/categories/',
+    ACCOUNT_CATEGORY_RELATION_FIELDS,
+    { filters: { search } },
+    signal,
+  )
+}
+
+/**
  * The category dropdown of ONE account's movements: a `RelationFetch` bound to
  * that account.
  *

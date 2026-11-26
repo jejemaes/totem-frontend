@@ -126,7 +126,7 @@ defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.reso
     :page-size="pageSize"
     :sync-url="syncUrl"
     storage-key="account-movements"
-    :extra-fields="['name']"
+    :extra-fields="['name', 'origin_type']"
     @loaded="emit('loaded', $event)"
   >
     <template #header="{ loading, reload }">
@@ -184,8 +184,10 @@ defineExpose({ reload: (): Promise<void> => list.value?.reload() ?? Promise.reso
         aria-label="Edit"
         @click="emit('open', row.id)"
       />
+      <!-- A movement booked from a document is refused on delete: no trash.
+           `origin_type` is an extra field, so the cog cannot drop it. -->
       <DeleteButton
-        v-if="canDelete"
+        v-if="canDelete && !movement(row).origin_type"
         label="Delete this movement?"
         :message="`“${row.name}” will be removed, and the account balance with it.`"
         @confirm="remove(row)"

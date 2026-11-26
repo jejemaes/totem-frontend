@@ -17,6 +17,7 @@ import BudgetPage from '@/pages/accounting/BudgetPage.vue'
 import BudgetsPage from '@/pages/accounting/BudgetsPage.vue'
 import InvoicePage from '@/pages/accounting/InvoicePage.vue'
 import InvoicesPage from '@/pages/accounting/InvoicesPage.vue'
+import PaymentPage from '@/pages/accounting/PaymentPage.vue'
 import PaymentsPage from '@/pages/accounting/PaymentsPage.vue'
 import ContactPage from '@/pages/contacts/ContactPage.vue'
 import ContactsPage from '@/pages/contacts/ContactsPage.vue'
@@ -260,14 +261,28 @@ export const router = createRouter({
             permissions: ['totem.invoice.read', 'totem.invoice.update'],
           },
         },
-        // ONE route: payments are read only here, registered and changed from
-        // the document they settle. The path drops the API's `/payment/`
-        // prefix: the screen lives with the rest of the accounting.
+        // The path drops the API's `/payment/` prefix: the screen lives with
+        // the rest of the accounting.
         {
           path: 'accounting/payments',
           name: 'accounting-payments',
           component: PaymentsPage,
           meta: { title: 'Payments', permissions: ['totem.payment.read'] },
+        },
+        {
+          path: 'accounting/payments/new',
+          name: 'accounting-payment-create',
+          component: PaymentPage,
+          meta: { title: 'New payment', permissions: ['totem.payment.create'] },
+        },
+        {
+          path: 'accounting/payments/:id',
+          name: 'accounting-payment-edit',
+          component: PaymentPage,
+          meta: {
+            title: 'Edit payment',
+            permissions: ['totem.payment.read', 'totem.payment.update'],
+          },
         },
         // Documents. Paths mirror the API's own two-segment prefix
         // (/document/documents/, /document/tag-categories/), pluralised like
