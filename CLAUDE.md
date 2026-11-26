@@ -470,7 +470,7 @@ create form or a Dialog draws none.
 ### Where field types are registered — two places, both in `form/fields/`
 
 1. The `Widget` union in `types.ts`: `string`, `boolean`, `boolean_toggle`, `text`, `integer`,
-   `float`, `selection`, `date`, `datetime`, `color`, `many2one`, `many2many_tags`, `media_image`, `html`, `password`.
+   `float`, `monetary`, `selection`, `date`, `datetime`, `color`, `many2one`, `many2many_tags`, `media_image`, `html`, `password`.
 2. The `WIDGETS: Record<Widget, Component>` map in `Field.vue` — *"the one and only widget →
    component registry"*. The `Record<Widget, …>` type is deliberate: adding a member to the union
    without its component becomes a compile error rather than a blank field at runtime. An unknown
@@ -781,6 +781,7 @@ into a Vue-free `.ts` module so it can be tested without a DOM:
 | every field                    | `fields/values.ts`      |
 | `ListView.vue`                 | `list/columns.ts`, `list/selection.ts`, `list/resequence.ts`, `list/delayedFlag.ts` |
 | every list cell                | `list/fields/cells.ts`  |
+| `MonetaryField` / `MonetaryCell` | `resources/currencies.ts` |
 | `ChartView.vue`                | `chart/prefs.ts`, `chart/series.ts`, `chart/fields/labels.ts`, `api/groupBy.ts` |
 | `ViewSwitcher.vue`             | `viewSwitcher.ts`       |
 | `RecordPager.vue`              | `recordSet.ts`          |

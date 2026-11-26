@@ -59,6 +59,12 @@ export const menu: MenuSection[] = [
         permission: 'totem.budget.read',
       },
       {
+        label: 'Invoices',
+        icon: 'pi pi-receipt',
+        to: '/accounting/invoices',
+        permission: 'totem.invoice.read',
+      },
+      {
         label: 'Payments',
         icon: 'pi pi-money-bill',
         to: '/accounting/payments',

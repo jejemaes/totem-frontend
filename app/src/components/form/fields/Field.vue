@@ -15,6 +15,7 @@ import IntegerField from './IntegerField.vue'
 import ManyToManyTagsField from './ManyToManyTagsField.vue'
 import ManyToOneField from './ManyToOneField.vue'
 import MediaImageField from './MediaImageField.vue'
+import MonetaryField from './MonetaryField.vue'
 import PasswordField from './PasswordField.vue'
 import SelectionField from './SelectionField.vue'
 import TextField from './TextField.vue'
@@ -43,6 +44,7 @@ const WIDGETS: Record<Widget, Component> = {
   text: TextField,
   integer: IntegerField,
   float: FloatField,
+  monetary: MonetaryField,
   selection: SelectionField,
   date: DateField,
   datetime: DateTimeField,

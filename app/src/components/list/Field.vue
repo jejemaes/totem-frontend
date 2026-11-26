@@ -31,15 +31,16 @@ const props = withDefaults(
     /** Percentage of the table width. */
     width?: number
     /**
-     * Header alignment. Defaults to `end` for `integer` and `float`, `start`
+     * Header alignment. Defaults to `end` for `integer`, `float` and `monetary`, `start`
      * otherwise -- set it on a column whose slot draws a number (an amount):
      * the slot aligns its own cell, the header is ListView's.
      */
     align?: 'start' | 'end'
     /**
      * The row keys the cell reads, i.e. what `?fields=` must carry while the
-     * column is shown. Defaults to `[name]`; a cell drawing a full name from
-     * two keys lists both.
+     * column is shown. Defaults to `[name]` -- plus `options.currencyField` on a
+     * `monetary` column, whose cell cannot write a symbol without it; a cell
+     * drawing a full name from two keys lists both.
      */
     fields?: readonly string[]
   }>(),
@@ -64,7 +65,18 @@ defineSlots<{
 }>()
 
 /** The widgets whose cells are right-aligned: their header follows. */
-const NUMERIC: ReadonlySet<ListWidget> = new Set(['integer', 'float'])
+const NUMERIC: ReadonlySet<ListWidget> = new Set(['integer', 'float', 'monetary'])
+
+/**
+ * What the cell reads when the view names nothing. A monetary column carries
+ * its currency's key: left to the view, hiding the Currency column in the cog
+ * would quietly drop every symbol.
+ */
+function defaultFields(): string[] {
+  const currencyField = props.options?.currencyField
+  if (props.widget === 'monetary' && currencyField) return [props.name, currencyField]
+  return [props.name]
+}
 
 const slots = useSlots()
 const list = useListContext()
@@ -81,7 +93,7 @@ list.register(props.name, () => ({
   defaultDisplay: props.defaultDisplay,
   width: props.width,
   align: props.align ?? (NUMERIC.has(props.widget) ? 'end' : 'start'),
-  fields: props.fields ?? [props.name],
+  fields: props.fields ?? defaultFields(),
   cell: slots.default,
 }))
 
